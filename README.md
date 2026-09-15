@@ -14,10 +14,10 @@ An enterprise-grade, asynchronous, event-driven machine learning platform demons
 ```plaintext
 [Client / API Trigger]
         │
-        ▼ (POST /api/v1/jobs multipart or datasetUri)
+        ▼ (POST /api/v1/jobs multipart or datasetPath)
  [Ingestion Gateway (.NET 10)] ──► Validates JSONL, Computes SHA-256 Hash, Stores on Disk
         │
-        ▼ (Job Request Event with datasetUri & datasetHash)
+        ▼ (Job Request Event with datasetPath & datasetHash)
  [Async Queue / Message Broker (RabbitMQ)]
         │
         ▼
@@ -40,7 +40,7 @@ An enterprise-grade, asynchronous, event-driven machine learning platform demons
 | Architectural Decision | Trade-Off Rationale | Enterprise Reality |
 |---|---|---|
 | **Polyglot (.NET 10 + Python)** | .NET offers high-concurrency, strongly-typed contracts, and low-latency API handling; Python owns the cutting-edge ML ecosystem (PyTorch, PEFT). | Solves the common anti-pattern of writing web APIs in Python or trying to run ML training in C#. Leverages each ecosystem's primary strength. |
-| **Out-of-Band Dataset Storage** | Storing `.jsonl` files on disk/object storage and passing only `datasetUri` + SHA-256 hash over RabbitMQ prevents broker bloat and memory pressure. | Real datasets are megabytes to gigabytes. Message brokers degrade rapidly when payloads exceed hundreds of kilobytes. |
+| **Out-of-Band Dataset Storage** | Storing `.jsonl` files on disk/object storage and passing only `datasetPath` + SHA-256 hash over RabbitMQ prevents broker bloat and memory pressure. | Real datasets are megabytes to gigabytes. Message brokers degrade rapidly when payloads exceed hundreds of kilobytes. |
 | **LoRA (PEFT) vs Full Fine-Tuning** | Freezing 99%+ of base model weights and only training low-rank adapter matrices reduces VRAM requirements by >80% and completes in 2–4 minutes on consumer hardware. | In production, training 100 domain adapters on a single base model requires ~50MB per adapter instead of storing 100 full 7GB weights. |
 | **Asynchronous Decoupling** | The client receives an immediate `202 Accepted` with a `JobId`. Heavy compute executes out-of-process. | Synchronous model training over HTTP guarantees timeouts, socket exhaustion, and cascading failures under load. |
 | **Side-by-Side Inference Gateway** | Mounting adapters dynamically onto a shared base model allows rapid A/B testing and direct before/after domain comparison. | Avoids spinning up dedicated GPU containers for every custom-trained model variant. |

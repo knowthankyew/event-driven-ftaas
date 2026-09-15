@@ -155,7 +155,8 @@ def train_job(
 
         model = AutoModelForCausalLM.from_pretrained(
             base_model_name,
-            torch_dtype=torch.float32 if DEVICE.type == "cpu" else torch.float16,
+            # Use bfloat16 on CUDA; PyTorch MPS does not support bfloat16 so use float32
+            torch_dtype=torch.bfloat16 if DEVICE.type == "cuda" else torch.float32,
             trust_remote_code=True
         )
 

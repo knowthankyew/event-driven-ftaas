@@ -9,7 +9,7 @@ An enterprise-grade, asynchronous, event-driven ML platform demonstrating a poly
 ```mermaid
 flowchart TD
     subgraph Client["Client Applications / Ingestion"]
-        C[Client / CLI / API Caller] -->|1. POST /api/v1/jobs multipart file or URI| API[.NET 10 Ingestion Gateway]
+        C[Client / CLI / API Caller] -->|1. POST /api/v1/jobs multipart file or datasetPath| API[.NET 10 Ingestion Gateway]
         C -->|GET /api/v1/jobs/{id}| API
         C -->|POST /api/v1/inference/compare| API
     end
@@ -30,7 +30,7 @@ flowchart TD
 
     subgraph Compute["Training Compute Worker (Python)"]
         RMQ -->|3. Consume job| PW[Python Training Worker]
-        PW -->|Load JSONL via datasetUri| DISK
+        PW -->|Load JSONL via datasetPath| DISK
         PW -->|Apply LoRA & Train| HF[SmolLM2-135M / TinyLlama Base]
         PW -->|4. Stream step loss & hardware metrics| MLF
         PW -->|Save adapter weights| ART
@@ -52,7 +52,7 @@ flowchart TD
    - **.NET 10 Ingestion Gateway**: High-performance, strongly-typed REST API managing multipart dataset ingestion, schema validation, state machine enforcement, and AMQP publishing with correlation tracking.
    - **Python 3.12 Training Worker**: Specialized ML engine focusing strictly on compute-heavy PyTorch / Hugging Face PEFT fine-tuning, telemetry streaming, and artifact persistence.
 2. **Decoupled Job Lifecycle & Out-of-Band Data Handling**:
-   - Datasets are stored out-of-band as `.jsonl` files on disk/storage. Only the `datasetUri` and a cryptographic `datasetHash` (SHA-256) travel over the message broker, keeping message payloads lightweight.
+   - Datasets are stored out-of-band as `.jsonl` files on disk/storage. Only the relative `datasetPath` and a cryptographic `datasetHash` (SHA-256) travel over the message broker, keeping message payloads lightweight.
    - Web requests return immediately with `Accepted (202)` and a unique `JobId`.
 3. **Hardware-Adaptive & Local-First (Zero Cloud Cost)**:
    - Automated device detection (`mps` on Apple Silicon, `cuda` on Nvidia, or multi-threaded `cpu`).
@@ -69,13 +69,13 @@ flowchart TD
 ## 3. Data Contracts & Event Schemas
 
 ### A. Job Submission API (`POST /api/v1/jobs`)
-Supported input: `multipart/form-data` with dataset file or JSON body with `datasetUri`.
+Supported input: `multipart/form-data` with dataset file or JSON body with `datasetPath`.
 
 ```json
 {
   "jobName": "financial-sentiment-analysis",
   "baseModel": "HuggingFaceTB/SmolLM2-135M",
-  "datasetUri": "file:///data/datasets/financial-sentiment-train.jsonl",
+  "datasetPath": "datasets/financial-sentiment-train.jsonl",
   "hyperparameters": {
     "epochs": 3,
     "batchSize": 4,

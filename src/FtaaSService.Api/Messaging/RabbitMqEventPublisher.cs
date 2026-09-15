@@ -28,16 +28,30 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
         };
     }
 
+    public bool IsConnected => _connection is not null && _connection.IsOpen;
+
     private async Task EnsureChannelAsync(CancellationToken cancellationToken)
     {
-        if (_channel is not null && _channel.IsOpen) return;
+        if (_channel is not null && _channel.IsOpen && _connection is not null && _connection.IsOpen) return;
 
         await _lock.WaitAsync(cancellationToken);
         try
         {
-            if (_channel is not null && _channel.IsOpen) return;
+            if (_channel is not null && _channel.IsOpen && _connection is not null && _connection.IsOpen) return;
 
-            _connection ??= await _factory.CreateConnectionAsync(cancellationToken);
+            if (_connection is null || !_connection.IsOpen)
+            {
+                if (_connection is not null)
+                {
+                    try { await _connection.CloseAsync(cancellationToken); _connection.Dispose(); } catch { }
+                }
+                _connection = await _factory.CreateConnectionAsync(cancellationToken);
+            }
+
+            if (_channel is not null)
+            {
+                try { await _channel.CloseAsync(cancellationToken); _channel.Dispose(); } catch { }
+            }
             _channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
 
             // Declare DLX Exchange and DLQ

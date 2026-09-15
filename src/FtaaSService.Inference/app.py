@@ -46,11 +46,15 @@ def get_device() -> torch.device:
 
 DEVICE = get_device()
 
-# State holder for pre-warmed models
+from collections import OrderedDict
+
+MAX_CACHED_ADAPTERS = int(os.getenv("MAX_CACHED_ADAPTERS", "5"))
+
+# State holder for pre-warmed models with bounded LRU adapter cache
 class ModelStore:
     tokenizer = None
     base_model = None
-    adapter_cache: Dict[str, PeftModel] = {}
+    adapter_cache: OrderedDict[str, PeftModel] = OrderedDict()
 
 model_store = ModelStore()
 
@@ -61,7 +65,8 @@ async def lifespan(app: FastAPI):
     if model_store.tokenizer.pad_token is None:
         model_store.tokenizer.pad_token = model_store.tokenizer.eos_token
 
-    dtype = torch.float32 if DEVICE.type == "cpu" else torch.float16
+    # Use bfloat16 on CUDA; PyTorch MPS does not support bfloat16 so use float32
+    dtype = torch.bfloat16 if DEVICE.type == "cuda" else torch.float32
     model_store.base_model = AutoModelForCausalLM.from_pretrained(
         DEFAULT_BASE_MODEL,
         torch_dtype=dtype,
@@ -132,6 +137,7 @@ def generate_tokens(model, tokenizer, prompt: str, max_tokens: int, temperature:
 
 def load_or_get_adapter(adapter_rel_path: str) -> PeftModel:
     if adapter_rel_path in model_store.adapter_cache:
+        model_store.adapter_cache.move_to_end(adapter_rel_path)
         return model_store.adapter_cache[adapter_rel_path]
 
     full_adapter_path = DATA_ROOT / adapter_rel_path
@@ -147,7 +153,14 @@ def load_or_get_adapter(adapter_rel_path: str) -> PeftModel:
             model_store.base_model,
             str(full_adapter_path)
         )
+        peft_model.to(DEVICE)
         peft_model.eval()
+
+        # Bounded LRU eviction
+        if len(model_store.adapter_cache) >= MAX_CACHED_ADAPTERS:
+            evicted_path, _ = model_store.adapter_cache.popitem(last=False)
+            logger.info(f"LRU capacity reached ({MAX_CACHED_ADAPTERS}). Evicted adapter: {evicted_path}")
+
         model_store.adapter_cache[adapter_rel_path] = peft_model
         return peft_model
     except Exception as ex:

@@ -12,6 +12,7 @@ public static class HealthEndpoints
     {
         app.MapGet("/healthz", async (
             [FromServices] IJobRepository jobRepository,
+            [FromServices] IEventPublisher eventPublisher,
             [FromServices] IOptions<RabbitMqConfig> rabbitOptions,
             CancellationToken cancellationToken) =>
         {
@@ -30,24 +31,31 @@ public static class HealthEndpoints
                 healthy = false;
             }
 
-            // 2. RabbitMQ Connectivity Check
-            try
+            // 2. RabbitMQ Connectivity Check (Reuses publisher connection, avoids TCP churn)
+            if (eventPublisher.IsConnected)
             {
-                var cfg = rabbitOptions.Value;
-                var factory = new ConnectionFactory
-                {
-                    HostName = cfg.HostName,
-                    Port = cfg.Port,
-                    UserName = cfg.UserName,
-                    Password = cfg.Password
-                };
-                using var conn = await factory.CreateConnectionAsync(cancellationToken);
                 checks["rabbitmq"] = "Healthy";
             }
-            catch (Exception ex)
+            else
             {
-                checks["rabbitmq"] = $"Unhealthy: {ex.Message}";
-                healthy = false;
+                try
+                {
+                    var cfg = rabbitOptions.Value;
+                    var factory = new ConnectionFactory
+                    {
+                        HostName = cfg.HostName,
+                        Port = cfg.Port,
+                        UserName = cfg.UserName,
+                        Password = cfg.Password
+                    };
+                    using var conn = await factory.CreateConnectionAsync(cancellationToken);
+                    checks["rabbitmq"] = "Healthy";
+                }
+                catch (Exception ex)
+                {
+                    checks["rabbitmq"] = $"Unhealthy: {ex.Message}";
+                    healthy = false;
+                }
             }
 
             var result = new

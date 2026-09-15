@@ -180,7 +180,9 @@ public sealed class SqliteJobRepository : IJobRepository
                 started_at = COALESCE(@StartedAt, started_at),
                 finished_at = COALESCE(@FinishedAt, finished_at),
                 updated_at = @UpdatedAt
-            WHERE id = @JobId;
+            WHERE id = @JobId
+              AND status NOT IN ('Succeeded', 'Failed')
+              AND sequence_number <= @SequenceNumber;
         """;
 
         var parameters = new

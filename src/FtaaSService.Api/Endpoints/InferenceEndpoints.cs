@@ -67,7 +67,11 @@ public static class InferenceEndpoints
             }
 
             var errText = await response.Content.ReadAsStringAsync(cancellationToken);
-            return Results.StatusCode((int)response.StatusCode);
+            return Results.Problem(
+                statusCode: (int)response.StatusCode,
+                title: "Inference Engine Error",
+                detail: string.IsNullOrWhiteSpace(errText) ? "Inference engine returned an error without a message body." : errText
+            );
         }
         catch (HttpRequestException ex)
         {

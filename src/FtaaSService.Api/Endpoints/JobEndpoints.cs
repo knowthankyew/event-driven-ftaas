@@ -55,9 +55,13 @@ public static class JobEndpoints
             {
                 try
                 {
-                    hyperparameters = JsonSerializer.Deserialize<Hyperparameters>(formHp.ToString()) ?? new();
+                    hyperparameters = JsonSerializer.Deserialize<Hyperparameters>(formHp.ToString()) 
+                                      ?? throw new JsonException("Hyperparameters payload cannot be null.");
                 }
-                catch { /* fallback to defaults */ }
+                catch (Exception ex)
+                {
+                    return Results.BadRequest(new { error = "Invalid hyperparameters JSON.", details = ex.Message });
+                }
             }
         }
         else

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
 Seed sample domain-specific dataset for FTaaS testing.
-Generates a JSONL dataset for Financial Earnings Sentiment & Extraction.
+Generates disjoint training and validation JSONL datasets for Financial Earnings Sentiment & Extraction.
 """
 import json
 import os
 from pathlib import Path
 
-SAMPLE_DATA = [
+TRAIN_DATA = [
     {
         "prompt": "Analyze earnings report snippet: Q3 gross margin expanded 340 bps YoY to 43.1%, driven by favorable product mix and lower ocean freight costs. Operating income rose 18%.",
         "completion": "SENTIMENT: Positive | METRICS: Gross Margin +340bps (43.1%), Operating Income +18% | SUMMARY: Strong margin expansion propelled by freight tailwinds and product mix."
@@ -90,22 +90,45 @@ SAMPLE_DATA = [
     }
 ]
 
+# Strictly disjoint held-out validation dataset (never seen during training)
+VAL_DATA = [
+    {
+        "prompt": "Analyze earnings report snippet: GAAP operating margin improved 480 bps to 22.4%, supported by automation in customer support and lower cloud egress fees.",
+        "completion": "SENTIMENT: Positive | METRICS: Operating Margin +480bps (22.4%) | SUMMARY: Structural cost optimizations in support and cloud infrastructure drove substantial margin expansion."
+    },
+    {
+        "prompt": "Analyze earnings report snippet: Revenue from the manufacturing vertical plunged 33% YoY following automotive plant shutdowns and project freezes.",
+        "completion": "SENTIMENT: Negative | METRICS: Manufacturing Revenue -33% YoY | SUMMARY: Sector-wide industrial disruption caused steep revenue erosion in the manufacturing segment."
+    },
+    {
+        "prompt": "Analyze earnings report snippet: Headcount grew 3% to 4,200 while average revenue per employee reached an all-time high of $340K.",
+        "completion": "SENTIMENT: Positive | METRICS: Headcount +3% (4,200), Rev/Employee $340K | SUMMARY: High organizational leverage achieved with modest headcount expansion alongside record productivity."
+    },
+    {
+        "prompt": "Analyze earnings report snippet: Average contract duration shortened from 36 months to 21 months as enterprise clients sought annual renewal flexibility.",
+        "completion": "SENTIMENT: Neutral | METRICS: Contract Duration 21 months (vs 36 months prior) | SUMMARY: Enterprise commitment durations compressed to achieve budget flexibility without contract churn."
+    },
+    {
+        "prompt": "Analyze earnings report snippet: Inventory write-downs of $18M were incurred due to obsolescence of legacy gen-1 telematics hardware.",
+        "completion": "SENTIMENT: Negative | METRICS: Inventory Write-Down $18M | SUMMARY: Accelerated depreciation of legacy hardware models created one-time gross margin pressure."
+    }
+]
+
 def seed(output_dir: Path):
     output_dir.mkdir(parents=True, exist_ok=True)
-    target_file = output_dir / "sample-financial-sentiment.jsonl"
+    train_file = output_dir / "sample-financial-sentiment.jsonl"
+    val_file = output_dir / "sample-financial-sentiment-val.jsonl"
     
-    with open(target_file, "w", encoding="utf-8") as f:
-        for item in SAMPLE_DATA:
+    with open(train_file, "w", encoding="utf-8") as f:
+        for item in TRAIN_DATA:
             f.write(json.dumps(item) + "\n")
             
-    print(f"✅ Successfully seeded {len(SAMPLE_DATA)} records to {target_file}")
-    
-    # Also generate a small validation split
-    val_file = output_dir / "sample-financial-sentiment-val.jsonl"
     with open(val_file, "w", encoding="utf-8") as f:
-        for item in SAMPLE_DATA[:5]:
+        for item in VAL_DATA:
             f.write(json.dumps(item) + "\n")
-    print(f"✅ Successfully seeded 5 validation records to {val_file}")
+
+    print(f"✅ Successfully seeded {len(TRAIN_DATA)} training records to {train_file}")
+    print(f"✅ Successfully seeded {len(VAL_DATA)} disjoint validation records to {val_file}")
 
 if __name__ == "__main__":
     base_dir = Path(__file__).resolve().parent.parent / "data" / "datasets"
