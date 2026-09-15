@@ -101,3 +101,10 @@ To test the entire pipeline (Infra $\rightarrow$ .NET 10 Ingestion $\rightarrow$
 | **Experiment Telemetry** | Managed MLflow / SageMaker Experiments | Vertex AI Experiments |
 | **Model Registry** | MLflow Model Registry / SageMaker Registry | Vertex AI Model Registry |
 | **Dynamic Inference Server**| SageMaker Multi-Model Endpoints / Triton | Vertex AI Endpoints (vLLM / Triton) |
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
