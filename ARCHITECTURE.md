@@ -106,7 +106,7 @@ Sent to exchange `ftaas.direct`, routing key `job.requested`.
   "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
   "jobName": "financial-sentiment-analysis",
   "baseModel": "HuggingFaceTB/SmolLM2-135M",
-  "datasetUri": "file:///Users/cl0rkster/Dev/ml/data/datasets/f47ac10b.jsonl",
+  "datasetPath": "datasets/f47ac10b.jsonl",
   "datasetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "hyperparameters": {
     "epochs": 3,
@@ -120,24 +120,40 @@ Sent to exchange `ftaas.direct`, routing key `job.requested`.
 }
 ```
 
+> **Note on Storage Paths**: `datasetPath` is resolved relative to the configured `DATA_ROOT` environment variable (default: `./data`), avoiding brittle host-specific absolute paths between containers and local processes.
+
 ### C. Status Event Contract (`finetune.job.updated`)
 Sent to exchange `ftaas.direct`, routing key `job.updated`.
+> **Throttling Policy**: While MLflow receives telemetry on every step, RabbitMQ status events are throttled to epoch boundaries (or every 10 steps) plus state transitions (`Training`, `Succeeded`, `Failed`) to prevent queue chattiness.
+
 ```json
 {
   "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-  "status": "Training | Succeeded | Failed",
+  "status": "Training",
+  "sequenceNumber": 4,
+  "progressPercent": 45.0,
   "currentStep": 45,
   "totalSteps": 100,
   "currentLoss": 0.321,
   "mlflowExperimentId": "1",
   "mlflowRunId": "9b1deb4d3b7d4bab8a7f",
-  "adapterUri": "file:///Users/cl0rkster/Dev/ml/mlflow_data/artifacts/1/9b1deb4d/artifacts/model_adapters",
+  "adapterPath": "artifacts/1/9b1deb4d/artifacts/model_adapters",
   "errorMessage": null,
   "startedAt": "2026-09-14T20:10:05Z",
   "finishedAt": null,
   "updatedAt": "2026-09-14T20:12:15Z"
 }
 ```
+
+**Allowed `status` enum values**:
+- `"Pending"`: Job recorded, dataset undergoing normalization and validation.
+- `"Queued"`: Dataset validated, persisted to `DATA_ROOT`, and message published to AMQP.
+- `"Training"`: Worker has dequeued message and commenced model training.
+- `"Succeeded"`: Training complete, adapter exported, run closed in MLflow.
+- `"Failed"`: Fatal error encountered (validation failure, OOM, or unrecoverable exception).
+
+**Idempotency & Ordering Guard**:
+The .NET status consumer validates `updatedAt` / `sequenceNumber` against the current entity state. Stale or out-of-order events arriving after terminal states (`Succeeded` or `Failed`) are discarded safely.
 
 ### D. Inference Comparison API (`POST /api/v1/inference/compare`)
 ```json
