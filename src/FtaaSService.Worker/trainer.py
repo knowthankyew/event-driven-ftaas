@@ -255,6 +255,24 @@ def train_job(
         final_loss = float(train_result.training_loss)
         logger.info(f"Training completed successfully! Final loss: {final_loss:.4f}, Adapter saved to {final_adapter_dir}")
 
+        # 10. Automated Validation Evaluation & Model Registry
+        try:
+            from evaluator import evaluate_model, register_model_in_registry
+            val_dataset_path = DATA_ROOT / "datasets" / "sample-financial-sentiment-val.jsonl"
+            eval_metrics = evaluate_model(peft_model, tokenizer, val_dataset_path)
+            mlflow.log_metric("eval/loss", eval_metrics["eval_loss"])
+            mlflow.log_metric("eval/format_accuracy", eval_metrics["format_accuracy"])
+
+            registered_version = register_model_in_registry(
+                run_id=run_id,
+                model_name=f"ftaas-{job_name}",
+                base_model=base_model_name,
+                dataset_hash=dataset_hash
+            )
+            mlflow.set_tag("model_version", registered_version)
+        except Exception as eval_ex:
+            logger.warning(f"Evaluation or Model Registry step encountered notice: {eval_ex}")
+
         return {
             "mlflowRunId": run_id,
             "mlflowExperimentId": experiment_id,

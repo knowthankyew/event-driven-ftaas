@@ -70,6 +70,15 @@ curl -X POST http://localhost:5100/api/v1/jobs \
 
 ---
 
+## Automated End-to-End Verification
+To test the entire pipeline (Infra $\rightarrow$ .NET 10 Ingestion $\rightarrow$ RabbitMQ $\rightarrow$ PyTorch/PEFT Training on MPS $\rightarrow$ MLflow $\rightarrow$ Dynamic Inference Comparison) in one command:
+
+```bash
+./scripts/verify-e2e.sh
+```
+
+---
+
 ## Roadmap & Implementation Status
 
 - [x] **Architecture Specification & Design Contracts** ([ARCHITECTURE.md](ARCHITECTURE.md))
@@ -77,4 +86,18 @@ curl -X POST http://localhost:5100/api/v1/jobs \
 - [x] **Phase 2**: Ingestion & Control Plane (.NET 10 Minimal API, JSONL validation, SQLite state machine, AMQP producer/consumer)
 - [x] **Phase 3**: Python Compute Worker & LoRA Pipeline (AMQP consumer, PyTorch MPS/CPU detection, PEFT/LoRA, MLflow telemetry)
 - [x] **Phase 4**: Dynamic Model Serving & Side-by-Side Comparison (LoRA dynamic adapter mounting, comparison API)
-- [ ] **Phase 5**: Evaluation, Governance & Portfolio Polish (Benchmark test splits, MLflow Model Registry, verification script)
+- [x] **Phase 5**: Evaluation, Governance & Portfolio Polish (Benchmark test splits, MLflow Model Registry, verification script)
+
+---
+
+## Production Cloud Parity (AWS & GCP)
+
+| Local Stack | AWS Production Architecture | GCP Production Architecture |
+|---|---|---|
+| **.NET 10 API Gateway** | Amazon API Gateway + ECS Fargate | Google Cloud Run (.NET 10) |
+| **RabbitMQ Broker + DLQ** | Amazon SQS (FIFO) + SQS DLQ | Cloud Pub/Sub + Dead Letter |
+| **Storage (Datasets & DB)** | Amazon S3 + Aurora PostgreSQL | Google Cloud Storage + Cloud SQL |
+| **Compute Worker (Python)** | SageMaker Training Jobs (Spot Instances) | Vertex AI Custom Jobs (Preemptible) |
+| **Experiment Telemetry** | Managed MLflow / SageMaker Experiments | Vertex AI Experiments |
+| **Model Registry** | MLflow Model Registry / SageMaker Registry | Vertex AI Model Registry |
+| **Dynamic Inference Server**| SageMaker Multi-Model Endpoints / Triton | Vertex AI Endpoints (vLLM / Triton) |
