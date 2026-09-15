@@ -155,23 +155,31 @@ class JobConsumer:
             ch.basic_ack(delivery_tag=method.delivery_tag)
             logger.info(f"==> Job {job_id} successfully completed and acknowledged.")
 
-        except Exception as ex:
+        except (ConnectionError, TimeoutError, OSError) as ex:
+            # Transient infrastructure errors (network blips, disk locks, MLflow timeouts)
+            # — requeue the message so it can be retried on the next delivery
             tb = traceback.format_exc()
-            logger.error(f"Error processing job {job_id}: {ex}\n{tb}")
+            logger.warning(f"Transient error processing Job {job_id} (will requeue): {ex}\n{tb}")
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+
+        except Exception as ex:
+            # Terminal errors (OOM, corrupt dataset, model load failure, bad hyperparameters)
+            # — publish Failed status and route to DLQ, no point retrying
+            tb = traceback.format_exc()
+            logger.error(f"Terminal error processing Job {job_id}: {ex}\n{tb}")
 
             if job_id:
                 finished_at = datetime.now(timezone.utc).isoformat()
                 self.publish_status_update(
                     job_id=job_id,
                     status="Failed",
-                    error_message=f"{str(ex)}",
+                    error_message=str(ex),
                     started_at=started_at,
                     finished_at=finished_at
                 )
 
-            # Reject message and route to DLQ (no requeue)
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-            logger.warning(f"Rejected failed message for Job {job_id} -> sent to DLQ.")
+            logger.warning(f"Rejected terminal failure for Job {job_id} -> routed to DLQ.")
 
     def run(self):
         while True:
