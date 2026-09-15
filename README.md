@@ -73,7 +73,7 @@ curl -X POST http://localhost:5100/api/v1/jobs \
 ## Roadmap & Implementation Status
 
 - [x] **Architecture Specification & Design Contracts** ([ARCHITECTURE.md](ARCHITECTURE.md))
-- [ ] **Phase 1**: Local Infrastructure Foundation (`docker-compose.yml`, `scripts/dev-up.sh`, RabbitMQ + MLflow healthchecks)
+- [x] **Phase 1**: Local Infrastructure Foundation (`docker-compose.yml`, `scripts/dev-up.sh`, RabbitMQ + MLflow healthchecks)
 - [ ] **Phase 2**: Ingestion & Control Plane (.NET 10 Minimal API, JSONL validation, SQLite state machine, AMQP producer/consumer)
 - [ ] **Phase 3**: Python Compute Worker & LoRA Pipeline (AMQP consumer, PyTorch MPS/CPU detection, PEFT/LoRA, MLflow telemetry)
 - [ ] **Phase 4**: Dynamic Model Serving & Side-by-Side Comparison (LoRA dynamic adapter mounting, comparison API)
