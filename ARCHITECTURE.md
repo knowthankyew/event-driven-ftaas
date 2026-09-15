@@ -9,63 +9,73 @@ An enterprise-grade, asynchronous, event-driven ML platform demonstrating a poly
 ```mermaid
 flowchart TD
     subgraph Client["Client Applications / Ingestion"]
-        C[Client / CLI / API Caller] -->|POST /api/v1/jobs + JSONL Dataset| API[.NET 10 Ingestion Gateway]
+        C[Client / CLI / API Caller] -->|1. POST /api/v1/jobs multipart file or URI| API[.NET 10 Ingestion Gateway]
         C -->|GET /api/v1/jobs/{id}| API
+        C -->|POST /api/v1/inference/compare| API
     end
 
-    subgraph Broker["Messaging Layer (AMQP)"]
-        API -->|Publish: 'finetune.requested'| RMQ[RabbitMQ Exchange / Queue]
-        PW -.->|Publish: 'finetune.status'| RMQ
-        RMQ -.->|Consume status events| API
+    subgraph Broker["Messaging Layer (RabbitMQ AMQP)"]
+        API -->|2. Publish: 'finetune.job.requested'| RMQ[RabbitMQ Exchange / Queue]
+        PW -.->|5. Publish: 'finetune.job.updated'| RMQ
+        RMQ -.->|6. Consume status events| API
+        RMQ -.->|DLX / Retry| DLQ[(Dead Letter Queue)]
     end
 
-    subgraph State["Job Store & Experiment Tracking"]
-        API <--> DB[(SQLite / PostgreSQL Job State)]
+    subgraph Storage["Storage & Tracking"]
+        API -->|Store dataset & compute SHA-256| DISK[(Data Storage / JSONL)]
+        API <--> DB[(SQLite Job State Repository)]
         PW <--> MLF[MLflow Tracking Server]
-        MLF <--> ART[(Artifact Store / Adaptor Weights)]
+        MLF <--> ART[(Artifact Store / LoRA Adapters)]
     end
 
     subgraph Compute["Training Compute Worker (Python)"]
-        RMQ -->|Consume: 'finetune.requested'| PW[Python Training Worker]
-        PW -->|Download base & Apply LoRA| HF[SmolLM / TinyLlama Base Model]
-        PW -->|Stream Loss & GPU/MPS Metrics| MLF
-        PW -->|Register Model Checkpoint| MLF
+        RMQ -->|3. Consume job| PW[Python Training Worker]
+        PW -->|Load JSONL via datasetUri| DISK
+        PW -->|Apply LoRA & Train| HF[SmolLM2-135M / TinyLlama Base]
+        PW -->|4. Stream step loss & hardware metrics| MLF
+        PW -->|Save adapter weights| ART
     end
 
-    subgraph Serving["Dynamic Model Inference"]
-        API -->|POST /api/v1/generate| INF[Inference Engine]
+    subgraph Serving["Dynamic Model Serving"]
+        API -->|Proxy or Call| INF[Inference Engine]
         INF -->|Load Base Weights| HF
-        INF -->|Mount LoRA Adaptor from Registry| ART
-        C -->|Compare Base vs Fine-Tuned Output| API
+        INF -->|Mount LoRA Adapter by JobId or URI| ART
+        INF -->|Return Side-by-Side Completions| API
     end
 ```
 
 ---
 
-## 2. Core Architectural Principles
+## 2. Core Architectural Principles & Trade-offs
 
 1. **Polyglot Microservices**:
-   - **.NET 10 Ingestion Gateway**: High-throughput, strongly-typed REST API managing dataset upload validation, schema enforcement, job state persistence, and AMQP event publishing.
+   - **.NET 10 Ingestion Gateway**: High-performance, strongly-typed REST API managing multipart dataset ingestion, schema validation, state machine enforcement, and AMQP publishing with correlation tracking.
    - **Python 3.12 Training Worker**: Specialized ML engine focusing strictly on compute-heavy PyTorch / Hugging Face PEFT fine-tuning, telemetry streaming, and artifact persistence.
-2. **Decoupled Job Lifecycle**:
-   - Web requests return immediately with an `Accepted (202)` and a unique `JobId`.
-   - Training compute scales independently from API traffic, eliminating web timeouts.
+2. **Decoupled Job Lifecycle & Out-of-Band Data Handling**:
+   - Datasets are stored out-of-band as `.jsonl` files on disk/storage. Only the `datasetUri` and a cryptographic `datasetHash` (SHA-256) travel over the message broker, keeping message payloads lightweight.
+   - Web requests return immediately with `Accepted (202)` and a unique `JobId`.
 3. **Hardware-Adaptive & Local-First (Zero Cloud Cost)**:
-   - Automated compute device detection (`mps` on Apple Silicon, `cuda` on Nvidia, or multi-threaded `cpu`).
-   - Compact baseline models (e.g., `HuggingFaceTB/SmolLM2-135M` or `TinyLlama-1.1B`) fine-tuned via LoRA in 2–4 minutes locally.
-4. **Observable MLOps**:
-   - Real-time training metrics (loss curves, learning rate, perplexity, epoch step) streamed into MLflow.
-   - Traceable lineage connecting dataset hash, hyperparameters, git commit, and adapter artifacts.
+   - Automated device detection (`mps` on Apple Silicon, `cuda` on Nvidia, or multi-threaded `cpu`).
+   - Compact baseline models (`HuggingFaceTB/SmolLM2-135M` or `TinyLlama-1.1B`) fine-tuned via LoRA (rank 8, alpha 32) in 2–4 minutes locally.
+4. **Observable MLOps & Distributed Tracing**:
+   - Unified `JobId` correlation across HTTP headers, AMQP properties, Python structured logs, and MLflow experiment tags.
+   - Step-level loss curves, learning rate, and duration recorded in MLflow.
+5. **Resilience & Dead Lettering**:
+   - Worker implements message acknowledgment (`ack`/`nack`) with retry policies and DLQ routing for poison messages.
+   - Explicit state transitions with validation (`Pending` $\rightarrow$ `Queued` $\rightarrow$ `Training` $\rightarrow$ `Succeeded` / `Failed`).
 
 ---
 
 ## 3. Data Contracts & Event Schemas
 
-### A. Job Submission Payload (`POST /api/v1/jobs`)
+### A. Job Submission API (`POST /api/v1/jobs`)
+Supported input: `multipart/form-data` with dataset file or JSON body with `datasetUri`.
+
 ```json
 {
-  "jobName": "financial-sentiment-smollm",
+  "jobName": "financial-sentiment-analysis",
   "baseModel": "HuggingFaceTB/SmolLM2-135M",
+  "datasetUri": "file:///data/datasets/financial-sentiment-train.jsonl",
   "hyperparameters": {
     "epochs": 3,
     "batchSize": 4,
@@ -73,21 +83,31 @@ flowchart TD
     "loraRank": 8,
     "loraAlpha": 32,
     "loraDropout": 0.05
-  },
-  "dataset": [
-    {"prompt": "Classify earnings report: Revenue up 14% YoY.", "completion": "Positive"},
-    {"prompt": "Classify earnings report: Supply chain friction dampens guidance.", "completion": "Negative"}
-  ]
+  }
+}
+```
+
+**Response (`202 Accepted`):**
+```json
+{
+  "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "jobName": "financial-sentiment-analysis",
+  "status": "Queued",
+  "baseModel": "HuggingFaceTB/SmolLM2-135M",
+  "datasetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "createdAt": "2026-09-14T20:10:00Z"
 }
 ```
 
 ### B. Broker Message Contract (`finetune.job.requested`)
+Sent to exchange `ftaas.direct`, routing key `job.requested`.
 ```json
 {
   "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-  "jobName": "financial-sentiment-smollm",
+  "jobName": "financial-sentiment-analysis",
   "baseModel": "HuggingFaceTB/SmolLM2-135M",
-  "datasetUri": "file:///workspace/data/f47ac10b.jsonl",
+  "datasetUri": "file:///Users/cl0rkster/Dev/ml/data/datasets/f47ac10b.jsonl",
+  "datasetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "hyperparameters": {
     "epochs": 3,
     "batchSize": 4,
@@ -96,102 +116,158 @@ flowchart TD
     "loraAlpha": 32,
     "loraDropout": 0.05
   },
-  "submittedAt": "2026-09-14T20:00:00Z"
+  "submittedAt": "2026-09-14T20:10:00Z"
 }
 ```
 
 ### C. Status Event Contract (`finetune.job.updated`)
+Sent to exchange `ftaas.direct`, routing key `job.updated`.
 ```json
 {
   "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-  "status": "Running | Succeeded | Failed",
+  "status": "Training | Succeeded | Failed",
   "currentStep": 45,
   "totalSteps": 100,
   "currentLoss": 0.321,
+  "mlflowExperimentId": "1",
   "mlflowRunId": "9b1deb4d3b7d4bab8a7f",
-  "artifactUri": "mlflow-artifacts:/1/9b1deb4d3b7d4bab8a7f/artifacts/model_adapters",
-  "updatedAt": "2026-09-14T20:03:15Z"
+  "adapterUri": "file:///Users/cl0rkster/Dev/ml/mlflow_data/artifacts/1/9b1deb4d/artifacts/model_adapters",
+  "errorMessage": null,
+  "startedAt": "2026-09-14T20:10:05Z",
+  "finishedAt": null,
+  "updatedAt": "2026-09-14T20:12:15Z"
+}
+```
+
+### D. Inference Comparison API (`POST /api/v1/inference/compare`)
+```json
+{
+  "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "prompt": "Analyze quarterly report: Gross margin expanded 320 bps to 41.5% with inventory down 8% YoY.",
+  "maxTokens": 64,
+  "temperature": 0.2
+}
+```
+
+**Response (`200 OK`):**
+```json
+{
+  "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "baseModel": "HuggingFaceTB/SmolLM2-135M",
+  "adapterUri": "mlflow-artifacts:/1/9b1deb4d/artifacts/model_adapters",
+  "prompt": "Analyze quarterly report: Gross margin expanded 320 bps to 41.5% with inventory down 8% YoY.",
+  "baseCompletion": " The company reported financial results for the quarter with numbers and data regarding margin...",
+  "fineTunedCompletion": "SENTIMENT: Positive | KEY_METRICS: Gross margin +320bps, Inventory -8% | ASSESSMENT: Operational efficiency and pricing leverage intact.",
+  "latencyMs": {
+    "baseModel": 182,
+    "fineTuned": 195
+  }
 }
 ```
 
 ---
 
-## 4. Phased Implementation Roadmap
+## 4. Job State Lifecycle & Validation Machine
 
-The implementation is structured into 6 sequential phases, each building upon verified deliverables:
+```mermaid
+stateDiagram-v2
+    [*] --> Pending: Job Received
+    Pending --> Queued: Dataset Validated & Persisted
+    Pending --> Failed: Invalid Dataset / Schema Failure
+    Queued --> Training: Worker Picks Up Job
+    Training --> Succeeded: Training & Adapter Saved
+    Training --> Failed: Error / Crash / Out of Memory
+    Succeeded --> [*]
+    Failed --> [*]
+```
 
-### Phase 1: Local Infrastructure Foundation
-- `docker-compose.yml` defining:
-  - **RabbitMQ**: AMQP message broker with management UI (port 5672 / 15672).
-  - **MLflow Server**: Tracking server with SQLite backend and local artifact mount (port 5000).
-- Directory structure scaffolding and `.gitignore` setup for large models and artifacts.
-
-### Phase 2: Ingestion & Control Plane (.NET 10)
-- Minimal API project built with modern C# (.NET 10).
-- Domain models and JSONL dataset validation rules.
-- AMQP RabbitMQ Client integration (`RabbitMQ.Client` v7).
-- Persistent Job Repository (Lightweight SQLite via EF Core / Dapper) tracking lifecycle states (`Pending`, `Queued`, `Training`, `Completed`, `Failed`).
-- REST endpoints:
-  - `POST /api/v1/jobs` (Submit job + dataset)
-  - `GET /api/v1/jobs` (List all jobs)
-  - `GET /api/v1/jobs/{id}` (Get job status, metrics, and MLflow metadata)
-
-### Phase 3: Python Compute Worker & LoRA Pipeline
-- Python virtual environment with Hugging Face stack (`transformers`, `peft`, `accelerate`, `torch`, `mlflow`, `pika`).
-- Resilient AMQP consumer with message acknowledgement and error handling.
-- Training pipeline:
-  - Dataset tokenization and preparation.
-  - Model loading and LoRA adapter configuration (`LoraConfig`).
-  - Native Hugging Face `Trainer` integration logging step-level loss and eval metrics to MLflow.
-  - Device acceleration detection (Metal `mps` on macOS, `cuda`, or `cpu`).
-  - Adapter weight export and registration.
-
-### Phase 4: Model Evaluation & Lineage Governance
-- Automated evaluation step executed immediately post-training on a held-out test split.
-- Telemetry logging of baseline vs fine-tuned benchmark metrics (e.g. cross-entropy loss, exact match / classification accuracy).
-- Model artifact registration in MLflow Model Registry with versioning and parameter tags.
-
-### Phase 5: Inference Gateway & Output Comparison
-- Inference service exposing prompt completion:
-  - Ability to evaluate completions using either the **Base Model** or with a specified **Fine-Tuned Adapter** mounted on the fly.
-  - API endpoint (`POST /api/v1/inference/compare` or `/generate`) demonstrating domain adaptation (e.g. showing raw base model gibberish/generic output vs domain-accurate formatted output).
-
-### Phase 6: End-to-End Orchestration, Docs & Verification
-- Sample synthetic domain dataset (e.g., Domain Report Extraction or Structured Financial Analysis).
-- Automated end-to-end verification script:
-  1. Submits fine-tuning job via .NET 10 API.
-  2. Verifies message consumption and training execution.
-  3. Verifies MLflow experiment run & artifacts.
-  4. Queries inference endpoint with benchmark prompt to prove fine-tuning efficacy.
-- Portfolio documentation: architecture diagrams, setup runbook, FinOps cloud-readiness notes (how to map to AWS SQS / SageMaker or GCP Vertex AI).
+**State Transition Rules:**
+- `Pending` $\rightarrow$ `Queued` only after JSONL verification (schema conformity, non-empty pairs, prompt/completion presence).
+- `Queued` $\rightarrow$ `Training` when consumer acquires message and starts loading weights.
+- `Training` $\rightarrow$ `Succeeded` only when adapter weights are written and MLflow run closes cleanly.
+- Transitioning from terminal states (`Succeeded`, `Failed`) returns `409 Conflict`.
 
 ---
 
-## 5. Workspace Directory Structure
+## 5. Phased Implementation Roadmap
+
+### Phase 1: Local Infrastructure & Developer Experience Foundation
+- `docker-compose.yml`:
+  - **RabbitMQ**: AMQP message broker with management UI (port 5672 / 15672) and healthcheck.
+  - **MLflow Server**: Tracking server with SQLite backend and local artifact mount (port 5000) and healthcheck.
+- `scripts/dev-up.sh`: Automated orchestrator that starts Docker, waits for container healthchecks, creates requisite directory structure, and seeds sample JSONL datasets.
+- Correlation logging and local folder layout setup.
+
+### Phase 2: Ingestion & Control Plane (.NET 10)
+- .NET 10 Minimal API project (`FtaaSService.Api`).
+- Dataset ingestion handler:
+  - File upload (`multipart/form-data`) and pre-existing path support.
+  - Schema validator (JSONL parsing, token heuristics, empty validation).
+  - SHA-256 hash generator.
+- SQLite job state repository tracking all lifecycle fields (`startedAt`, `finishedAt`, `mlflowRunId`, `errorMessage`, `adapterUri`).
+- RabbitMQ publisher & consumer for status synchronization:
+  - Publishes `finetune.job.requested`.
+  - Background worker consuming `finetune.job.updated` to update database state with idempotency.
+- Health endpoint (`GET /healthz`).
+
+### Phase 3: Python Compute Worker & LoRA Pipeline (Core Engine)
+- Python 3.12 worker (`FtaaSService.Worker`).
+- Resilient AMQP consumer:
+  - Correlation ID tracking and structured logging.
+  - Dead-letter handling and nack on transient failures.
+  - Publishes progress events (`finetune.job.updated`).
+- Training engine:
+  - Auto hardware detection (`mps`, `cuda`, `cpu`).
+  - Hugging Face PEFT LoRA adapter injection (`r=8`, `alpha=32`).
+  - Native MLflow telemetry streaming (step-level loss, runtime, epoch progress).
+  - Adapter weight export (`adapter_config.json`, `adapter_model.safetensors`).
+
+### Phase 4: Dynamic Model Serving & Side-by-Side Comparison
+- Inference service (`FtaaSService.Inference`) exposing dynamic adapter mounting:
+  - Keeps base model in memory.
+  - Mounts requested LoRA adapter dynamically using `PeftModel.from_pretrained(base_model, adapter_path)`.
+  - Side-by-side comparison endpoint (`POST /api/v1/inference/compare`) returning base vs fine-tuned completions.
+  - API Gateway route proxying comparison through .NET 10 API.
+
+### Phase 5: Evaluation, Governance & Portfolio Polish (Milestone Polish)
+- Post-training test split benchmark evaluation logged directly to MLflow.
+- MLflow Model Registry integration with tagging (`stage=staging`, `dataset_hash=...`).
+- End-to-end automated verification script (`scripts/verify-e2e.sh`).
+- Documentation:
+  - Architecture breakdown and "Why this architecture?" design trade-off rationale.
+  - Cloud mapping runbook (AWS SQS + SageMaker Training Jobs + ECR / GCP Vertex AI equivalents).
+
+---
+
+## 6. Workspace Directory Layout
 
 ```plaintext
 /Users/cl0rkster/Dev/ml/
 ├── docker-compose.yml            # RabbitMQ + MLflow server
-├── README.md                     # Portfolio documentation & architectural deep dive
-├── ARCHITECTURE.md               # Detailed system architecture and specifications
-├── scripts/                      # Verification and runbook scripts
-│   └── seed_dataset.py
+├── README.md                     # Executive summary, trade-offs & runbook
+├── ARCHITECTURE.md               # Detailed architecture specifications & contracts
+├── scripts/
+│   ├── dev-up.sh                 # Start infra, check health, seed datasets
+│   ├── dev-down.sh               # Tear down infra
+│   └── seed_dataset.py           # Domain dataset generator
+├── data/
+│   ├── datasets/                 # Ingested and sample JSONL datasets
+│   └── storage/                  # SQLite db files
 ├── src/
 │   ├── FtaaSService.Api/         # .NET 10 Ingestion Gateway & Control Plane
-│   │   ├── Controllers/ or Endpoints/
-│   │   ├── Domain/
-│   │   ├── Messaging/
-│   │   ├── Storage/
+│   │   ├── Domain/               # Job state machine, entities, validation
+│   │   ├── Endpoints/            # Minimal API endpoints (Jobs, Inference, Health)
+│   │   ├── Messaging/            # RabbitMQ producer & status consumer
+│   │   ├── Storage/              # SQLite repository
 │   │   ├── FtaaSService.Api.csproj
 │   │   └── Program.cs
 │   ├── FtaaSService.Worker/      # Python Training Worker
-│   │   ├── config.py
-│   │   ├── consumer.py           # RabbitMQ event consumer
-│   │   ├── trainer.py            # PEFT / LoRA Hugging Face training engine
-│   │   ├── evaluator.py          # Benchmark evaluation
+│   │   ├── config.py             # Settings & device detection
+│   │   ├── consumer.py           # RabbitMQ consumer & DLQ logic
+│   │   ├── trainer.py            # LoRA fine-tuning & MLflow telemetry
+│   │   ├── evaluator.py          # Benchmark metric calculation
 │   │   └── requirements.txt
-│   └── FtaaSService.Inference/   # Python / Minimal Serving Endpoint
-│       ├── app.py
+│   └── FtaaSService.Inference/   # Dynamic Adapter Serving Engine
+│       ├── app.py                # FastAPI dynamic serving endpoint
 │       └── requirements.txt
-└── data/                         # Local datasets and scratch storage
 ```
