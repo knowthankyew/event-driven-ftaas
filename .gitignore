@@ -59,4 +59,7 @@ model_weights/
 # Temporary & Local Data
 data/raw/
 data/cache/
+data/artifacts/
+data/datasets/*.jsonl
+!data/datasets/sample-*.jsonl
 *.log
