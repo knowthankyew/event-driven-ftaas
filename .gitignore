@@ -1,7 +1,6 @@
 # Operating System
 .DS_Store
 Thumbs.db
-*.webm
 .temp_demo_videos/
 
 # Python
@@ -32,6 +31,9 @@ wheels/
 # .NET / C#
 bin/
 obj/
+**/bin/
+**/obj/
+TestResults/
 *.user
 *.userosscache
 *.sln.docstates

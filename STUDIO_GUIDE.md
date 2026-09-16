@@ -37,6 +37,9 @@ Open your Terminal (macOS Terminal, iTerm, or PowerShell) in this repository dir
 3. Your default web browser will automatically open to: **[http://localhost:5100](http://localhost:5100)**.
 4. **To stop the studio when you're done:** Switch back to your terminal window and press `Ctrl + C`.
 
+> [!TIP]
+> **Want to watch a demo first?** Check out [`demo.webm`](demo.webm) for a pre-recorded video walkthrough, or generate a fresh video anytime with `./scripts/record-demo.sh`.
+
 ---
 
 ## ⚙️ Two Modes of Operation: Preview vs. Live Compute

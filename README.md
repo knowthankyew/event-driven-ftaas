@@ -7,6 +7,16 @@ An enterprise-grade, asynchronous, event-driven machine learning platform demons
 - **Message Broker**: RabbitMQ (AMQP) with DLX and retry handling
 - **Base Models**: Ultra-compact models (`HuggingFaceTB/SmolLM2-135M` or `TinyLlama-1.1B`) for zero-cost, fast local execution on consumer hardware (Apple Silicon MPS / CPU / CUDA).
 
+## 📺 Interactive Video Demonstration
+
+Watch the complete end-to-end studio workflow in action—from side-by-side compliance policy comparison to live PII guardrails and event pipeline tracking:
+
+https://github.com/user-attachments/assets/demo.webm
+
+> **Recorded Demonstration**: [demo.webm](demo.webm) *(High-definition Playwright automated recording)*
+>
+> To regenerate this demonstration at any time, run: `./scripts/record-demo.sh`
+
 ---
 
 ## Quickstart for Non-Technical Users & Business Leaders
@@ -104,8 +114,38 @@ curl -X POST http://localhost:5100/api/v1/jobs \
 
 ---
 
-## Automated End-to-End Verification
-To test the entire pipeline (Infra $\rightarrow$ .NET 10 Ingestion $\rightarrow$ RabbitMQ $\rightarrow$ PyTorch/PEFT Training on MPS $\rightarrow$ MLflow $\rightarrow$ Dynamic Inference Comparison) in one command:
+## Automated Test Suites & Quality Engineering
+
+The platform includes formal, automated unit and regression test suites across both the .NET control plane and Python compute layers:
+
+### 1. .NET 10 API Test Suite (xUnit + Coverlet)
+Validates compliance boundaries, data sanitization, and state machine idempotency:
+- **PII Compliance Gateway**: Delimited SSA SSNs, contextual SSNs, and Luhn-valid payment cards.
+- **False-Positive Immunity**: Verifies that non-contextual 9-digit integers (order IDs, invoice numbers) pass unhindered.
+- **Full-Row Unmapped Column Scanning**: Scans all metadata columns/properties; strips unmapped fields upon normalization.
+- **Zero-Disk In-Memory Guarantee**: Verifies zero bytes are written to disk upon compliance rejection.
+- **Ingestion Ceilings**: Enforces 25 MB file size and 50,000 record limits.
+- **State Machine Idempotency**: Rejects out-of-order sequence updates and prevents terminal state regressions in SQLite.
+
+```bash
+# Run all .NET unit tests with code coverage collection:
+dotnet test tests/FtaaSService.Api.Tests --collect:"XPlat Code Coverage"
+```
+
+### 2. Python Worker & Inference Tests (unittest)
+Validates model serving resilience and file integrity:
+- **Adapter Weight Integrity**: Rejects truncated, zero-byte, or incomplete writes (<100 KB weights, <10 bytes config).
+- **Bounded LRU Cache Eviction**: Verifies dynamic eviction of least-recently-used LoRA adapters under memory pressure.
+
+```bash
+# Run all Python unit tests:
+src/FtaaSService.Worker/.venv/bin/python -m unittest discover -s tests
+```
+
+---
+
+## Automated End-to-End Integration Verification
+To test the entire live pipeline (Infra $\rightarrow$ .NET 10 Ingestion $\rightarrow$ RabbitMQ $\rightarrow$ PyTorch/PEFT Training on MPS $\rightarrow$ MLflow $\rightarrow$ Dynamic Inference Comparison) in one command:
 
 ```bash
 ./scripts/verify-e2e.sh
