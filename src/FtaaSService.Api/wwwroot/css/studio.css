@@ -729,6 +729,12 @@ main.app-main {
   border-color: var(--accent-primary);
 }
 
+.dataset-input.pii-flagged {
+  border-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.08) !important;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.3);
+}
+
 .dataset-actions {
   display: flex;
   justify-content: space-between;

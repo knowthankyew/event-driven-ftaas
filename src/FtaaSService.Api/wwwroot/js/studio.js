@@ -53,6 +53,7 @@
     setupTabNavigation();
     setupDropzone();
     setupEventListeners();
+    await checkEngineHealth();
     await loadPersonas();
     await loadJobs();
     startPolling();
@@ -371,6 +372,95 @@
     });
   }
 
+  // Active Engine Health Probe
+  async function checkEngineHealth() {
+    try {
+      const res = await fetch('/api/v1/studio/engine-health');
+      if (res.ok) {
+        const data = await res.json();
+        state.isLiveEngine = data.isLive;
+        if (data.isLive) {
+          if (elements.modeStatusIndicator) {
+            elements.modeStatusIndicator.style.background = '#10b981';
+            elements.modeStatusIndicator.style.boxShadow = '0 0 8px #10b981';
+          }
+          if (elements.modeStatusText) {
+            elements.modeStatusText.innerHTML = `Engine: <strong style="color: #34d399;">Live Compute (${data.device})</strong>`;
+          }
+        } else {
+          if (elements.modeStatusIndicator) {
+            elements.modeStatusIndicator.style.background = '#f59e0b';
+            elements.modeStatusIndicator.style.boxShadow = '0 0 8px #f59e0b';
+          }
+          if (elements.modeStatusText) {
+            elements.modeStatusText.innerHTML = `Engine: <strong style="color: #fbbf24;">Preview Mode</strong>`;
+          }
+        }
+      }
+    } catch {
+      state.isLiveEngine = false;
+    }
+  }
+
+  // Active PII Guardrail Detector
+  function scanForPII(text) {
+    if (!text) return null;
+    // Check SSN format: 3-2-4 digits (with hyphens, spaces, or raw 9 digits)
+    if (/\b\d{3}-\d{2}-\d{4}\b/.test(text) || /\b\d{9}\b/.test(text)) return 'Social Security Number (SSN)';
+    // Check Credit/Debit Card numbers (13-19 digits formatted or raw 16)
+    if (/\b(?:\d{4}[ -]?){3}\d{4}\b/.test(text)) return 'Credit/Debit Card Number';
+    // Check US Phone numbers
+    if (/\b(?:\+?1[-. ]?)?\(?([0-9]{3})\)?[-. ]?([0-9]{3})[-. ]?([0-9]{4})\b/.test(text)) return 'Phone Number';
+    return null;
+  }
+
+  function updatePiiStatus() {
+    let piiFound = null;
+    let piiRowIndex = -1;
+
+    const rows = elements.datasetTableBody ? elements.datasetTableBody.querySelectorAll('tr') : [];
+    rows.forEach((tr, index) => {
+      const promptInput = tr.querySelector('.prompt-cell');
+      const compInput = tr.querySelector('.comp-cell');
+
+      const piiPrompt = promptInput ? scanForPII(promptInput.value) : null;
+      const piiComp = compInput ? scanForPII(compInput.value) : null;
+
+      if (promptInput) promptInput.classList.toggle('pii-flagged', !!piiPrompt);
+      if (compInput) compInput.classList.toggle('pii-flagged', !!piiComp);
+
+      if ((piiPrompt || piiComp) && !piiFound) {
+        piiFound = piiPrompt || piiComp;
+        piiRowIndex = index + 1;
+      }
+    });
+
+    let piiBanner = document.getElementById('pii-guardrail-banner');
+    if (piiFound) {
+      if (!piiBanner && elements.datasetTableBody) {
+        piiBanner = document.createElement('div');
+        piiBanner.id = 'pii-guardrail-banner';
+        piiBanner.style.cssText = 'background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; padding: 0.75rem 1.25rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.85rem;';
+        const card = elements.datasetTableBody.closest('.studio-card');
+        const table = elements.datasetTableBody.closest('table');
+        if (card && table) card.insertBefore(piiBanner, table);
+      }
+      if (piiBanner) {
+        piiBanner.innerHTML = `🚨 <strong>Active PII Guardrail Alert:</strong> Detected potential real customer <strong>${piiFound}</strong> in Row ${piiRowIndex}. Training is blocked until sanitized or replaced with fictitious examples.`;
+      }
+      if (elements.submitJobBtn) {
+        elements.submitJobBtn.disabled = true;
+        elements.submitJobBtn.title = 'Blocked by PII guardrail';
+      }
+    } else {
+      if (piiBanner) piiBanner.remove();
+      if (elements.submitJobBtn) {
+        elements.submitJobBtn.disabled = false;
+        elements.submitJobBtn.title = '';
+      }
+    }
+  }
+
   // No-Code Dataset Builder
   function renderDatasetRows() {
     if (!elements.datasetTableBody) return;
@@ -392,9 +482,11 @@
 
       tr.querySelector('.prompt-cell').addEventListener('input', (e) => {
         state.datasetRows[index].prompt = e.target.value;
+        updatePiiStatus();
       });
       tr.querySelector('.comp-cell').addEventListener('input', (e) => {
         state.datasetRows[index].completion = e.target.value;
+        updatePiiStatus();
       });
       tr.querySelector('.btn-danger-sm').addEventListener('click', () => {
         state.datasetRows.splice(index, 1);
@@ -403,6 +495,8 @@
 
       elements.datasetTableBody.appendChild(tr);
     });
+
+    updatePiiStatus();
   }
 
   function addDatasetRow() {
@@ -593,13 +687,23 @@
       card.className = 'library-card';
       const isSucceeded = job.status === 'Succeeded';
       const isFailed = job.status === 'Failed';
-      const isWorking = job.status === 'Training' || job.status === 'Queued';
+      const isTraining = job.status === 'Training';
+      const isQueued = job.status === 'Queued';
+      const ageMs = Date.now() - new Date(job.createdAt).getTime();
+      const isWorkerWaiting = isQueued && (ageMs > 30000);
 
-      const statusBadge = isSucceeded 
-        ? `<span class="persona-tag" style="background: rgba(16, 185, 129, 0.15); color: #34d399;">Ready to Serve</span>`
-        : isWorking
-        ? `<span class="persona-tag" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;">${job.status}...</span>`
-        : `<span class="persona-tag" style="background: rgba(239, 68, 68, 0.15); color: #f87171;">Failed</span>`;
+      let statusBadge;
+      if (isSucceeded) {
+        statusBadge = `<span class="persona-tag" style="background: rgba(16, 185, 129, 0.15); color: #34d399;" title="Stored at ${job.adapterPath}">✓ Real LoRA Adapter</span>`;
+      } else if (isTraining) {
+        statusBadge = `<span class="persona-tag" style="background: rgba(99, 102, 241, 0.2); color: #a5b4fc;">⚡ Training Live...</span>`;
+      } else if (isWorkerWaiting) {
+        statusBadge = `<span class="persona-tag" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;" title="In queue, but Python worker (consumer.py) is offline">⏳ Queued (Worker Offline)</span>`;
+      } else if (isQueued) {
+        statusBadge = `<span class="persona-tag" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;">Queued...</span>`;
+      } else {
+        statusBadge = `<span class="persona-tag" style="background: rgba(239, 68, 68, 0.15); color: #f87171;" title="${escapeHtml(job.errorMessage || 'Training process error')}">Failed</span>`;
+      }
 
       card.innerHTML = `
         <div class="library-card-header">
@@ -615,10 +719,20 @@
             <div class="library-metric-val">SmolLM2-135M</div>
           </div>
           <div class="library-metric-box">
-            <div class="library-metric-label">Adapter Size</div>
-            <div class="library-metric-val">~1.8 MB</div>
+            <div class="library-metric-label">Artifact Footprint</div>
+            <div class="library-metric-val">${isSucceeded ? '~1.8 MB' : '--'}</div>
           </div>
         </div>
+        ${isWorkerWaiting ? `
+          <div style="font-size: 0.75rem; color: #fbbf24; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 6px; padding: 0.4rem 0.6rem; margin-bottom: 0.75rem;">
+            ⚠️ Job waiting in queue. The Python worker (<code>consumer.py</code>) is currently offline.
+          </div>
+        ` : ''}
+        ${isFailed && job.errorMessage ? `
+          <div style="font-size: 0.75rem; color: #f87171; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 6px; padding: 0.4rem 0.6rem; margin-bottom: 0.75rem;">
+            Error: ${escapeHtml(job.errorMessage)}
+          </div>
+        ` : ''}
         <div style="margin-top: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
           <span style="font-size: 0.75rem; color: var(--text-dim);">
             ${new Date(job.createdAt).toLocaleDateString()}
@@ -657,6 +771,7 @@
   function startPolling() {
     if (state.pollInterval) clearInterval(state.pollInterval);
     state.pollInterval = setInterval(async () => {
+      await checkEngineHealth();
       await loadJobs();
     }, 8000);
   }

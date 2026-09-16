@@ -34,6 +34,7 @@ public static class StudioEndpoints
     {
         group.MapGet("/personas", GetPersonas);
         group.MapGet("/overview", GetOverviewAsync);
+        group.MapGet("/engine-health", CheckEngineHealthAsync);
         return group;
     }
 
@@ -191,4 +192,52 @@ public static class StudioEndpoints
             }
         });
     }
+
+    private static async Task<IResult> CheckEngineHealthAsync(
+        [FromServices] IHttpClientFactory httpClientFactory,
+        [FromServices] IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        var inferenceUrl = configuration.GetValue<string>("INFERENCE_SERVICE_URL") ?? configuration["Inference:BaseUrl"] ?? "http://localhost:8000";
+        var client = httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromMilliseconds(1500);
+
+        try
+        {
+            var response = await client.GetAsync($"{inferenceUrl.TrimEnd('/')}/healthz", cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(cancellationToken: cancellationToken);
+                bool isLoaded = content.TryGetProperty("baseModelLoaded", out var loaded) && loaded.GetBoolean();
+                string device = content.TryGetProperty("device", out var d) ? d.GetString() ?? "unknown" : "unknown";
+                string baseModel = content.TryGetProperty("baseModel", out var bm) ? bm.GetString() ?? "" : "";
+                
+                return Results.Ok(new
+                {
+                    isLive = isLoaded,
+                    status = isLoaded ? "Ready" : "WarmingUp",
+                    device,
+                    baseModel,
+                    message = isLoaded ? "Live on-device PyTorch model loaded" : "Base model is pre-warming in memory"
+                });
+            }
+
+            return Results.Ok(new
+            {
+                isLive = false,
+                status = "Unhealthy",
+                message = $"Inference engine returned HTTP {response.StatusCode}"
+            });
+        }
+        catch
+        {
+            return Results.Ok(new
+            {
+                isLive = false,
+                status = "Offline",
+                message = "Inference engine (:8000) unreachable. Running in Interactive Preview Mode."
+            });
+        }
+    }
 }
+
