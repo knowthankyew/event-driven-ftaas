@@ -181,14 +181,28 @@ async function sleep(ms) {
   await context.close();
   await browser.close();
 
-  // Move video to root demo.webm
+  // Convert recorded video to demo.mp4
+  const { execSync } = require('child_process');
   const videoFiles = fs.readdirSync(tempVideoDir).filter(f => f.endsWith('.webm'));
   if (videoFiles.length > 0) {
     const latestVideo = path.join(tempVideoDir, videoFiles[videoFiles.length - 1]);
-    const destRepo = path.join(repoRoot, 'demo.webm');
-    fs.copyFileSync(latestVideo, destRepo);
+    const destMp4 = path.join(repoRoot, 'demo.mp4');
+
+    let ffmpegPath = 'ffmpeg';
+    const venvFfmpeg = path.join(repoRoot, 'src/FtaaSService.Worker/.venv/lib/python3.12/site-packages/imageio_ffmpeg/binaries/ffmpeg-macos-x86_64-v7.1');
+    if (fs.existsSync(venvFfmpeg)) {
+      ffmpegPath = venvFfmpeg;
+    }
+
+    try {
+      console.log('Converting recording to web-optimized MP4 (H.264)...');
+      execSync(`"${ffmpegPath}" -y -i "${latestVideo}" -c:v libx264 -pix_fmt yuv420p -movflags +faststart "${destMp4}"`, { stdio: 'inherit' });
+      console.log(`Demo video successfully saved to: ${destMp4} (${(fs.statSync(destMp4).size / (1024 * 1024)).toFixed(2)} MB)`);
+    } catch (e) {
+      console.warn('FFmpeg conversion failed:', e.message);
+    }
+
     fs.rmSync(tempVideoDir, { recursive: true, force: true });
-    console.log(`Demo video saved to: ${destRepo}`);
   }
 
   console.log('Recording completed successfully.');

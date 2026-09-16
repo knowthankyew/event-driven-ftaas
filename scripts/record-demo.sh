@@ -44,4 +44,4 @@ done
 # Run Playwright recording script
 node scripts/record-demo.js
 
-echo "Demo recording saved to: $REPO_ROOT/demo.webm"
+echo "Demo recording saved to: $REPO_ROOT/demo.mp4"

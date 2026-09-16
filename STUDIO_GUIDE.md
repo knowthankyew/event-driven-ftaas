@@ -38,7 +38,7 @@ Open your Terminal (macOS Terminal, iTerm, or PowerShell) in this repository dir
 4. **To stop the studio when you're done:** Switch back to your terminal window and press `Ctrl + C`.
 
 > [!TIP]
-> **Want to watch a demo first?** Check out [`demo.webm`](demo.webm) for a pre-recorded video walkthrough, or generate a fresh video anytime with `./scripts/record-demo.sh`.
+> **Want to watch a demo first?** Check out [`demo.mp4`](demo.mp4) for a pre-recorded video walkthrough, or generate a fresh video anytime with `./scripts/record-demo.sh`.
 
 ---
 

@@ -11,9 +11,9 @@ An enterprise-grade, asynchronous, event-driven machine learning platform demons
 
 Watch the complete end-to-end studio workflow in action—from side-by-side compliance policy comparison to live PII guardrails and event pipeline tracking:
 
-https://github.com/user-attachments/assets/demo.webm
+https://github.com/user-attachments/assets/demo.mp4
 
-> **Recorded Demonstration**: [demo.webm](demo.webm) *(High-definition Playwright automated recording)*
+> **Recorded Demonstration**: [demo.mp4](demo.mp4) *(High-definition Playwright automated recording)*
 >
 > To regenerate this demonstration at any time, run: `./scripts/record-demo.sh`
 
