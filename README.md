@@ -12,7 +12,9 @@ An enterprise-grade, asynchronous, event-driven machine learning platform demons
 ## Quickstart for Non-Technical Users & Business Leaders
 
 > [!TIP]
-> **Zero-Code Operation**: You do not need to know Python, PyTorch, Docker, or terminal commands to use FTaaS. 
+> **Zero-Code Operation**: You do not need to write Python, manage PyTorch, or configure machine learning pipelines to evaluate FTaaS.
+>
+> **Prerequisite**: [.NET 10 SDK](https://dotnet.microsoft.com/download) installed on your machine.
 
 Run one command to launch the full interactive web application:
 
@@ -22,14 +24,17 @@ Run one command to launch the full interactive web application:
 
 Then open your browser to **[http://localhost:5100](http://localhost:5100)**.
 
-📖 **Looking for a non-technical walkthrough? Read the [FTaaS Enterprise Studio Guide](STUDIO_GUIDE.md) for step-by-step instructions, feature breakdowns, and FAQs with zero code jargon.**
+📖 **Looking for a guided walkthrough? Read the [FTaaS Enterprise Studio Guide](STUDIO_GUIDE.md) for step-by-step instructions, visual explanations, and FAQs.**
 
 ### What You Can Do in the Studio:
-1. **⚡ Side-by-Side Comparison Arena**: Select a business team persona (e.g. *Fintech Support & Compliance*, *Enterprise SaaS Ops*, or *Financial Earnings*) and run customer inquiries. See how the **Generic Foundation Model** (missing disclaimers, unadapted) contrasts with your **Company Custom AI** (which adheres to internal SLAs, Reg CC limits, and mandatory FDIC/SEC disclaimers).
-2. **🛡️ Compliance & Policy Inspector**: An automated checklist auditing whether required disclosures, statutory exemptions, and department tags are included in model completions.
-3. **🛠️ No-Code Adapter Studio**: Enter your team's common questions and preferred compliant answers in an interactive spreadsheet-like grid, or drag and drop existing company CSV/JSONL documents. Click **"Train & Deploy Team Adapter"** to trigger background training without writing code.
-4. **🔄 Live Event Pipeline Visualizer**: A visual, animated walkthrough of the event-driven workflow showing how incoming requests are decoupled from heavy ML compute.
-5. **📚 Adapter Library**: Browse company adapters, check their footprint (~1.8 MB), and load them directly into the comparison arena with one click.
+1. **⚡ Side-by-Side Comparison Arena**: Select a business persona (e.g. *Fintech Support & Compliance*, *Enterprise SaaS Ops*, or *Financial Earnings*) and test realistic inquiries. Observe how a **Generic Foundation Model** contrasts with your **Company Custom AI** (incorporating team SLAs, policy limits, and required regulatory disclaimers).
+2. **🛡️ Team Policy & Disclaimer Inspector**: Pattern-matching verification checking whether designated training guidelines and statutory tags appear in completions *(demonstration aid; not legal advice or statutory regulatory certification)*.
+3. **🛠️ No-Code Adapter Studio**: Define your department's question-and-answer pairs in an intuitive table editor, or drag-and-drop a `.csv` document. Click **"Train & Deploy Team Adapter"** to submit the job in milliseconds without waiting on background compute.
+4. **🔄 Live Event Pipeline Visualizer**: An animated diagram demonstrating how incoming user requests decouple from background training compute.
+5. **📚 Adapter Library**: View trained department models, inspect their lightweight footprint (~1.8 MB), and load them into the arena with one click.
+
+> [!NOTE]
+> **Preview vs. Live Compute**: When launched standalone via `start-studio.sh`, the studio operates in **Interactive Preview Mode** with pre-formatted demonstration outputs so you can evaluate the interface without spinning up Docker containers or downloading multi-gigabyte models. To run live on-device GPU inference, start Docker and the Python services via `./scripts/dev-up.sh`.
 
 ---
 

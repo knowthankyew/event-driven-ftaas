@@ -54,9 +54,9 @@
 
     <!-- System Status Badges -->
     <div class="system-status">
-      <div class="status-pill">
-        <span class="status-indicator pulse"></span>
-        <span>Control Plane: <strong>.NET 10</strong></span>
+      <div id="mode-status-pill" class="status-pill">
+        <span id="mode-status-indicator" class="status-indicator"></span>
+        <span id="mode-status-text">Engine: <strong>Detecting...</strong></span>
       </div>
       <div class="status-pill">
         <span class="status-indicator"></span>
@@ -117,12 +117,12 @@
             </div>
 
             <button id="btn-run-compare" class="btn-primary">
-              <span>⚡</span> Compare Live Models
+              <span>⚡</span> Compare Models
             </button>
           </div>
 
-          <div id="preview-notice" style="display: none; margin-top: 1rem; padding: 0.75rem 1rem; border-radius: var(--radius-sm); background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); font-size: 0.825rem; color: #c7d2fe;">
-            <!-- Interactive preview message -->
+          <div id="preview-notice" style="display: none; margin-top: 1.25rem; padding: 0.85rem 1.25rem; border-radius: var(--radius-sm); background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); font-size: 0.825rem; color: #fde68a;">
+            <!-- Interactive preview message rendered dynamically -->
           </div>
         </div>
 
@@ -136,7 +136,7 @@
                 <span class="model-badge base">Generic AI</span>
                 <span class="model-title">Standard Foundation Model</span>
               </div>
-              <span class="model-meta">SmolLM2-135M (Zero Customization)</span>
+              <span id="base-mode-tag" class="model-meta">SmolLM2-135M</span>
             </div>
 
             <div id="base-completion" class="completion-box placeholder">
@@ -156,7 +156,7 @@
                 <span class="model-badge tuned">Company AI</span>
                 <span id="tuned-adapter-label" class="model-title">Enterprise Adapter (1.8 MB)</span>
               </div>
-              <span class="model-meta" style="color: #a5b4fc;">Mounted On-The-Fly</span>
+              <span id="tuned-mode-tag" class="model-meta" style="color: #a5b4fc;">Mounted On-The-Fly</span>
             </div>
 
             <div id="tuned-completion" class="completion-box placeholder">
@@ -165,7 +165,7 @@
 
             <div class="model-panel-footer">
               <span id="tuned-latency" class="metric-pill">Latency: -- • Memory: ~1.8 MB</span>
-              <span style="color: var(--success); font-weight: 600; font-size: 0.75rem;">✓ Strict Compliance Enforced</span>
+              <span style="color: var(--success); font-weight: 600; font-size: 0.75rem;">✓ Policy Match Verified</span>
             </div>
           </div>
 
@@ -174,11 +174,13 @@
         <!-- Compliance & Rule Verification Inspector -->
         <div class="compliance-inspector">
           <div class="inspector-header">
-            <div class="inspector-title">
-              <span>🛡️</span> Compliance & Enterprise Policy Audit Inspector
-            </div>
-            <div style="font-size: 0.8rem; color: var(--text-dim);">
-              Automated audit of required regulatory disclosures and internal ticket tags
+            <div>
+              <div class="inspector-title">
+                <span>🛡️</span> Team Policy & Disclaimer Match Inspector
+              </div>
+              <div style="font-size: 0.775rem; color: var(--text-dim); margin-top: 0.2rem;">
+                Keyword & pattern check against your team's training dataset rules. <em>(Pattern match demonstration; does not constitute independent statutory certification or legal advice.)</em>
+              </div>
             </div>
           </div>
           <div id="compliance-grid" class="compliance-grid">
@@ -198,6 +200,11 @@
           <div class="studio-title">No-Code Team Adapter Builder</div>
           <div class="studio-subtitle">
             Teach the AI your department's specific terminology, compliance rules, and preferred phrasing in minutes. No ML or Python code required.
+          </div>
+
+          <!-- Data Privacy Notice -->
+          <div style="margin-bottom: 1.25rem; padding: 0.85rem 1.1rem; border-radius: var(--radius-sm); background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.8rem; color: #fde68a; line-height: 1.5;">
+            🔒 <strong>Data Privacy Notice:</strong> Do NOT enter real customer Personally Identifiable Information (PII), real credit card/bank account numbers, or real patient health records into sample training tables. Always use sanitized or fictitious company examples.
           </div>
 
           <!-- Drag and Drop Box -->
@@ -262,7 +269,7 @@
               </div>
               <ul style="font-size: 0.8rem; color: var(--text-muted); padding-left: 1.2rem; line-height: 1.6;">
                 <li>Produces a tiny <strong>~1.8 MB adapter</strong> instead of a 7 GB redundant model.</li>
-                <li>Trains in <strong>2–3 minutes</strong> on standard Apple Silicon MPS or GPU.</li>
+                <li>Trains in <strong>2–3 minutes</strong> on Apple Silicon (M1–M4) or NVIDIA GPU (~10–15 min on standard CPU).</li>
                 <li>Zero memory leakage between different company teams.</li>
               </ul>
             </div>

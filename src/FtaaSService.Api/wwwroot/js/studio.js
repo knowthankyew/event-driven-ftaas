@@ -31,6 +31,11 @@
     tunedAdapterLabel: document.getElementById('tuned-adapter-label'),
     complianceGrid: document.getElementById('compliance-grid'),
     previewNotice: document.getElementById('preview-notice'),
+    modeStatusPill: document.getElementById('mode-status-pill'),
+    modeStatusIndicator: document.getElementById('mode-status-indicator'),
+    modeStatusText: document.getElementById('mode-status-text'),
+    baseModeTag: document.getElementById('base-mode-tag'),
+    tunedModeTag: document.getElementById('tuned-mode-tag'),
     datasetTableBody: document.getElementById('dataset-table-body'),
     addRowBtn: document.getElementById('btn-add-row'),
     loadTemplateBtn: document.getElementById('btn-load-template'),
@@ -284,7 +289,7 @@
     } finally {
       state.isComparing = false;
       elements.runCompareBtn.disabled = false;
-      elements.runCompareBtn.innerHTML = '<span>⚡</span> Compare Live Models';
+      elements.runCompareBtn.innerHTML = '<span>⚡</span> Compare Models';
     }
   }
 
@@ -297,15 +302,41 @@
     elements.tunedCompletion.textContent = data.fineTunedCompletion || 'No output generated.';
     elements.tunedLatency.textContent = `Latency: ${data.latencyMs?.fineTuned || 48}ms • Memory: ~1.8 MB`;
 
-    // Notice banner
+    // Loud, explicit notice banner for preview vs live compute transparency
     if (elements.previewNotice) {
+      elements.previewNotice.style.display = 'block';
       if (data.isSimulated) {
-        elements.previewNotice.style.display = 'block';
+        elements.previewNotice.style.background = 'rgba(245, 158, 11, 0.12)';
+        elements.previewNotice.style.borderColor = 'rgba(245, 158, 11, 0.35)';
+        elements.previewNotice.style.color = '#fde68a';
         elements.previewNotice.innerHTML = `
-          <strong>💡 Interactive Preview Mode:</strong> ${data.note || 'Inference engine is pre-warming. Real domain responses displayed.'}
+          <strong>🟡 Interactive Preview Mode Active:</strong> The live ML inference service (:8000) is currently offline or pre-warming. The responses shown below are pre-formatted demonstration examples illustrating team policy formatting and compliance tags, <em>not live neural network generation</em>. To run real weights on your hardware, launch the Python worker and inference services.
         `;
+        if (elements.modeStatusIndicator) {
+          elements.modeStatusIndicator.style.background = '#f59e0b';
+          elements.modeStatusIndicator.style.boxShadow = '0 0 8px #f59e0b';
+        }
+        if (elements.modeStatusText) {
+          elements.modeStatusText.innerHTML = 'Engine: <strong style="color:#fbbf24;">Preview Mode</strong>';
+        }
+        if (elements.baseModeTag) elements.baseModeTag.textContent = 'Preview Output';
+        if (elements.tunedModeTag) elements.tunedModeTag.textContent = 'Preview Output';
       } else {
-        elements.previewNotice.style.display = 'none';
+        elements.previewNotice.style.background = 'rgba(16, 185, 129, 0.12)';
+        elements.previewNotice.style.borderColor = 'rgba(16, 185, 129, 0.35)';
+        elements.previewNotice.style.color = '#a7f3d0';
+        elements.previewNotice.innerHTML = `
+          <strong>✓ Live Compute Run:</strong> Output generated dynamically on ${data.device || 'device'} from loaded PyTorch model weights.
+        `;
+        if (elements.modeStatusIndicator) {
+          elements.modeStatusIndicator.style.background = '#10b981';
+          elements.modeStatusIndicator.style.boxShadow = '0 0 8px #10b981';
+        }
+        if (elements.modeStatusText) {
+          elements.modeStatusText.innerHTML = 'Engine: <strong style="color:#34d399;">Live Compute</strong>';
+        }
+        if (elements.baseModeTag) elements.baseModeTag.textContent = 'Live Model Run';
+        if (elements.tunedModeTag) elements.tunedModeTag.textContent = 'Live LoRA Mount';
       }
     }
 
