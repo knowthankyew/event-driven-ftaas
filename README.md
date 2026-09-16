@@ -36,6 +36,9 @@ Then open your browser to **[http://localhost:5100](http://localhost:5100)**.
 > [!NOTE]
 > **Preview vs. Live Compute**: When launched standalone via `start-studio.sh`, the studio operates in **Interactive Preview Mode** with pre-formatted demonstration outputs so you can evaluate the interface without spinning up Docker containers or downloading multi-gigabyte models. To run live on-device GPU inference, start Docker and the Python services via `./scripts/dev-up.sh`.
 
+> [!CAUTION]
+> **Data Privacy & Guardrail Scope**: Automated heuristic checks detect delimited SSNs and Luhn-valid credit card numbers across all columns (including unmapped metadata). However, this is a best-effort defense, not an exhaustive DLP certification tool. Always sanitize datasets prior to training.
+
 ---
 
 ## Architecture at a Glance

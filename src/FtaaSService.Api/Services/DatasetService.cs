@@ -61,62 +61,116 @@ public sealed class DatasetService : IDatasetService
 
                 int recordCount = 0;
                 string? line;
+                bool isFirstLine = true;
+                bool isCsv = uploadedFile?.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) == true
+                             || existingPath?.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) == true;
+                int promptColIdx = 0;
+                int compColIdx = 1;
 
                 while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
                 {
                     if (string.IsNullOrWhiteSpace(line)) continue;
 
-                    JsonDocument doc;
-                    try
-                    {
-                        doc = JsonDocument.Parse(line);
-                    }
-                    catch (Exception ex)
+                    // 1. Full-Row Server-Side PII Compliance Check (Scans ALL columns/properties including unmapped metadata)
+                    var piiDetected = ScanForPii(line);
+                    if (piiDetected is not null)
                     {
                         File.Delete(targetDiskPath);
-                        return new DatasetResult(false, null, null, 0, $"Invalid JSON at line {recordCount + 1}: {ex.Message}");
+                        _logger.LogWarning("Job {JobId}: Ingestion blocked due to detected customer {PiiType} in payload at record {RecordIndex}",
+                            jobId, piiDetected, recordCount + 1);
+                        return new DatasetResult(false, null, null, 0,
+                            $"Security/PII compliance violation at record {recordCount + 1}: Detected potential real customer {piiDetected} in payload (including unmapped metadata columns). Training dataset rejected by server ingestion gateway.");
                     }
 
-                    using (doc)
+                    // Auto-detect CSV on first line if not explicitly named
+                    if (isFirstLine && !line.TrimStart().StartsWith("{"))
                     {
-                        var root = doc.RootElement;
-                        if (!root.TryGetProperty("prompt", out var promptElem) || promptElem.ValueKind != JsonValueKind.String)
-                        {
-                            File.Delete(targetDiskPath);
-                            return new DatasetResult(false, null, null, 0, $"Line {recordCount + 1} is missing required string 'prompt' property.");
-                        }
-
-                        if (!root.TryGetProperty("completion", out var compElem) || compElem.ValueKind != JsonValueKind.String)
-                        {
-                            File.Delete(targetDiskPath);
-                            return new DatasetResult(false, null, null, 0, $"Line {recordCount + 1} is missing required string 'completion' property.");
-                        }
-
-                        var prompt = promptElem.GetString()?.Trim() ?? "";
-                        var completion = compElem.GetString()?.Trim() ?? "";
-
-                        if (prompt.Length < 3 || completion.Length < 1)
-                        {
-                            File.Delete(targetDiskPath);
-                            return new DatasetResult(false, null, null, 0, $"Line {recordCount + 1} has empty or insufficiently short prompt/completion tokens.");
-                        }
-
-                        // Server-Side PII Compliance Check
-                        var piiDetected = ScanForPii(prompt) ?? ScanForPii(completion);
-                        if (piiDetected is not null)
-                        {
-                            File.Delete(targetDiskPath);
-                            _logger.LogWarning("Job {JobId}: Ingestion blocked due to detected customer {PiiType} at record {RecordIndex}",
-                                jobId, piiDetected, recordCount + 1);
-                            return new DatasetResult(false, null, null, 0,
-                                $"Security/PII compliance violation at record {recordCount + 1}: Detected potential real customer {piiDetected}. Training dataset rejected by server ingestion gateway.");
-                        }
-
-                        // Write normalized json string
-                        var normalizedJson = JsonSerializer.Serialize(new { prompt, completion });
-                        await writer.WriteLineAsync(normalizedJson);
-                        recordCount++;
+                        isCsv = true;
                     }
+
+                    string prompt = "";
+                    string completion = "";
+
+                    if (isCsv)
+                    {
+                        var cols = line.Split(',');
+                        if (isFirstLine)
+                        {
+                            isFirstLine = false;
+                            // Check for CSV header row
+                            var headerLower = cols.Select(c => c.Trim().ToLowerInvariant().Trim('"', '\'')).ToList();
+                            var pIdx = headerLower.FindIndex(h => h is "prompt" or "question" or "inquiry");
+                            var cIdx = headerLower.FindIndex(h => h is "completion" or "response" or "answer");
+                            if (pIdx != -1 && cIdx != -1)
+                            {
+                                promptColIdx = pIdx;
+                                compColIdx = cIdx;
+                                continue; // Skip header row
+                            }
+                        }
+
+                        if (cols.Length > Math.Max(promptColIdx, compColIdx))
+                        {
+                            prompt = cols[promptColIdx].Trim().Trim('"', '\'');
+                            completion = (compColIdx == cols.Length - 1)
+                                ? string.Join(",", cols.Skip(compColIdx)).Trim().Trim('"', '\'')
+                                : cols[compColIdx].Trim().Trim('"', '\'');
+                        }
+                        else if (cols.Length >= 2)
+                        {
+                            prompt = cols[0].Trim().Trim('"', '\'');
+                            completion = string.Join(",", cols.Skip(1)).Trim().Trim('"', '\'');
+                        }
+                        else
+                        {
+                            File.Delete(targetDiskPath);
+                            return new DatasetResult(false, null, null, 0, $"CSV line {recordCount + 1} has insufficient columns (expected at least prompt and completion).");
+                        }
+                    }
+                    else
+                    {
+                        isFirstLine = false;
+                        JsonDocument doc;
+                        try
+                        {
+                            doc = JsonDocument.Parse(line);
+                        }
+                        catch (Exception ex)
+                        {
+                            File.Delete(targetDiskPath);
+                            return new DatasetResult(false, null, null, 0, $"Invalid JSON at line {recordCount + 1}: {ex.Message}");
+                        }
+
+                        using (doc)
+                        {
+                            var root = doc.RootElement;
+                            if (!root.TryGetProperty("prompt", out var promptElem) || promptElem.ValueKind != JsonValueKind.String)
+                            {
+                                File.Delete(targetDiskPath);
+                                return new DatasetResult(false, null, null, 0, $"Line {recordCount + 1} is missing required string 'prompt' property.");
+                            }
+
+                            if (!root.TryGetProperty("completion", out var compElem) || compElem.ValueKind != JsonValueKind.String)
+                            {
+                                File.Delete(targetDiskPath);
+                                return new DatasetResult(false, null, null, 0, $"Line {recordCount + 1} is missing required string 'completion' property.");
+                            }
+
+                            prompt = promptElem.GetString()?.Trim() ?? "";
+                            completion = compElem.GetString()?.Trim() ?? "";
+                        }
+                    }
+
+                    if (prompt.Length < 3 || completion.Length < 1)
+                    {
+                        File.Delete(targetDiskPath);
+                        return new DatasetResult(false, null, null, 0, $"Line {recordCount + 1} has empty or insufficiently short prompt/completion tokens.");
+                    }
+
+                    // Write strictly normalized { prompt, completion } JSONL, dropping any unmapped metadata columns
+                    var normalizedJson = JsonSerializer.Serialize(new { prompt, completion });
+                    await writer.WriteLineAsync(normalizedJson);
+                    recordCount++;
                 }
 
                 await writer.FlushAsync(cancellationToken);

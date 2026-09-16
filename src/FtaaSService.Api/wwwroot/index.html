@@ -204,7 +204,7 @@
 
           <!-- Data Privacy Notice -->
           <div style="margin-bottom: 1.25rem; padding: 0.85rem 1.1rem; border-radius: var(--radius-sm); background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.8rem; color: #fde68a; line-height: 1.5;">
-            🔒 <strong>Data Privacy Notice:</strong> Do NOT enter real customer Personally Identifiable Information (PII), real credit card/bank account numbers, or real patient health records into sample training tables. Always use sanitized or fictitious company examples.
+            🔒 <strong>Data Privacy Notice & Guardrail Scope:</strong> Do NOT enter real customer Personally Identifiable Information (PII), real credit cards, or patient health records. The studio runs an automated, server-enforced heuristic check for delimited SSNs and Luhn-valid payment cards as a safety net, but it is <strong>not exhaustive DLP certification</strong> (e.g. unflagged raw 9-digit integers without context are not caught). A passing scan is not proof of sanitized data; always review and sanitize company data before upload.
           </div>
 
           <!-- Drag and Drop Box -->

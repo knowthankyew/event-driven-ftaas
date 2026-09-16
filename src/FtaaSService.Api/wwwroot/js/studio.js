@@ -667,6 +667,7 @@
   function parseAndImportDataset(content, fileName) {
     const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     const parsed = [];
+    let piiFoundInUnmappedColumn = false;
 
     // Try parsing as JSONL
     let jsonlSuccess = true;
@@ -674,7 +675,11 @@
       try {
         const obj = JSON.parse(line);
         if (obj.prompt && obj.completion) {
-          parsed.push({ prompt: obj.prompt, completion: obj.completion });
+          parsed.push({ prompt: String(obj.prompt), completion: String(obj.completion) });
+        }
+        // Scan full raw line for PII (including unmapped metadata/notes fields)
+        if (!piiFoundInUnmappedColumn && scanForPII(line)) {
+          piiFoundInUnmappedColumn = true;
         }
       } catch {
         jsonlSuccess = false;
@@ -685,10 +690,35 @@
     // Try parsing as CSV if JSONL failed
     if (!jsonlSuccess || parsed.length === 0) {
       parsed.length = 0;
-      for (const line of lines) {
+      let promptIdx = 0;
+      let compIdx = 1;
+      let startRow = 0;
+
+      // Check for header row
+      if (lines.length > 0) {
+        const headerParts = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
+        const pIdx = headerParts.findIndex(h => h === 'prompt' || h === 'question' || h === 'inquiry');
+        const cIdx = headerParts.findIndex(h => h === 'completion' || h === 'response' || h === 'answer');
+        if (pIdx !== -1 && cIdx !== -1) {
+          promptIdx = pIdx;
+          compIdx = cIdx;
+          startRow = 1;
+        }
+      }
+
+      for (let i = startRow; i < lines.length; i++) {
+        const line = lines[i];
         const parts = line.split(',');
-        if (parts.length >= 2) {
-          parsed.push({ prompt: parts[0].trim(), completion: parts.slice(1).join(',').trim() });
+        if (parts.length > Math.max(promptIdx, compIdx)) {
+          const prompt = parts[promptIdx].trim().replace(/^["']|["']$/g, '');
+          const comp = (compIdx === parts.length - 1)
+            ? parts.slice(compIdx).join(',').trim().replace(/^["']|["']$/g, '')
+            : parts[compIdx].trim().replace(/^["']|["']$/g, '');
+          parsed.push({ prompt, completion: comp });
+        }
+        // Scan full raw line across all CSV columns (including unmapped notes/metadata)
+        if (!piiFoundInUnmappedColumn && scanForPII(line)) {
+          piiFoundInUnmappedColumn = true;
         }
       }
     }
@@ -697,10 +727,10 @@
       state.datasetRows = parsed;
       renderDatasetRows();
       const piiRow = parsed.find(r => scanForPII(r.prompt) || scanForPII(r.completion));
-      if (piiRow) {
-        showToast(`Security Alert: "${fileName}" contains customer PII. Training is blocked until sanitized.`, 'error');
+      if (piiRow || piiFoundInUnmappedColumn) {
+        showToast(`Security Alert: "${fileName}" contains customer PII (in data or unmapped columns). Training is blocked until sanitized.`, 'error');
       } else {
-        showToast(`Imported ${parsed.length} examples from "${fileName}".`, 'success');
+        showToast(`Imported ${parsed.length} examples from "${fileName}" (unmapped metadata columns safely excluded).`, 'success');
       }
     } else {
       showToast('Could not parse prompt/completion pairs from file.', 'error');

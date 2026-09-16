@@ -91,7 +91,9 @@ This is where you observe the business impact of team-specific customization:
 Use this tab to create or modify custom rules for your team:
 
 > [!CAUTION]
-> **Data Privacy Notice**: Do **NOT** paste real customer Personally Identifiable Information (PII), real credit card/bank account numbers, or real patient health records into sample training tables. Always use fictitious or sanitized data.
+> **Data Privacy Notice & Guardrail Scope**: Do **NOT** paste real customer Personally Identifiable Information (PII), real credit card/bank account numbers, or real patient health records into sample training tables or upload files. Always use fictitious or sanitized data.
+>
+> *Note on Guardrail Capabilities*: The Studio and server ingestion gateway run an automated heuristic scanner to block delimited Social Security Numbers (`XXX-XX-XXXX`), contextual SSNs (`SSN: XXXXXXXXX`), and Luhn-valid credit card numbers across all columns (including unmapped metadata). However, this is a **best-effort safety net, not an exhaustive Data Loss Prevention (DLP) certification tool**. Raw, uncontextualized 9-digit numbers or non-standard formats will not be detected. Never treat a passing scan as proof that a dataset is safe; company data sanitization policies remain mandatory.
 
 1. **Add Training Examples**:
    - Click **"Load Persona Policy Examples"** to pre-populate sample rules, or click **"+ Add Example Row"** to type your own.
