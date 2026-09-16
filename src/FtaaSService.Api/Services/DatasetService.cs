@@ -101,6 +101,17 @@ public sealed class DatasetService : IDatasetService
                             return new DatasetResult(false, null, null, 0, $"Line {recordCount + 1} has empty or insufficiently short prompt/completion tokens.");
                         }
 
+                        // Server-Side PII Compliance Check
+                        var piiDetected = ScanForPii(prompt) ?? ScanForPii(completion);
+                        if (piiDetected is not null)
+                        {
+                            File.Delete(targetDiskPath);
+                            _logger.LogWarning("Job {JobId}: Ingestion blocked due to detected customer {PiiType} at record {RecordIndex}",
+                                jobId, piiDetected, recordCount + 1);
+                            return new DatasetResult(false, null, null, 0,
+                                $"Security/PII compliance violation at record {recordCount + 1}: Detected potential real customer {piiDetected}. Training dataset rejected by server ingestion gateway.");
+                        }
+
                         // Write normalized json string
                         var normalizedJson = JsonSerializer.Serialize(new { prompt, completion });
                         await writer.WriteLineAsync(normalizedJson);
@@ -132,5 +143,62 @@ public sealed class DatasetService : IDatasetService
             _logger.LogError(ex, "Unexpected error normalizing dataset for Job {JobId}", jobId);
             return new DatasetResult(false, null, null, 0, $"Error processing dataset: {ex.Message}");
         }
+    }
+
+    // SSN format: 3-2-4 with delimiters, respecting SSA rules (area != 000, 666, 900-999; group != 00; serial != 0000)
+    private static readonly System.Text.RegularExpressions.Regex SsnDelimitedRegex = new(
+        @"\b(?!000|666|9\d{2})\d{3}[- ](?!00)\d{2}[- ](?!0000)\d{4}\b",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    // Contextual SSN: preceded by 'ssn' or 'social security' to prevent blocking bare 9-digit order/invoice IDs
+    private static readonly System.Text.RegularExpressions.Regex SsnContextualRegex = new(
+        @"(?i)\b(?:ssn|social\s*security(?:\s*number)?)[^\d]{1,10}((?!000|666|9\d{2})\d{3}[- ]?(?!00)\d{2}[- ]?(?!0000)\d{4})\b",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    // Credit Card candidates: 13-19 digits formatted or contiguous
+    private static readonly System.Text.RegularExpressions.Regex CreditCardCandidateRegex = new(
+        @"\b(?:\d{4}[ -]?){3}\d{4}\b|\b\d{15,16}\b",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static string? ScanForPii(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+
+        if (SsnDelimitedRegex.IsMatch(text) || SsnContextualRegex.IsMatch(text))
+        {
+            return "Social Security Number (SSN)";
+        }
+
+        var ccMatches = CreditCardCandidateRegex.Matches(text);
+        foreach (System.Text.RegularExpressions.Match match in ccMatches)
+        {
+            var digitsOnly = match.Value.Replace("-", "").Replace(" ", "");
+            if (digitsOnly.Length >= 13 && digitsOnly.Length <= 19 && PassesLuhn(digitsOnly))
+            {
+                return "Credit/Debit Card Number";
+            }
+        }
+
+        return null;
+    }
+
+    private static bool PassesLuhn(string number)
+    {
+        int sum = 0;
+        bool alternate = false;
+        for (int i = number.Length - 1; i >= 0; i--)
+        {
+            char c = number[i];
+            if (!char.IsDigit(c)) continue;
+            int n = c - '0';
+            if (alternate)
+            {
+                n *= 2;
+                if (n > 9) n -= 9;
+            }
+            sum += n;
+            alternate = !alternate;
+        }
+        return sum % 10 == 0;
     }
 }

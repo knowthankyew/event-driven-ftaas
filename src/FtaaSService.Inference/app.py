@@ -147,7 +147,25 @@ def load_or_get_adapter(adapter_rel_path: str) -> PeftModel:
             detail=f"Adapter path '{adapter_rel_path}' not found at '{full_adapter_path}'"
         )
 
-    logger.info(f"Mounting LoRA adapter on-the-fly from {full_adapter_path}...")
+    # Verify adapter integrity: reject zero-byte or truncated files from interrupted writes
+    config_file = full_adapter_path / "adapter_config.json"
+    safetensors_file = full_adapter_path / "adapter_model.safetensors"
+    bin_file = full_adapter_path / "adapter_model.bin"
+
+    if not config_file.exists() or config_file.stat().st_size < 10:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Adapter at '{adapter_rel_path}' is corrupted: missing or zero-byte adapter_config.json"
+        )
+
+    weights_file = safetensors_file if safetensors_file.exists() else bin_file
+    if not weights_file.exists() or weights_file.stat().st_size < 100 * 1024:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Adapter at '{adapter_rel_path}' is corrupted: weight file is missing or truncated (<100KB)"
+        )
+
+    logger.info(f"Mounting verified LoRA adapter ({weights_file.stat().st_size / 1024 / 1024:.2f} MB) on-the-fly from {full_adapter_path}...")
     try:
         peft_model = PeftModel.from_pretrained(
             model_store.base_model,

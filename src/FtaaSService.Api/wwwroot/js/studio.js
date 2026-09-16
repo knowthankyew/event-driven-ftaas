@@ -11,7 +11,10 @@
     datasetRows: [],
     activeJobId: null,
     isComparing: false,
-    pollInterval: null
+    pollInterval: null,
+    isLiveEngine: false,
+    consecutiveProbeFailures: 0,
+    isProbingEngine: false
   };
 
   // DOM Elements
@@ -372,14 +375,17 @@
     });
   }
 
-  // Active Engine Health Probe
+  // Active Engine Health Probe (with load debounce / hysteresis)
   async function checkEngineHealth() {
+    if (state.isProbingEngine) return;
+    state.isProbingEngine = true;
     try {
       const res = await fetch('/api/v1/studio/engine-health');
       if (res.ok) {
         const data = await res.json();
-        state.isLiveEngine = data.isLive;
         if (data.isLive) {
+          state.isLiveEngine = true;
+          state.consecutiveProbeFailures = 0;
           if (elements.modeStatusIndicator) {
             elements.modeStatusIndicator.style.background = '#10b981';
             elements.modeStatusIndicator.style.boxShadow = '0 0 8px #10b981';
@@ -387,30 +393,71 @@
           if (elements.modeStatusText) {
             elements.modeStatusText.innerHTML = `Engine: <strong style="color: #34d399;">Live Compute (${data.device})</strong>`;
           }
-        } else {
-          if (elements.modeStatusIndicator) {
-            elements.modeStatusIndicator.style.background = '#f59e0b';
-            elements.modeStatusIndicator.style.boxShadow = '0 0 8px #f59e0b';
-          }
-          if (elements.modeStatusText) {
-            elements.modeStatusText.innerHTML = `Engine: <strong style="color: #fbbf24;">Preview Mode</strong>`;
-          }
+          return;
         }
       }
+      handleProbeFailure();
     } catch {
-      state.isLiveEngine = false;
+      handleProbeFailure();
+    } finally {
+      state.isProbingEngine = false;
     }
   }
 
-  // Active PII Guardrail Detector
+  function handleProbeFailure() {
+    state.consecutiveProbeFailures++;
+    // Only downgrade status to Preview Mode after 2 consecutive failures to prevent flapping during heavy inference
+    if (state.consecutiveProbeFailures >= 2 || !state.isLiveEngine) {
+      state.isLiveEngine = false;
+      if (elements.modeStatusIndicator) {
+        elements.modeStatusIndicator.style.background = '#f59e0b';
+        elements.modeStatusIndicator.style.boxShadow = '0 0 8px #f59e0b';
+      }
+      if (elements.modeStatusText) {
+        elements.modeStatusText.innerHTML = `Engine: <strong style="color: #fbbf24;">Preview Mode</strong>`;
+      }
+    }
+  }
+
+  // Luhn checksum algorithm for credit/debit card validation
+  function passesLuhn(digits) {
+    let sum = 0;
+    let alternate = false;
+    for (let i = digits.length - 1; i >= 0; i--) {
+      let n = parseInt(digits.charAt(i), 10);
+      if (alternate) {
+        n *= 2;
+        if (n > 9) n -= 9;
+      }
+      sum += n;
+      alternate = !alternate;
+    }
+    return sum % 10 === 0;
+  }
+
+  // Active PII Guardrail Detector (Delimiter-aware SSA SSN and Luhn-validated Payment Cards)
   function scanForPII(text) {
     if (!text) return null;
-    // Check SSN format: 3-2-4 digits (with hyphens, spaces, or raw 9 digits)
-    if (/\b\d{3}-\d{2}-\d{4}\b/.test(text) || /\b\d{9}\b/.test(text)) return 'Social Security Number (SSN)';
-    // Check Credit/Debit Card numbers (13-19 digits formatted or raw 16)
-    if (/\b(?:\d{4}[ -]?){3}\d{4}\b/.test(text)) return 'Credit/Debit Card Number';
-    // Check US Phone numbers
-    if (/\b(?:\+?1[-. ]?)?\(?([0-9]{3})\)?[-. ]?([0-9]{3})[-. ]?([0-9]{4})\b/.test(text)) return 'Phone Number';
+
+    // 1. Delimited SSN (XXX-XX-XXXX or XXX XX XXXX) with SSA rule checks (area != 000, 666, 900-999; group != 00; serial != 0000)
+    const ssnDelimited = /\b(?!000|666|9\d{2})\d{3}[- ](?!00)\d{2}[- ](?!0000)\d{4}\b/;
+    if (ssnDelimited.test(text)) return 'Social Security Number (SSN)';
+
+    // 2. Contextual SSN: only match contiguous 9 digits if preceded by "ssn" or "social security"
+    const ssnContext = /(?:\bssn\b|\bsocial\s*security(?:\s*number)?)[^\d]{1,10}((?!000|666|9\d{2})\d{3}[- ]?(?!00)\d{2}[- ]?(?!0000)\d{4})\b/i;
+    if (ssnContext.test(text)) return 'Social Security Number (SSN)';
+
+    // 3. Credit / Debit Card: Check 13-19 digits formatted or raw, verified with Luhn checksum
+    const cardMatches = text.match(/\b(?:\d{4}[ -]?){3}\d{4}\b|\b\d{15,16}\b/g);
+    if (cardMatches) {
+      for (const card of cardMatches) {
+        const digitsOnly = card.replace(/\D/g, '');
+        if (digitsOnly.length >= 13 && digitsOnly.length <= 19 && passesLuhn(digitsOnly)) {
+          return 'Credit/Debit Card Number';
+        }
+      }
+    }
+
     return null;
   }
 
@@ -554,7 +601,7 @@
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || `HTTP ${res.status}`);
+        throw new Error(errJson.details || errJson.error || `HTTP ${res.status}`);
       }
 
       const jobData = await res.json();
@@ -649,7 +696,12 @@
     if (parsed.length > 0) {
       state.datasetRows = parsed;
       renderDatasetRows();
-      showToast(`Imported ${parsed.length} examples from "${fileName}".`, 'success');
+      const piiRow = parsed.find(r => scanForPII(r.prompt) || scanForPII(r.completion));
+      if (piiRow) {
+        showToast(`Security Alert: "${fileName}" contains customer PII. Training is blocked until sanitized.`, 'error');
+      } else {
+        showToast(`Imported ${parsed.length} examples from "${fileName}".`, 'success');
+      }
     } else {
       showToast('Could not parse prompt/completion pairs from file.', 'error');
     }

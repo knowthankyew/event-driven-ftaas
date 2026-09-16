@@ -245,6 +245,20 @@ def train_job(
         # Relative path from DATA_ROOT for storage contract
         rel_adapter_path = str(final_adapter_dir.relative_to(DATA_ROOT))
 
+        # Verify adapter integrity: ensure weights exist and are not zero-byte or truncated
+        adapter_config_file = final_adapter_dir / "adapter_config.json"
+        safetensors_file = final_adapter_dir / "adapter_model.safetensors"
+        bin_file = final_adapter_dir / "adapter_model.bin"
+
+        if not adapter_config_file.exists() or adapter_config_file.stat().st_size < 10:
+            raise RuntimeError(f"Adapter verification failed: adapter_config.json missing or zero-byte at {final_adapter_dir}")
+
+        weights_file = safetensors_file if safetensors_file.exists() else bin_file
+        if not weights_file.exists() or weights_file.stat().st_size < 100 * 1024:
+            raise RuntimeError(f"Adapter verification failed: adapter weight file missing or truncated (<100KB) at {final_adapter_dir}")
+
+        logger.info(f"Verified adapter integrity: {weights_file.name} is {weights_file.stat().st_size / 1024 / 1024:.2f} MB")
+
         # Log adapter artifacts to MLflow
         try:
             mlflow.log_artifacts(str(final_adapter_dir), artifact_path="model_adapters")

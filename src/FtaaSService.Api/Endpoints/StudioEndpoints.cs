@@ -200,7 +200,7 @@ public static class StudioEndpoints
     {
         var inferenceUrl = configuration.GetValue<string>("INFERENCE_SERVICE_URL") ?? configuration["Inference:BaseUrl"] ?? "http://localhost:8000";
         var client = httpClientFactory.CreateClient();
-        client.Timeout = TimeSpan.FromMilliseconds(1500);
+        client.Timeout = TimeSpan.FromMilliseconds(3500);
 
         try
         {
