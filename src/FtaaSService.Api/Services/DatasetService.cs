@@ -55,10 +55,7 @@ public sealed class DatasetService : IDatasetService
                 var targetDiskPath = Path.Combine(_dataRoot, relativePath);
 
                 using var reader = new StreamReader(inputStream, Encoding.UTF8);
-                using var outStream = File.Create(targetDiskPath);
-                using var writer = new StreamWriter(outStream, new UTF8Encoding(false));
-                using var sha256 = SHA256.Create();
-
+                var validatedRecords = new List<(string Prompt, string Completion)>();
                 int recordCount = 0;
                 string? line;
                 bool isFirstLine = true;
@@ -67,22 +64,22 @@ public sealed class DatasetService : IDatasetService
                 int promptColIdx = 0;
                 int compColIdx = 1;
 
+                // Pass 1: Stream-scan input entirely in-memory — zero files created on disk prior to 100% compliance pass
                 while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
                 {
                     if (string.IsNullOrWhiteSpace(line)) continue;
 
-                    // 1. Full-Row Server-Side PII Compliance Check (Scans ALL columns/properties including unmapped metadata)
+                    // Full-Row PII Check across all columns/properties (including unmapped metadata)
                     var piiDetected = ScanForPii(line);
                     if (piiDetected is not null)
                     {
-                        File.Delete(targetDiskPath);
+                        // Redacted logging: record only Job ID and PII category name, NEVER raw payload or token values
                         _logger.LogWarning("Job {JobId}: Ingestion blocked due to detected customer {PiiType} in payload at record {RecordIndex}",
                             jobId, piiDetected, recordCount + 1);
                         return new DatasetResult(false, null, null, 0,
                             $"Security/PII compliance violation at record {recordCount + 1}: Detected potential real customer {piiDetected} in payload (including unmapped metadata columns). Training dataset rejected by server ingestion gateway.");
                     }
 
-                    // Auto-detect CSV on first line if not explicitly named
                     if (isFirstLine && !line.TrimStart().StartsWith("{"))
                     {
                         isCsv = true;
@@ -97,7 +94,6 @@ public sealed class DatasetService : IDatasetService
                         if (isFirstLine)
                         {
                             isFirstLine = false;
-                            // Check for CSV header row
                             var headerLower = cols.Select(c => c.Trim().ToLowerInvariant().Trim('"', '\'')).ToList();
                             var pIdx = headerLower.FindIndex(h => h is "prompt" or "question" or "inquiry");
                             var cIdx = headerLower.FindIndex(h => h is "completion" or "response" or "answer");
@@ -105,7 +101,7 @@ public sealed class DatasetService : IDatasetService
                             {
                                 promptColIdx = pIdx;
                                 compColIdx = cIdx;
-                                continue; // Skip header row
+                                continue;
                             }
                         }
 
@@ -123,7 +119,6 @@ public sealed class DatasetService : IDatasetService
                         }
                         else
                         {
-                            File.Delete(targetDiskPath);
                             return new DatasetResult(false, null, null, 0, $"CSV line {recordCount + 1} has insufficient columns (expected at least prompt and completion).");
                         }
                     }
@@ -137,7 +132,6 @@ public sealed class DatasetService : IDatasetService
                         }
                         catch (Exception ex)
                         {
-                            File.Delete(targetDiskPath);
                             return new DatasetResult(false, null, null, 0, $"Invalid JSON at line {recordCount + 1}: {ex.Message}");
                         }
 
@@ -146,13 +140,11 @@ public sealed class DatasetService : IDatasetService
                             var root = doc.RootElement;
                             if (!root.TryGetProperty("prompt", out var promptElem) || promptElem.ValueKind != JsonValueKind.String)
                             {
-                                File.Delete(targetDiskPath);
                                 return new DatasetResult(false, null, null, 0, $"Line {recordCount + 1} is missing required string 'prompt' property.");
                             }
 
                             if (!root.TryGetProperty("completion", out var compElem) || compElem.ValueKind != JsonValueKind.String)
                             {
-                                File.Delete(targetDiskPath);
                                 return new DatasetResult(false, null, null, 0, $"Line {recordCount + 1} is missing required string 'completion' property.");
                             }
 
@@ -163,23 +155,30 @@ public sealed class DatasetService : IDatasetService
 
                     if (prompt.Length < 3 || completion.Length < 1)
                     {
-                        File.Delete(targetDiskPath);
                         return new DatasetResult(false, null, null, 0, $"Line {recordCount + 1} has empty or insufficiently short prompt/completion tokens.");
                     }
 
-                    // Write strictly normalized { prompt, completion } JSONL, dropping any unmapped metadata columns
-                    var normalizedJson = JsonSerializer.Serialize(new { prompt, completion });
-                    await writer.WriteLineAsync(normalizedJson);
+                    validatedRecords.Add((prompt, completion));
                     recordCount++;
                 }
 
-                await writer.FlushAsync(cancellationToken);
-
                 if (recordCount == 0)
                 {
-                    File.Delete(targetDiskPath);
                     return new DatasetResult(false, null, null, 0, "Dataset contains no valid records.");
                 }
+
+                // Pass 2: Write strictly sanitized normalized { prompt, completion } records to disk
+                using var outStream = File.Create(targetDiskPath);
+                using var writer = new StreamWriter(outStream, new UTF8Encoding(false));
+                using var sha256 = SHA256.Create();
+
+                foreach (var (prompt, completion) in validatedRecords)
+                {
+                    var normalizedJson = JsonSerializer.Serialize(new { prompt, completion });
+                    await writer.WriteLineAsync(normalizedJson);
+                }
+
+                await writer.FlushAsync(cancellationToken);
 
                 // Compute hash over written normalized file
                 outStream.Position = 0;
