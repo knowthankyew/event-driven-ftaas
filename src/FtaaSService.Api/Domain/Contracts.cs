@@ -216,6 +216,12 @@ public sealed record InferenceCompareResponse
 
     [JsonPropertyName("latencyMs")]
     public required LatencyBreakdown LatencyMs { get; init; }
+
+    [JsonPropertyName("isSimulated")]
+    public bool IsSimulated { get; init; } = false;
+
+    [JsonPropertyName("note")]
+    public string? Note { get; init; }
 }
 
 public sealed record LatencyBreakdown

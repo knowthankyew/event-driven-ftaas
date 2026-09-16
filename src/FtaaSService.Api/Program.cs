@@ -27,6 +27,10 @@ var app = builder.Build();
 app.UseCors();
 app.UseExceptionHandler();
 
+// Enable static assets for Non-Tech Studio web interface
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 // Initialize DB schema
 using (var scope = app.Services.CreateScope())
 {
@@ -38,5 +42,7 @@ using (var scope = app.Services.CreateScope())
 app.MapHealthEndpoints();
 app.MapGroup("/api/v1/jobs").MapJobEndpoints();
 app.MapGroup("/api/v1/inference").MapInferenceEndpoints();
+app.MapGroup("/api/v1/studio").MapStudioEndpoints();
 
 app.Run();
+

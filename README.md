@@ -9,10 +9,32 @@ An enterprise-grade, asynchronous, event-driven machine learning platform demons
 
 ---
 
+## Quickstart for Non-Technical Users & Business Leaders
+
+> [!TIP]
+> **Zero-Code Operation**: You do not need to know Python, PyTorch, Docker, or terminal commands to use FTaaS. 
+
+Run one command to launch the full interactive web application:
+
+```bash
+./scripts/start-studio.sh
+```
+
+Then open your browser to **[http://localhost:5100](http://localhost:5100)**.
+
+### What You Can Do in the Studio:
+1. **⚡ Side-by-Side Comparison Arena**: Select a business team persona (e.g. *Fintech Support & Compliance*, *Enterprise SaaS Ops*, or *Financial Earnings*) and run customer inquiries. See how the **Generic Foundation Model** (missing disclaimers, unadapted) contrasts with your **Company Custom AI** (which adheres to internal SLAs, Reg CC limits, and mandatory FDIC/SEC disclaimers).
+2. **🛡️ Compliance & Policy Inspector**: An automated checklist auditing whether required disclosures, statutory exemptions, and department tags are included in model completions.
+3. **🛠️ No-Code Adapter Studio**: Enter your team's common questions and preferred compliant answers in an interactive spreadsheet-like grid, or drag and drop existing company CSV/JSONL documents. Click **"Train & Deploy Team Adapter"** to trigger background training without writing code.
+4. **🔄 Live Event Pipeline Visualizer**: A visual, animated walkthrough of the event-driven workflow showing how incoming requests are decoupled from heavy ML compute.
+5. **📚 Adapter Library**: Browse company adapters, check their footprint (~1.8 MB), and load them directly into the comparison arena with one click.
+
+---
+
 ## Architecture at a Glance
 
 ```plaintext
-[Client / API Trigger]
+[Non-Tech Web Studio / Client]
         │
         ▼ (POST /api/v1/jobs multipart or datasetPath)
  [Ingestion Gateway (.NET 10)] ──► Validates JSONL, Computes SHA-256 Hash, Stores on Disk
@@ -47,13 +69,15 @@ An enterprise-grade, asynchronous, event-driven machine learning platform demons
 
 ---
 
-## Local Quickstart Workflow
+## Developer Quickstart Workflow (Command Line & APIs)
+
+For engineers wanting to run each microservice manually:
 
 ```bash
 # 1. Bring up Infrastructure (RabbitMQ + MLflow) and seed sample datasets
 ./scripts/dev-up.sh
 
-# 2. Run the Ingestion API (.NET 10)
+# 2. Run the Ingestion API & Web Studio (.NET 10)
 cd src/FtaaSService.Api && dotnet run
 
 # 3. In another terminal, run the Training Worker (Python)
@@ -62,10 +86,10 @@ cd src/FtaaSService.Worker && source .venv/bin/activate && python consumer.py
 # 4. In another terminal, run the Inference Engine
 cd src/FtaaSService.Inference && source .venv/bin/activate && python app.py
 
-# 5. Submit a fine-tuning job & inspect live metrics
+# 5. Submit a fine-tuning job via curl
 curl -X POST http://localhost:5100/api/v1/jobs \
-  -F "file=@data/datasets/sample-financial-sentiment.jsonl" \
-  -F "jobName=sentiment-v1"
+  -F "file=@data/datasets/sample-support-compliance.jsonl" \
+  -F "jobName=compliance-v1"
 ```
 
 ---

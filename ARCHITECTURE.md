@@ -8,10 +8,19 @@ An enterprise-grade, asynchronous, event-driven ML platform demonstrating a poly
 
 ```mermaid
 flowchart TD
+    subgraph Presentation["Presentation & Non-Tech Interface"]
+        UI[FTaaS Enterprise Studio: Single Page Web App]
+        UI -->|Browse personas & templates| API
+        UI -->|Drag-drop CSV/JSONL dataset| API
+        UI -->|1-Click Train Team Adapter| API
+        UI -->|Side-by-side comparison arena| API
+    end
+
     subgraph Client["Client Applications / Ingestion"]
-        C[Client / CLI / API Caller] -->|1. POST /api/v1/jobs multipart file or datasetPath| API[.NET 10 Ingestion Gateway]
-        C -->|GET /api/v1/jobs/{id}| API
-        C -->|POST /api/v1/inference/compare| API
+        UI -->|POST /api/v1/jobs multipart or datasetPath| API[.NET 10 Ingestion Gateway :5100]
+        C[CLI / API Caller] -->|POST /api/v1/jobs| API
+        API -->|GET /api/v1/jobs/{id}| DB
+        API -->|POST /api/v1/inference/compare| INF[Inference Engine :8000]
     end
 
     subgraph Broker["Messaging Layer (RabbitMQ AMQP)"]
@@ -37,7 +46,7 @@ flowchart TD
     end
 
     subgraph Serving["Dynamic Model Serving"]
-        API -->|Proxy or Call| INF[Inference Engine]
+        API -->|Proxy or Call| INF
         INF -->|Load Base Weights| HF
         INF -->|Mount LoRA Adapter by JobId or URI| ART
         INF -->|Return Side-by-Side Completions| API
@@ -49,7 +58,7 @@ flowchart TD
 ## 2. Core Architectural Principles & Trade-offs
 
 1. **Polyglot Microservices**:
-   - **.NET 10 Ingestion Gateway**: High-performance, strongly-typed REST API managing multipart dataset ingestion, schema validation, state machine enforcement, and AMQP publishing with correlation tracking.
+   - **.NET 10 Ingestion Gateway**: High-performance, strongly-typed REST API managing multipart dataset ingestion, schema validation, state machine enforcement, and AMQP publishing with correlation tracking. Hosts the static **FTaaS Enterprise Studio** single-page web app with zero extra port overhead.
    - **Python 3.12 Training Worker**: Specialized ML engine focusing strictly on compute-heavy PyTorch / Hugging Face PEFT fine-tuning, telemetry streaming, and artifact persistence.
 2. **Decoupled Job Lifecycle & Out-of-Band Data Handling**:
    - Datasets are stored out-of-band as `.jsonl` files on disk/storage. Only the relative `datasetPath` and a cryptographic `datasetHash` (SHA-256) travel over the message broker, keeping message payloads lightweight.
@@ -63,6 +72,11 @@ flowchart TD
 5. **Resilience & Dead Lettering**:
    - Worker implements message acknowledgment (`ack`/`nack`) with retry policies and DLQ routing for poison messages.
    - Explicit state transitions with validation (`Pending` $\rightarrow$ `Queued` $\rightarrow$ `Training` $\rightarrow$ `Succeeded` / `Failed`).
+6. **Non-Technical Democratization & Presentation Layer**:
+   - Solves the gap between complex ML infrastructure and business value.
+   - **Side-by-Side Comparison Arena**: Directly showcases the business contrast between a generic foundational model and a team-tuned LoRA adapter (e.g. enforcing Reg CC, FDIC, or internal SLAs).
+   - **No-Code Adapter Studio**: Empowers support and compliance leads to curate prompt-completion examples and launch fine-tuning jobs via simple visual tables and drag-and-drop CSV/JSONL.
+   - **Hybrid Simulation Fallback**: If the GPU/MPS inference container is offline or pre-warming, the API transparently serves realistic domain comparisons so business stakeholders can explore without engineering friction.
 
 ---
 
@@ -178,6 +192,42 @@ The .NET status consumer validates `updatedAt` / `sequenceNumber` against the cu
     "baseModel": 182,
     "fineTuned": 195
   }
+### E. Studio Presentation Contracts
+
+#### 1. Persona Catalog (`GET /api/v1/studio/personas`)
+Returns curated business personas, sample customer tickets, compliance checklists, and seed prompt-completion pairs.
+```json
+[
+  {
+    "id": "fintech-compliance",
+    "name": "Fintech Support & Compliance Copilot",
+    "department": "Risk, Support & Operations",
+    "description": "Enforces Reg CC ACH hold limits, BSA/AML verification, and mandatory FDIC insurance notices.",
+    "adapterSize": "1.8 MB",
+    "complianceRules": [
+      "Mandatory FDIC deposit status disclaimer",
+      "Reg CC 3-5 business day ACH clearance notification for >$10K"
+    ],
+    "samplePrompts": [
+      {
+        "title": "ACH Deposit Clearance Delay",
+        "prompt": "Customer ticket: User states their account transfer of $15,000 is delayed..."
+      }
+    ]
+  }
+]
+```
+
+#### 2. System & Adapter Overview (`GET /api/v1/studio/overview`)
+Provides aggregate stats for non-technical dashboard rendering.
+```json
+{
+  "totalJobs": 7,
+  "succeededJobs": 4,
+  "trainingJobs": 0,
+  "queuedJobs": 0,
+  "baseModel": "HuggingFaceTB/SmolLM2-135M",
+  "adapterFootprint": "~1.8 MB"
 }
 ```
 

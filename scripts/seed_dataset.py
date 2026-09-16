@@ -114,10 +114,34 @@ VAL_DATA = [
     }
 ]
 
+SUPPORT_COMPLIANCE_DATA = [
+    {
+        "prompt": "Customer ticket: User states their account transfer of $15,000 from external credit union is delayed past 2 business days. How should we advise them regarding clearance and compliance?",
+        "completion": "Advise the customer: Under Reg CC and internal ACH policy, external transfers exceeding $10,000 are subject to standard 3-5 business day secondary verification. Reference Ticket Tag: [ACH-HELD-VERIFY]. Mandatory compliance notice: 'Funds are held in accordance with Federal Reserve Regulation CC and FinCEN transaction monitoring guidelines. FDIC insurance coverage applies once funds are credited to your deposit account.'"
+    },
+    {
+        "prompt": "Customer ticket: Customer requests immediate cancellation of enterprise contract after 45 days, citing low team adoption. What is our contractual policy?",
+        "completion": "Internal Policy Response: Under Section 8.2 of Enterprise SaaS Master Services Agreement, the standard cancellation window is strictly 30 calendar days from provision date. Contracts beyond 30 days are non-refundable for the remaining annual term. Tag: [MSA-SEC8-NONREF]. Recommended escalation: Offer dedicated Customer Success review [CS-REENGAGE] or contract seat reallocation under Addendum B."
+    },
+    {
+        "prompt": "Customer ticket: User asks if our automated portfolio balancing feature guarantees a minimum annual percentage yield (APY) of 8%.",
+        "completion": "COMPLIANCE MANDATE: Never guarantee yield or performance. Response: 'Our automated portfolio balancing tool optimizes asset allocation according to your risk score, but does not guarantee returns or APY. Past performance does not indicate future results. Investment products are Not FDIC Insured, Not Bank Guaranteed, and May Lose Value.' Tag: [FINRA-RULE-2210]."
+    },
+    {
+        "prompt": "Customer ticket: Premium client asks why their wire transfer was flagged for extra KYC document submission.",
+        "completion": "Advise client: 'Your wire was selected for routine Enhanced Due Diligence (EDD) under BSA/AML Section 314(b) compliance protocols to protect account security. Once passport and proof-of-address documents are uploaded to the secure vault, review completes within 4 business hours.' Tag: [BSA-EDD-SECURE]."
+    },
+    {
+        "prompt": "Customer ticket: User is asking for advice on whether they should purchase Ethereum or Bitcoin right now.",
+        "completion": "STRICT REGULATORY DISCLAIMER: We are an execution platform and cannot provide investment, legal, or tax advice. Response: 'We do not offer financial or investment advice. Cryptocurrencies involve substantial market risk and volatility. Please consult a licensed financial advisor before making trading decisions.' Tag: [SEC-NO-ADVISORY]."
+    }
+]
+
 def seed(output_dir: Path):
     output_dir.mkdir(parents=True, exist_ok=True)
     train_file = output_dir / "sample-financial-sentiment.jsonl"
     val_file = output_dir / "sample-financial-sentiment-val.jsonl"
+    compliance_file = output_dir / "sample-support-compliance.jsonl"
     
     with open(train_file, "w", encoding="utf-8") as f:
         for item in TRAIN_DATA:
@@ -127,9 +151,16 @@ def seed(output_dir: Path):
         for item in VAL_DATA:
             f.write(json.dumps(item) + "\n")
 
+    if not compliance_file.exists():
+        with open(compliance_file, "w", encoding="utf-8") as f:
+            for item in SUPPORT_COMPLIANCE_DATA:
+                f.write(json.dumps(item) + "\n")
+
     print(f"✅ Successfully seeded {len(TRAIN_DATA)} training records to {train_file}")
     print(f"✅ Successfully seeded {len(VAL_DATA)} disjoint validation records to {val_file}")
+    print(f"✅ Verified support compliance records in {compliance_file}")
 
 if __name__ == "__main__":
     base_dir = Path(__file__).resolve().parent.parent / "data" / "datasets"
     seed(base_dir)
+
