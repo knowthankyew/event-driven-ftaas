@@ -18,6 +18,9 @@ public sealed class DatasetService : IDatasetService
         Directory.CreateDirectory(Path.Combine(_dataRoot, "datasets"));
     }
 
+    private const long MaxFileSizeBytes = 25 * 1024 * 1024; // 25 MB safety ceiling
+    private const int MaxRecordCount = 50_000;
+
     public async Task<DatasetResult> NormalizeAndStoreAsync(
         string jobId,
         IFormFile? uploadedFile,
@@ -29,6 +32,11 @@ public sealed class DatasetService : IDatasetService
             Stream inputStream;
             if (uploadedFile is not null && uploadedFile.Length > 0)
             {
+                if (uploadedFile.Length > MaxFileSizeBytes)
+                {
+                    return new DatasetResult(false, null, null, 0,
+                        $"Upload size ({uploadedFile.Length / (1024 * 1024)} MB) exceeds maximum permitted dataset limit of {MaxFileSizeBytes / (1024 * 1024)} MB.");
+                }
                 inputStream = uploadedFile.OpenReadStream();
             }
             else if (!string.IsNullOrWhiteSpace(existingPath))
@@ -42,6 +50,14 @@ public sealed class DatasetService : IDatasetService
                 {
                     return new DatasetResult(false, null, null, 0, $"Dataset file not found at '{existingPath}'");
                 }
+
+                var fileInfo = new FileInfo(resolved);
+                if (fileInfo.Length > MaxFileSizeBytes)
+                {
+                    return new DatasetResult(false, null, null, 0,
+                        $"Dataset file size ({fileInfo.Length / (1024 * 1024)} MB) exceeds maximum permitted limit of {MaxFileSizeBytes / (1024 * 1024)} MB.");
+                }
+
                 inputStream = File.OpenRead(resolved);
             }
             else
@@ -160,6 +176,12 @@ public sealed class DatasetService : IDatasetService
 
                     validatedRecords.Add((prompt, completion));
                     recordCount++;
+
+                    if (recordCount >= MaxRecordCount)
+                    {
+                        return new DatasetResult(false, null, null, 0,
+                            $"Dataset exceeds maximum permitted ceiling of {MaxRecordCount:N0} records.");
+                    }
                 }
 
                 if (recordCount == 0)

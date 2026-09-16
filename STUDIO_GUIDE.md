@@ -101,6 +101,7 @@ Use this tab to create or modify custom rules for your team:
    - **Compliant Response (Completion)**: The exact answer, policy citation, and disclaimer you want the AI to give.
 2. **Or Upload an Existing File**:
    - Drag and drop a `.csv` or `.jsonl` document from your computer into the upload box.
+   - *Dataset Guidelines*: LoRA policy adapters typically only need 20 to 500 focused examples for high-quality convergence. The system enforces a **25 MB file size ceiling** and a **50,000 record maximum** to maintain optimal server performance and memory safety.
 3. **Deploy Team Adapter**:
    - Give your model a name (e.g., `support-team-v1`).
    - Click **"Train & Deploy Team Adapter"**.

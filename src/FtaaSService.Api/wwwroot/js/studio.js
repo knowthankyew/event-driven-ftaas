@@ -655,7 +655,13 @@
     });
   }
 
+  const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB
+
   function handleFileUpload(file) {
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      showToast(`File "${file.name}" (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds the 25 MB limit.`, 'error');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target.result;
