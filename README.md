@@ -22,6 +22,8 @@ Run one command to launch the full interactive web application:
 
 Then open your browser to **[http://localhost:5100](http://localhost:5100)**.
 
+📖 **Looking for a non-technical walkthrough? Read the [FTaaS Enterprise Studio Guide](STUDIO_GUIDE.md) for step-by-step instructions, feature breakdowns, and FAQs with zero code jargon.**
+
 ### What You Can Do in the Studio:
 1. **⚡ Side-by-Side Comparison Arena**: Select a business team persona (e.g. *Fintech Support & Compliance*, *Enterprise SaaS Ops*, or *Financial Earnings*) and run customer inquiries. See how the **Generic Foundation Model** (missing disclaimers, unadapted) contrasts with your **Company Custom AI** (which adheres to internal SLAs, Reg CC limits, and mandatory FDIC/SEC disclaimers).
 2. **🛡️ Compliance & Policy Inspector**: An automated checklist auditing whether required disclosures, statutory exemptions, and department tags are included in model completions.
