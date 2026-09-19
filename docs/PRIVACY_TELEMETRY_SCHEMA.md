@@ -178,3 +178,19 @@ public sealed class AuditOptions
   "required": ["version", "privacy", "telemetry", "audit"]
 }
 ```
+
+---
+
+## 7. Single Source of Truth for UI Privacy Claims & Honest Indicators
+
+To prevent false privacy claims sitting adjacent to honest telemetry indicators:
+
+1. **Unified Privacy Claims Function:**
+   All client-side applications must derive user-facing claims from a single helper (`getPrivacyClaims(report)`).
+   - **Consumer Mode (`isLocalOnlyHonest === true`):** Asserts `100% Client-Side Local Execution • Zero Network Transmission`.
+   - **Enterprise Mode (`isLocalOnlyHonest === false`):** Must dynamically adjust all UI copy (dropzones, disclaimers, headers, footers) to reflect operational metadata export while emphasizing that document text is redacted via allowlist.
+2. **Prominent Enterprise Differentiation:**
+   When built with an external exporter (`otlp`), the UI must render an unmistakable persistent top banner (e.g. `enterprise-persistent-banner`) and an `[ENTERPRISE]` title badge so that non-default builds cannot be mistaken for default consumer builds at a glance.
+3. **`NOTICE.md` Compliance:**
+   Each repository must maintain a root `NOTICE.md` detailing statutory disclaimers, consumer privacy air-gap invariants, enterprise observability disclosures, and third-party software attribution aligned with the CycloneDX SBOM.
+
