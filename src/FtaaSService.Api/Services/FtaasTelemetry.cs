@@ -34,9 +34,11 @@ public sealed class FtaasTelemetry : IFtaasTelemetry
     private readonly string? _otlpEndpoint;
     private readonly bool _burnEnabled;
 
-    private static readonly HashSet<string> ProhibitedAttributes = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> SafeAllowlistAttributes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "text", "body", "dataset_text", "prompt", "completion", "data", "payload", "raw_content", "dataset_content"
+        "job_id", "status", "duration_ms", "duration_sec", "base_model", "dataset_hash",
+        "dataset_relative_path", "current_step", "total_steps", "progress_pct", "loss",
+        "device", "adapter_path", "adapter_size_bytes", "exchange", "routing_key"
     };
 
     public string Mode => _mode;
@@ -74,9 +76,9 @@ public sealed class FtaasTelemetry : IFtaasTelemetry
         {
             foreach (var kv in attributes)
             {
-                if (ProhibitedAttributes.Contains(kv.Key))
+                if (!SafeAllowlistAttributes.Contains(kv.Key))
                 {
-                    sanitizedAttrs[kv.Key] = "[REDACTED_BY_PRIVACY_POLICY]";
+                    sanitizedAttrs[kv.Key] = "[REDACTED_NOT_IN_ALLOWLIST]";
                     continue;
                 }
 

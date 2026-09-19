@@ -47,9 +47,9 @@ public sealed class FtaasTelemetryTests
         Assert.Equal("mps", span.Attributes["device"]);
         Assert.Equal(1048576, span.Attributes["adapter_size_bytes"]);
 
-        // Prohibited keys must be redacted
-        Assert.Equal("[REDACTED_BY_PRIVACY_POLICY]", span.Attributes["dataset_text"]);
-        Assert.Equal("[REDACTED_BY_PRIVACY_POLICY]", span.Attributes["prompt"]);
+        // Prohibited/unknown keys must be redacted by allowlist
+        Assert.Equal("[REDACTED_NOT_IN_ALLOWLIST]", span.Attributes["dataset_text"]);
+        Assert.Equal("[REDACTED_NOT_IN_ALLOWLIST]", span.Attributes["prompt"]);
     }
 
     [Fact]

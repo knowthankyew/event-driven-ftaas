@@ -24,21 +24,28 @@ from trainer import train_job
 
 logger = logging.getLogger("FtaaSService.Worker.Consumer")
 
+SAFE_ALLOWLIST_KEYS = {
+    "job_id", "status", "duration_sec", "base_model", "dataset_hash",
+    "dataset_relative_path", "current_step", "total_steps", "steps",
+    "progress_pct", "loss", "final_loss", "device", "adapter_path",
+    "adapter_size_bytes", "exchange", "routing_key"
+}
+
 def emit_lifecycle_span(span_name: str, job_id: str, status: str, duration_sec: float = 0.0, attributes: dict = None):
     """
     Emits payload-scrubbed OpenTelemetry-style lifecycle span.
-    Guarantees no raw training prompts, dataset texts, or completions are ever recorded.
+    Uses a strict allowlist. Any key not in SAFE_ALLOWLIST_KEYS is redacted by default.
     """
     clean_attrs = {
         "job_id": job_id,
         "status": status,
         "duration_sec": round(duration_sec, 3)
     }
-    prohibited = ("text", "body", "prompt", "completion", "raw_content", "raw_text", "payload", "dataset_content", "dataset_text", "dataset_body")
     if attributes:
         for k, v in attributes.items():
             lower_k = k.lower()
-            if any(p in lower_k for p in prohibited):
+            if lower_k not in SAFE_ALLOWLIST_KEYS:
+                clean_attrs[k] = "[REDACTED_NOT_IN_ALLOWLIST]"
                 continue
             clean_attrs[k] = v
     logger.info(f"[TELEMETRY_SPAN] {span_name} :: {json.dumps(clean_attrs)}")

@@ -8,7 +8,7 @@
 Every application in the portfolio conforms to the **Consumer-Safe, Zero-Fork Enterprise Overlay** standard:
 1. **Consumer Default (Safe & Burnable):** Runs with zero network egress (`deny`), in-memory telemetry (`memory_only`), zero cloud retention, and complete memory wipe upon triggering "Burn Local Data".
 2. **Enterprise Overlay (Opt-In Observability):** An enterprise operator can attach standard OpenTelemetry collectors (`otlp`) and configure audit retention without modifying source code or maintaining a separate fork.
-3. **Payload Sanitization Invariant:** Raw document text, emails, paystubs, medical notes, or fine-tuning datasets are **strictly prohibited** from span attributes, logs, or metrics. Only metadata (durations, rule IDs, error codes, token counts, SHA-256 hashes) is permitted unless explicit administrative override (`allow_raw_payloads = true`) is granted.
+3. **Strict Allowlist Invariant:** To prevent short clause leaks or sensitive snippets from slipping through under unanticipated key names (e.g., `matchedText`, `snippet`, `excerpt`, `clause_text`), attribute sanitizers operate on a **strict allowlist**, not a denylist. Only explicitly registered metadata keys (`rule_id`, `rule_ids`, `clause_count`, `flagged_count`, `duration_ms`, `job_id`, `status`, `jurisdiction`, `device`, `adapter_size_bytes`, `dataset_hash`) are permitted. All unrecognized or arbitrary keys are automatically redacted as `[REDACTED_NOT_IN_ALLOWLIST]`.
 
 ---
 

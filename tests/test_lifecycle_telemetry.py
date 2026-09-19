@@ -58,11 +58,11 @@ class TestLifecycleTelemetry(unittest.TestCase):
             self.assertEqual(data["adapter_size_bytes"], 2048576)
             self.assertEqual(data["dataset_hash"], "sha256_abcdef123456")
 
-            # Assert prohibited fields strictly omitted
-            self.assertNotIn("raw_text", data)
-            self.assertNotIn("prompt", data)
-            self.assertNotIn("completion", data)
-            self.assertNotIn("dataset_body", data)
+            # Assert non-allowlisted fields are strictly redacted
+            self.assertEqual(data["raw_text"], "[REDACTED_NOT_IN_ALLOWLIST]")
+            self.assertEqual(data["prompt"], "[REDACTED_NOT_IN_ALLOWLIST]")
+            self.assertEqual(data["completion"], "[REDACTED_NOT_IN_ALLOWLIST]")
+            self.assertEqual(data["dataset_body"], "[REDACTED_NOT_IN_ALLOWLIST]")
 
         finally:
             logger.removeHandler(handler)
