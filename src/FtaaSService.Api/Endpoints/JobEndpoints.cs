@@ -25,6 +25,7 @@ public static class JobEndpoints
         [FromServices] IDatasetService datasetService,
         [FromServices] IJobRepository jobRepository,
         [FromServices] IEventPublisher eventPublisher,
+        [FromServices] IFtaasTelemetry telemetry,
         CancellationToken cancellationToken)
     {
         string jobId = Guid.NewGuid().ToString("N");
@@ -113,6 +114,13 @@ public static class JobEndpoints
 
         await jobRepository.CreateAsync(job, cancellationToken);
 
+        telemetry.RecordSpan("job.accepted", jobId, JobStatus.Queued.ToString(), 0, new Dictionary<string, object>
+        {
+            ["base_model"] = baseModel,
+            ["dataset_hash"] = normResult.Sha256Hash!,
+            ["dataset_relative_path"] = normResult.RelativePath!
+        });
+
         // 3. Publish AMQP Event
         var requestedEvent = new JobRequestedEvent
         {
@@ -126,6 +134,12 @@ public static class JobEndpoints
         };
 
         await eventPublisher.PublishJobRequestedAsync(requestedEvent, cancellationToken);
+
+        telemetry.RecordSpan("job.published", jobId, JobStatus.Queued.ToString(), 0, new Dictionary<string, object>
+        {
+            ["exchange"] = "ftaas.direct",
+            ["routing_key"] = "job.requested"
+        });
 
         var response = new SubmitJobResponse
         {

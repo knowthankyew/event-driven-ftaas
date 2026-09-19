@@ -64,12 +64,24 @@ public sealed class JobStatusListener : BackgroundService
                         {
                             using var scope = _serviceProvider.CreateScope();
                             var repo = scope.ServiceProvider.GetRequiredService<IJobRepository>();
+                            var telemetry = scope.ServiceProvider.GetRequiredService<FtaaSService.Api.Services.IFtaasTelemetry>();
                             
                             var updated = await repo.UpdateStatusIdempotentAsync(update, stoppingToken);
                             if (updated)
                             {
                                 _logger.LogInformation("Job {JobId} status transitioned to {Status} (Step {Step}/{Total}, Loss: {Loss})",
                                     update.JobId, update.Status, update.CurrentStep, update.TotalSteps, update.CurrentLoss);
+
+                                var spanAttrs = new Dictionary<string, object>
+                                {
+                                    ["current_step"] = update.CurrentStep,
+                                    ["total_steps"] = update.TotalSteps,
+                                    ["progress_pct"] = update.ProgressPercent
+                                };
+                                if (update.CurrentLoss.HasValue) spanAttrs["loss"] = update.CurrentLoss.Value;
+                                if (!string.IsNullOrEmpty(update.AdapterPath)) spanAttrs["adapter_path"] = update.AdapterPath;
+
+                                telemetry.RecordSpan($"job.transition.{update.Status.ToLowerInvariant()}", update.JobId, update.Status, 0, spanAttrs);
                             }
                         }
 

@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timezone
 import pika
 
+from pathlib import Path
 from config import (
     RABBITMQ_HOST,
     RABBITMQ_PORT,
@@ -16,11 +17,31 @@ from config import (
     JOB_UPDATED_QUEUE,
     DLQ_QUEUE,
     JOB_REQUESTED_ROUTING_KEY,
-    JOB_UPDATED_ROUTING_KEY
+    JOB_UPDATED_ROUTING_KEY,
+    DEVICE
 )
 from trainer import train_job
 
 logger = logging.getLogger("FtaaSService.Worker.Consumer")
+
+def emit_lifecycle_span(span_name: str, job_id: str, status: str, duration_sec: float = 0.0, attributes: dict = None):
+    """
+    Emits payload-scrubbed OpenTelemetry-style lifecycle span.
+    Guarantees no raw training prompts, dataset texts, or completions are ever recorded.
+    """
+    clean_attrs = {
+        "job_id": job_id,
+        "status": status,
+        "duration_sec": round(duration_sec, 3)
+    }
+    prohibited = ("text", "body", "prompt", "completion", "raw_content", "raw_text", "payload", "dataset_content", "dataset_text", "dataset_body")
+    if attributes:
+        for k, v in attributes.items():
+            lower_k = k.lower()
+            if any(p in lower_k for p in prohibited):
+                continue
+            clean_attrs[k] = v
+    logger.info(f"[TELEMETRY_SPAN] {span_name} :: {json.dumps(clean_attrs)}")
 
 class JobConsumer:
     def __init__(self):
@@ -103,6 +124,10 @@ class JobConsumer:
             hyperparameters = message.get("hyperparameters", {})
 
             logger.info(f"==> Dequeued Job {job_id} ('{job_name}', model: {base_model})")
+            emit_lifecycle_span("job.consumed", job_id, "Consumed", attributes={
+                "base_model": base_model,
+                "dataset_hash": dataset_hash
+            })
 
             # 1. Notify that training has started
             self.publish_status_update(
@@ -111,6 +136,10 @@ class JobConsumer:
                 started_at=started_at,
                 progress_pct=0.0
             )
+            emit_lifecycle_span("job.training.started", job_id, "Training", attributes={
+                "device": str(DEVICE),
+                "base_model": base_model
+            })
 
             # 2. Define throttled progress callback
             def handle_progress(step: int, total_steps: int, loss: float, progress_pct: float):
@@ -125,6 +154,7 @@ class JobConsumer:
                 )
 
             # 3. Execute training
+            t0 = time.time()
             result = train_job(
                 job_id=job_id,
                 job_name=job_name,
@@ -134,6 +164,26 @@ class JobConsumer:
                 hyperparameters=hyperparameters,
                 status_callback=handle_progress
             )
+            training_duration = time.time() - t0
+            emit_lifecycle_span("job.training.finished", job_id, "TrainingFinished", duration_sec=training_duration, attributes={
+                "steps": result["totalSteps"],
+                "final_loss": result["finalLoss"],
+                "device": str(DEVICE)
+            })
+
+            # Calculate adapter directory size in bytes without inspecting file content
+            adapter_size_bytes = 0
+            try:
+                ad_path = Path(result["adapterPath"])
+                if ad_path.exists():
+                    adapter_size_bytes = sum(f.stat().st_size for f in ad_path.rglob('*') if f.is_file())
+            except Exception:
+                pass
+
+            emit_lifecycle_span("job.registered", job_id, "Succeeded", attributes={
+                "adapter_path": result["adapterPath"],
+                "adapter_size_bytes": adapter_size_bytes
+            })
 
             # 4. Notify success
             finished_at = datetime.now(timezone.utc).isoformat()

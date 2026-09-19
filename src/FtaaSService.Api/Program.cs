@@ -9,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<RabbitMqConfig>(builder.Configuration.GetSection("RabbitMQ"));
 
 // Register Core Services
+builder.Services.AddSingleton<IFtaasTelemetry, FtaasTelemetry>();
 builder.Services.AddSingleton<IJobRepository, SqliteJobRepository>();
 builder.Services.AddSingleton<IDatasetService, DatasetService>();
 builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
@@ -43,6 +44,7 @@ app.MapHealthEndpoints();
 app.MapGroup("/api/v1/jobs").MapJobEndpoints();
 app.MapGroup("/api/v1/inference").MapInferenceEndpoints();
 app.MapGroup("/api/v1/studio").MapStudioEndpoints();
+app.MapGroup("/api/v1/telemetry").MapTelemetryEndpoints();
 
 app.Run();
 

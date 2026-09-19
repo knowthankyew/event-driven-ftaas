@@ -51,6 +51,21 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r src/FtaaSService.Inference/requirements.txt
+          pip install pip-audit
+
+      - name: Audit Python Dependencies
+        run: |
+          pip-audit -r src/FtaaSService.Inference/requirements.txt
+          pip-audit -r src/FtaaSService.Worker/requirements.txt
 
       - name: Run Python Unit Tests
         run: python -m unittest discover -s tests
+
+      - name: Generate CycloneDX SBOM
+        run: npx --yes @cyclonedx/cdxgen -o bom.json
+
+      - name: Upload SBOM Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-ftaas-cyclonedx
+          path: bom.json
