@@ -1,0 +1,43 @@
+version: 2
+updates:
+  # .NET API Dependencies
+  - package-ecosystem: "nuget"
+    directory: "/src/FtaaSService.Api"
+    schedule:
+      interval: "weekly"
+    groups:
+      dotnet-dependencies:
+        patterns:
+          - "*"
+
+  # Python Inference Service
+  - package-ecosystem: "pip"
+    directory: "/src/FtaaSService.Inference"
+    schedule:
+      interval: "weekly"
+    groups:
+      python-inference-dependencies:
+        patterns:
+          - "*"
+
+  # Python Worker Service
+  - package-ecosystem: "pip"
+    directory: "/src/FtaaSService.Worker"
+    schedule:
+      interval: "weekly"
+    groups:
+      python-worker-dependencies:
+        patterns:
+          - "*"
+
+  # Docker Container Images
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
