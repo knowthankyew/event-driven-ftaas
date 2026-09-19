@@ -1,11 +1,12 @@
-# FTaaS: Event-Driven "Fine-Tuning as a Service"
+# FTaaS: Event-Driven "Fine-Tuning as a Service" (`event-driven-ftaas` / `ml`)
 
 An enterprise-grade, asynchronous, event-driven machine learning platform demonstrating a polyglot microservice pattern:
 - **Control Plane & Ingestion Gateway**: .NET 10 Minimal API / AMQP Producer
 - **Compute Worker**: Python 3.12, PyTorch, Hugging Face PEFT / LoRA, AMQP Consumer
-- **Telemetry & Experiment Tracking**: MLflow Tracking Server & Model Registry
+- **Telemetry & Experiment Tracking**: OpenTelemetry ActivitySource + MLflow Tracking Server & Model Registry
 - **Message Broker**: RabbitMQ (AMQP) with DLX and retry handling
 - **Base Models**: Ultra-compact models (`HuggingFaceTB/SmolLM2-135M` or `TinyLlama-1.1B`) for zero-cost, fast local execution on consumer hardware (Apple Silicon MPS / CPU / CUDA).
+- **Privacy & Observability Standard**: Complies with [PRIVACY_TELEMETRY_SCHEMA.md](docs/PRIVACY_TELEMETRY_SCHEMA.md).
 
 ## 📺 Interactive Video Demonstration
 
@@ -48,6 +49,21 @@ Then open your browser to **[http://localhost:5100](http://localhost:5100)**.
 
 > [!CAUTION]
 > **Data Privacy & Guardrail Scope**: Automated heuristic checks detect delimited SSNs and Luhn-valid credit card numbers across all columns (including unmapped metadata). However, this is a best-effort defense, not an exhaustive DLP certification tool. Always sanitize datasets prior to training.
+
+---
+
+## Privacy, Observability & Job Lifecycle Spans
+
+FTaaS follows the portfolio governance standard documented in [PRIVACY_TELEMETRY_SCHEMA.md](docs/PRIVACY_TELEMETRY_SCHEMA.md):
+
+- **Consumer Privacy Default:** Runs in `memory_only` mode with zero outbound telemetry egress.
+- **Job Lifecycle Spans:** Traces the entire training pipeline: `job.accepted` &rarr; `job.published` &rarr; `job.consumed` &rarr; `job.training.started` &rarr; `job.training.finished` &rarr; `job.registered`.
+- **Payload Redaction:** Attributes strictly log job IDs, statuses, durations, hardware devices (`cuda` | `mps` | `cpu`), and adapter byte sizes. No raw prompts, completions, or dataset contents are ever permitted in spans.
+- **Inspection & Purge API:**
+  - `GET /api/v1/telemetry/privacy-audit`: Real-time inspection of active telemetry mode and buffer state.
+  - `GET /api/v1/telemetry/spans`: Inspect buffered in-memory spans.
+  - `POST /api/v1/telemetry/burn`: Immediately purges the in-memory telemetry buffer.
+- **Enterprise OTLP Overlay:** Setting `OTEL_EXPORTER_OTLP_ENDPOINT` exports spans to an enterprise collector while maintaining the strict payload scrubbing invariant.
 
 ---
 
