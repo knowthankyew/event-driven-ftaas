@@ -28,7 +28,7 @@ SAFE_ALLOWLIST_KEYS = {
     "job_id", "status", "duration_sec", "base_model", "dataset_hash",
     "dataset_relative_path", "current_step", "total_steps", "steps",
     "progress_pct", "loss", "final_loss", "device", "adapter_path",
-    "adapter_size_bytes", "exchange", "routing_key"
+    "adapter_size_bytes", "exchange", "routing_key", "action"
 }
 
 def emit_lifecycle_span(span_name: str, job_id: str, status: str, duration_sec: float = 0.0, attributes: dict = None):

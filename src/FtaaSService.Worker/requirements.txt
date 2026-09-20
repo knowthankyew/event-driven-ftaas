@@ -4,6 +4,8 @@ transformers>=5.17.0,<5.18
 peft>=0.21.0
 accelerate>=1.15.0
 datasets>=5.0.1
+onnx>=1.16.0
+onnxruntime>=1.16.0
 
 # Compatibility Pins
 numpy<3.0.0

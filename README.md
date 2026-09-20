@@ -176,7 +176,8 @@ To test the entire live pipeline (Infra $\rightarrow$ .NET 10 Ingestion $\righta
 - [x] **Phase 2**: Ingestion & Control Plane (.NET 10 Minimal API, JSONL validation, SQLite state machine, AMQP producer/consumer)
 - [x] **Phase 3**: Python Compute Worker & LoRA Pipeline (AMQP consumer, PyTorch MPS/CPU detection, PEFT/LoRA, MLflow telemetry)
 - [x] **Phase 4**: Dynamic Model Serving & Side-by-Side Comparison (LoRA dynamic adapter mounting, comparison API)
-- [x] **Phase 5**: Evaluation, Governance & Portfolio Polish (Benchmark test splits, MLflow Model Registry, verification script)
+- [x] **Portfolio Phase 3a (The FTaaS Bridge Exporter)**: Edge ONNX Exporter (`src/FtaaSService.Worker/exporter.py`, `scripts/export_edge_adapter.py`) and Web API export endpoints (`GET/POST /api/v1/jobs/{id}/export/edge`) compiling LoRA adapters into web-optimized ONNX format with integrity checksums.
+- [x] **Portfolio Phase 3b (In-Browser Execution)**: Ingesting and executing exported ONNX packages directly inside client browser engines via WebGPU/WASM (`onnxruntime-web`), single-input ONNX export signature, and dynamic INT8 quantization.
 
 ---
 
