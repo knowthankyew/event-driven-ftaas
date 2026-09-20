@@ -1,5 +1,7 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
+using KnowThankYew.Privacy.Telemetry.Abstractions;
+using KnowThankYew.Privacy.Telemetry.Core;
+using Microsoft.Extensions.Configuration;
 
 namespace FtaaSService.Api.Services;
 
@@ -26,114 +28,61 @@ public interface IFtaasTelemetry
 
 public sealed class FtaasTelemetry : IFtaasTelemetry
 {
-    public static readonly ActivitySource ActivitySource = new("KnowThankYew.FtaaSService", "1.0.0");
+    private readonly IPrivacyTelemetry _inner;
 
-    private readonly ConcurrentQueue<FtaasSpanRecord> _spanBuffer = new();
-    private const int MaxBufferSize = 500;
-    private readonly string _mode;
-    private readonly string? _otlpEndpoint;
-    private readonly bool _burnEnabled;
-
-    private static readonly HashSet<string> SafeAllowlistAttributes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "job_id", "status", "duration_ms", "duration_sec", "base_model", "dataset_hash",
-        "dataset_relative_path", "current_step", "total_steps", "progress_pct", "loss",
-        "device", "adapter_path", "adapter_size_bytes", "exchange", "routing_key"
-    };
-
-    public string Mode => _mode;
-    public bool IsBurnEnabled => _burnEnabled;
-    public string? OtlpEndpoint => _otlpEndpoint;
+    public string Mode => _inner.Mode;
+    public bool IsBurnEnabled => _inner.IsBurnEnabled;
+    public string? OtlpEndpoint => _inner.OtlpEndpoint;
 
     public FtaasTelemetry(IConfiguration configuration)
     {
-        _otlpEndpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT")
-                        ?? configuration["Telemetry:OtlpEndpoint"];
+        var allowlist = new SafeAllowlist(new[]
+        {
+            "job_id", "status", "duration_ms", "duration_sec", "base_model", "dataset_hash",
+            "dataset_relative_path", "current_step", "total_steps", "progress_pct", "loss",
+            "device", "adapter_path", "adapter_size_bytes", "exchange", "routing_key"
+        });
 
-        _mode = !string.IsNullOrEmpty(_otlpEndpoint)
-            ? "otlp"
-            : (configuration["Telemetry:Mode"] ?? "memory_only");
-
-        _burnEnabled = bool.TryParse(configuration["Privacy:BurnEnabled"], out var b) ? b : true;
+        _inner = new PrivacyTelemetryService(
+            configuration: configuration,
+            allowlist: allowlist);
     }
 
     public void RecordSpan(string name, string jobId, string status, long durationMs = 0, IDictionary<string, object>? attributes = null)
     {
-        if (_mode == "disabled") return;
-
-        using var activity = ActivitySource.StartActivity(name);
-        activity?.SetTag("job_id", jobId);
-        activity?.SetTag("status", status);
-        if (durationMs > 0) activity?.SetTag("duration_ms", durationMs);
-
-        var sanitizedAttrs = new Dictionary<string, object>
-        {
-            ["job_id"] = jobId,
-            ["status"] = status
-        };
-
-        if (attributes != null)
-        {
-            foreach (var kv in attributes)
-            {
-                if (!SafeAllowlistAttributes.Contains(kv.Key))
-                {
-                    sanitizedAttrs[kv.Key] = "[REDACTED_NOT_IN_ALLOWLIST]";
-                    continue;
-                }
-
-                // Protect against raw large text in values
-                if (kv.Value is string s && s.Length > 256)
-                {
-                    sanitizedAttrs[kv.Key] = $"[TRUNCATED_HASH_{s[..8]}...]";
-                }
-                else
-                {
-                    sanitizedAttrs[kv.Key] = kv.Value;
-                }
-
-                activity?.SetTag(kv.Key, sanitizedAttrs[kv.Key]);
-            }
-        }
-
-        var record = new FtaasSpanRecord
-        {
-            Id = activity?.Id ?? Guid.NewGuid().ToString("N"),
-            Name = name,
-            Timestamp = DateTimeOffset.UtcNow,
-            DurationMs = durationMs,
-            Status = status,
-            Attributes = sanitizedAttrs
-        };
-
-        _spanBuffer.Enqueue(record);
-
-        while (_spanBuffer.Count > MaxBufferSize && _spanBuffer.TryDequeue(out _))
-        {
-        }
+        _inner.RecordSpan(name, jobId, status, durationMs, attributes);
     }
 
-    public IReadOnlyList<FtaasSpanRecord> GetBufferedSpans() => _spanBuffer.ToArray();
+    public IReadOnlyList<FtaasSpanRecord> GetBufferedSpans()
+    {
+        return _inner.GetBufferedSpans().Select(s => new FtaasSpanRecord
+        {
+            Id = s.Id,
+            Name = s.Name,
+            Timestamp = s.Timestamp,
+            DurationMs = s.DurationMs,
+            Status = s.Status,
+            Attributes = s.Attributes
+        }).ToList();
+    }
 
     public void Burn()
     {
-        if (_burnEnabled)
-        {
-            _spanBuffer.Clear();
-        }
+        _inner.Burn();
     }
 
     public object GetPrivacyAuditReport()
     {
+        var report = _inner.GetPrivacyAuditReport();
         return new
         {
-            telemetryMode = _mode,
-            networkEgress = _mode == "otlp" ? "allow_otlp" : "deny",
-            burnEnabled = _burnEnabled,
-            otlpEndpoint = _otlpEndpoint,
-            allowRawPayloads = false,
-            activeSpanCount = _spanBuffer.Count,
-            isLocalOnlyHonest = _mode != "otlp" && string.IsNullOrEmpty(_otlpEndpoint)
+            telemetryMode = report.TelemetryMode,
+            networkEgress = report.NetworkEgress,
+            burnEnabled = report.BurnEnabled,
+            otlpEndpoint = report.OtlpEndpoint,
+            allowRawPayloads = report.AllowRawPayloads,
+            activeSpanCount = report.ActiveSpanCount,
+            isLocalOnlyHonest = report.IsLocalOnlyHonest
         };
     }
 }
