@@ -15,6 +15,9 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7
 
+      - name: Checkout Shared Privacy Telemetry
+        run: git clone --depth 1 https://github.com/knowthankyew/privacy-telemetry.git ../privacy-telemetry
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
