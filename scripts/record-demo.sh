@@ -44,4 +44,8 @@ done
 # Run Playwright recording script
 node scripts/record-demo.js
 
-echo "Demo recording saved to: $REPO_ROOT/demo.mp4"
+echo "Demo recording saved to:"
+echo "  - MP4: $REPO_ROOT/demo.mp4"
+if [ -f "$REPO_ROOT/demo.gif" ]; then
+    echo "  - GIF: $REPO_ROOT/demo.gif"
+fi

@@ -12,9 +12,9 @@ An enterprise-grade, asynchronous, event-driven machine learning platform demons
 
 Watch the complete end-to-end studio workflow in action—from side-by-side compliance policy comparison to live PII guardrails and event pipeline tracking:
 
-https://github.com/user-attachments/assets/demo.mp4
+![FTaaS Studio Interactive Walkthrough](demo.gif)
 
-> **Recorded Demonstration**: [demo.mp4](demo.mp4) *(High-definition Playwright automated recording)*
+> 📹 **High-Definition Recording**: [`demo.mp4`](demo.mp4) *(Playwright automated run, 1366x860)*
 >
 > To regenerate this demonstration at any time, run: `./scripts/record-demo.sh`
 

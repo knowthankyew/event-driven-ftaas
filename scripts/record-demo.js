@@ -198,6 +198,11 @@ async function sleep(ms) {
       console.log('Converting recording to web-optimized MP4 (H.264)...');
       execSync(`"${ffmpegPath}" -y -i "${latestVideo}" -c:v libx264 -pix_fmt yuv420p -movflags +faststart "${destMp4}"`, { stdio: 'inherit' });
       console.log(`Demo video successfully saved to: ${destMp4} (${(fs.statSync(destMp4).size / (1024 * 1024)).toFixed(2)} MB)`);
+
+      console.log('Converting recording to animated preview GIF for README...');
+      const destGif = path.join(repoRoot, 'demo.gif');
+      execSync(`"${ffmpegPath}" -y -i "${destMp4}" -vf "fps=8,scale=720:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=96[p];[s1][p]paletteuse=dither=bayer" "${destGif}"`, { stdio: 'inherit' });
+      console.log(`Demo GIF successfully saved to: ${destGif} (${(fs.statSync(destGif).size / (1024 * 1024)).toFixed(2)} MB)`);
     } catch (e) {
       console.warn('FFmpeg conversion failed:', e.message);
     }
