@@ -4,15 +4,15 @@ transformers>=5.17.0,<5.18
 peft>=0.21.0
 accelerate>=1.15.0
 datasets>=5.0.1
-onnx>=1.16.0
-onnxruntime>=1.16.0
+onnx>=1.23.0
+onnxruntime>=1.30.0
 
 # Compatibility Pins
 numpy<3.0.0
 scipy<1.19.0
 
 # MLOps & Experiment Tracking
-mlflow>=3.16.0
+mlflow>=3.16.1
 
 # Messaging & Serving Utilities
 pika>=1.4.4
