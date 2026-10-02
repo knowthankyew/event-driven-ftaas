@@ -5,6 +5,8 @@ updates:
     directory: "/src/FtaaSService.Api"
     schedule:
       interval: "weekly"
+    assignees:
+      - "knowthankyew"
     groups:
       dotnet-dependencies:
         patterns:
@@ -15,6 +17,8 @@ updates:
     directory: "/src/FtaaSService.Inference"
     schedule:
       interval: "weekly"
+    assignees:
+      - "knowthankyew"
     groups:
       python-inference-dependencies:
         patterns:
@@ -25,6 +29,8 @@ updates:
     directory: "/src/FtaaSService.Worker"
     schedule:
       interval: "weekly"
+    assignees:
+      - "knowthankyew"
     groups:
       python-worker-dependencies:
         patterns:
@@ -35,18 +41,20 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    assignees:
+      - "knowthankyew"
     ignore:
       # Maintain LTS stability
       - dependency-name: "node"
         update-types: ["version-update:semver-major"]
-      - dependency-name: "node"
-        versions: ["23.*", "25.*", "27.*"]
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "monthly"
+    assignees:
+      - "knowthankyew"
     groups:
       github-actions:
         patterns:
