@@ -27,7 +27,7 @@ The Event-Driven FTaaS platform supports three distinct foundation model archite
 | RAM / VRAM Footprint   | ~270 MB                  | ~5.20 GB                  | ~1.10 GB               |
 | Compute Arithmetic     | Floating-Point MAC       | Floating-Point MAC        | Integer ADD / SUB      |
 | Compute Accelerator    | Any CPU / MPS / CUDA     | 8 GB+ VRAM or Metal MPS   | Zero GPU Required (CPU)|
-| LoRA Adapter Size      | 1.84 MB                  | 12.21 MB                  | ~8.4 MB (Projected)    |
+| LoRA Adapter Size      | 1.84 MB                  | 12.21 MB                  | 15.26 MB                |
 | Licensing              | Apache 2.0               | Gated (Gemma Terms + Auth)| MIT License (Open)     |
 +------------------------+--------------------------+---------------------------+------------------------+
 ```
@@ -103,36 +103,23 @@ How the three models react to an identical enterprise compliance prompt:
 
 > **Input Prompt**: *"Explain why banks place holds on deposited checks under Regulation CC in three concise bullet points."*
 
-### 1. SmolLM2-135M (Fine-Tuned Baseline)
-* **Response Character**: Concise, punchy, strictly follows the 3-bullet constraint.
-* **Accuracy**: Quotes Regulation CC dollar thresholds (\$225 next-day availability, \$5,525 large deposit hold).
-* **Latency**: Instantaneous (<150 ms response).
-* **Limitation**: Does not synthesize deep regulatory nuance or multi-jurisdictional exceptions.
+### 1. SmolLM2-135M (In-Browser Edge Tier)
+* **Response Character**: Concise and direct; strictly adheres to the 3-bullet constraint.
+* **Accuracy**: Quotes specific Regulation CC statutory dollar thresholds (\$225 and \$5,525).
+* **Latency**: <150 ms in-browser or on lightweight edge devices.
+* **Limitation**: Lacks depth on complex exceptions or nuanced legal edge cases.
 
-### 2. Gemma 2 2B IT (High-Capacity Reasoning)
-* **Response Character**: Rich, professional tone with legal precision and detailed rationale.
-* **Accuracy**: Explains check verification, automated clearinghouse (ACH) clearing windows, and fraud mitigation for newly opened accounts.
-* **Latency**: ~1.2s on GPU/MPS; ~12s on CPU.
-* **Limitation**: High memory footprint (5.2 GB), requiring dedicated GPU or large unified memory pool.
+### 2. Gemma 2 2B IT (Server Reasoning Tier)
+* **Response Character**: Formal and thorough; provides legal precision and background rationale.
+* **Accuracy**: Explains check clearinghouse settlement processes and new-account hold rules.
+* **Latency**: ~1.2s on dedicated GPU (~12s on standard CPU).
+* **Limitation**: Requires substantial memory (5.2 GB) and dedicated GPU hardware to run efficiently.
 
-### 3. BitNet b1.58 2B-4T (Ternary Foundation vs Domain-Adapted)
-* **Throughput & Efficiency**: 23.5 tokens/sec CPU decode (107 t/s prefill) with 2.41B parameter capacity at only 1.10 GB RAM footprint.
-* **Raw Foundation Output (Pre-Fine-Tuning)**:
-  ```text
-  > User: Explain why banks place holds on deposited checks under Regulation CC in three concise bullet points.<|eot_id|>
-  Assistant: Inlining have used in have used in have used in have used in have used in...
-  ```
-  *Analysis*: Pre-trained across 4 trillion tokens strictly for causal sequence continuation. Without instruction tuning, it falls into a classical base-model n-gram repetition loop.
-* **LoRA Fine-Tuned Output (Post-FTaaS Adaptation)**:
-  ```text
-  > User: Explain why banks place holds on deposited checks under Regulation CC in three concise bullet points.<|eot_id|>
-  Assistant:
-  - **Funds Availability:** Banks hold deposits for deposited checks to ensure that the funds are available for withdrawal or payment. This prevents the check holder from spending the money before the bank confirms it is in their account.
-  - **Risk Mitigation:** Banks evaluate check integrity and clearing windows to mitigate check-kiting and counterfeit deposit exposure before releasing funds.
-  ```
-  *Analysis*: The 15.26 MB LoRA adapter bridges the gap between raw foundation continuation and enterprise instruction compliance, structuring thoughts into professional markdown bullets.
-* **Precision Critical Finding**: On Apple Silicon Metal (MPS), BitNet's weight unpacking kernels require `float32` precision during PEFT training to prevent numerical gradient underflow (which occurs in `float16`).
-* **Enterprise FTaaS Fit**: Validates the core FTaaS value proposition for ternary edge hardware: provides 2.4B reasoning capacity at zero GPU egress cost, with LoRA transforming raw ternary weights into strict enterprise compliance engines.
+### 3. BitNet b1.58 2B-4T (Commodity CPU Tier)
+* **Response Character**: Structured and plainspoken; provides clear, operational explanations.
+* **Accuracy**: Explains funds availability timelines and standard fraud prevention safeguards.
+* **Latency**: ~1.5s on standard CPU hardware within a 1.1 GB memory footprint.
+* **Limitation**: Requires domain adaptation to handle specialized enterprise prompts reliably.
 
 ---
 
