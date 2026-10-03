@@ -68,6 +68,7 @@ flowchart TD
    - Tiered baseline models:
      - **SmolLM2-135M** (`HuggingFaceTB/SmolLM2-135M`): Ultra-compact baseline (LoRA rank 8, alpha 32, ~1.8 MB adapter) fine-tuning in 2–4 minutes on Apple Silicon (M1–M4) or CUDA.
      - **Google Gemma 2 2B IT** (`google/gemma-2-2b-it`): High-capacity reasoning tier (LoRA rank 8, alpha 32, ~6.5 MB adapter) utilizing Gemma chat templates (`<start_of_turn>`) with hardware preflight gates (~8 GB VRAM requirement and Hugging Face license check).
+     - **Microsoft BitNet b1.58 2B-4T** (`microsoft/BitNet-b1.58-2B-4T`): 1.58-bit ternary foundation model ($W \in \{-1, 0, +1\}$) operating at ~1.10 GB RAM footprint via integer addition/subtraction, delivering up to 23.5 tokens/sec decode entirely on CPU (zero GPU required).
 4. **Observable MLOps & Distributed Tracing**:
    - Unified `JobId` correlation across HTTP headers, AMQP properties, Python structured logs, and MLflow experiment tags.
    - Step-level loss curves, learning rate, and duration recorded in MLflow.
@@ -235,6 +236,15 @@ Returns the dynamic model catalog, parameter specifications, and hardware discla
     "minVramGb": 8.0,
     "requiresAuth": true,
     "disclaimer": "Requires HF_TOKEN with access granted at huggingface.co/google/gemma-2-2b-it. Minimum 8GB VRAM (or Apple Silicon MPS float16) recommended."
+  },
+  {
+    "modelId": "microsoft/BitNet-b1.58-2B-4T",
+    "displayName": "BitNet b1.58 2B-4T (Ternary Weight Tier • Open)",
+    "parameterCount": "2.4B",
+    "contextLength": 4096,
+    "minVramGb": 0.0,
+    "requiresAuth": false,
+    "disclaimer": "1.58-bit ternary model operating on CPU via AVX2 SIMD integer operations (zero GPU VRAM required). Inference requires bitnet.cpp runtime."
   }
 ]
 ```
@@ -354,6 +364,12 @@ stateDiagram-v2
 - Precision & Memory Optimization: `torch.float16` on Apple Silicon MPS with dynamic gradient accumulation (`per_device_batch=1`, `accum_steps=batch_size`) and watermark ceiling bypass.
 - Dynamic inference conflict guard: HTTP 409 Conflict with actionable restart hint on base model mismatch.
 - Documented live prototype benchmark in `GEMMA_PROTOTYPE_RESULTS.md`.
+
+### Phase 7: Ternary Weight Scaling & BitNet b1.58 Prototype
+- `microsoft/BitNet-b1.58-2B-4T` catalog integration in `model_registry.py` and `SupportedModels`.
+- Ternary weights $W \in \{-1, 0, +1\}$ executing on CPU via AVX2 SIMD integer operations (zero GPU VRAM required).
+- Native prompt formatting (`User: <prompt><|eot_id|>\nAssistant: <completion><|eot_id|>`).
+- Live CPU scaling benchmarks documented in `BITNET_PROTOTYPE_RESULTS.md` achieving up to 23.54 tokens/sec on Intel Core i9 CPU.
 
 ---
 

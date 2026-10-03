@@ -16,6 +16,7 @@ from model_registry import (
     ChatTemplate,
     SMOLLM2,
     GEMMA_2_2B_IT,
+    BITNET_2B_4T,
     SUPPORTED_MODEL_IDS,
 )
 
@@ -48,6 +49,21 @@ class TestModelRegistrySpecs(unittest.TestCase):
         self.assertIsNotNone(spec.hardware_disclaimer)
         self.assertIn("8 GB", spec.hardware_disclaimer)
 
+    def test_bitnet_spec_is_registered(self):
+        spec = get_model_spec(BITNET_2B_4T)
+        self.assertEqual(spec.model_id, "microsoft/BitNet-b1.58-2B-4T")
+        self.assertEqual(spec.display_name, "BitNet b1.58 2B-4T")
+        self.assertEqual(spec.chat_template, ChatTemplate.BITNET)
+        self.assertIn("q_proj", spec.lora_target_modules)
+        self.assertIn("v_proj", spec.lora_target_modules)
+        self.assertEqual(len(spec.lora_target_modules), 4)
+        self.assertEqual(spec.parameter_count_display, "2.4B")
+        self.assertEqual(spec.context_length, 4096)
+        self.assertEqual(spec.min_gpu_vram_gb, 0.0)
+        self.assertFalse(spec.requires_hf_auth)
+        self.assertIsNotNone(spec.hardware_disclaimer)
+        self.assertIn("1.58-bit ternary", spec.hardware_disclaimer)
+
     def test_unknown_model_raises_value_error(self):
         with self.assertRaises(ValueError) as ctx:
             get_model_spec("some/random-model-xyz")
@@ -57,7 +73,8 @@ class TestModelRegistrySpecs(unittest.TestCase):
     def test_supported_model_ids_frozenset_contains_both(self):
         self.assertIn(SMOLLM2, SUPPORTED_MODEL_IDS)
         self.assertIn(GEMMA_2_2B_IT, SUPPORTED_MODEL_IDS)
-        self.assertEqual(len(SUPPORTED_MODEL_IDS), 2)
+        self.assertIn(BITNET_2B_4T, SUPPORTED_MODEL_IDS)
+        self.assertEqual(len(SUPPORTED_MODEL_IDS), 3)
 
 
 class TestChatTemplates(unittest.TestCase):
@@ -74,6 +91,13 @@ class TestChatTemplates(unittest.TestCase):
         self.assertIn("<start_of_turn>model\nWorld<end_of_turn>", result)
         self.assertNotIn("<|im_start|>", result)
 
+    def test_bitnet_training_prompt_uses_bitnet_template(self):
+        result = format_training_prompt(BITNET_2B_4T, "Hello", "World")
+        self.assertIn("User: Hello<|eot_id|>", result)
+        self.assertIn("Assistant: World<|eot_id|>", result)
+        self.assertNotIn("<|im_start|>", result)
+        self.assertNotIn("<start_of_turn>", result)
+
     def test_smollm2_inference_prompt_open_ended(self):
         result = format_inference_prompt(SMOLLM2, "Hello")
         self.assertTrue(result.endswith("<|im_start|>assistant\n"))
@@ -83,6 +107,10 @@ class TestChatTemplates(unittest.TestCase):
         result = format_inference_prompt(GEMMA_2_2B_IT, "Hello")
         self.assertTrue(result.endswith("<start_of_turn>model\n"))
         self.assertNotIn("<|im_start|>", result)
+
+    def test_bitnet_inference_prompt_open_ended(self):
+        result = format_inference_prompt(BITNET_2B_4T, "Hello")
+        self.assertEqual(result, "User: Hello<|eot_id|>\nAssistant: ")
 
     def test_training_prompt_preserves_content(self):
         prompt = "What is the ACH clearance policy?"
@@ -108,6 +136,15 @@ class TestPreflightCheck(unittest.TestCase):
             mock_torch.cuda.is_available.return_value = False
             mock_torch.backends.mps.is_available.return_value = False
             result = preflight_check(SMOLLM2)
+        self.assertTrue(result["passed"])
+        self.assertIsNone(result["warning"])
+
+    def test_bitnet_passes_on_cpu(self):
+        """BitNet has 0.0 GB VRAM requirement — should always pass on CPU without warnings."""
+        with patch("model_registry.torch") as mock_torch:
+            mock_torch.cuda.is_available.return_value = False
+            mock_torch.backends.mps.is_available.return_value = False
+            result = preflight_check(BITNET_2B_4T)
         self.assertTrue(result["passed"])
         self.assertIsNone(result["warning"])
 

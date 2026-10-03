@@ -161,6 +161,14 @@ class TestTrainerModelSelection(unittest.TestCase):
         self.assertIn("k_proj", targets)
         self.assertIn("o_proj", targets)
 
+    def test_bitnet_uses_correct_lora_targets(self):
+        captured = self._run_trainer_with_mocks("microsoft/BitNet-b1.58-2B-4T")
+        targets = captured.get("lora_target_modules", [])
+        self.assertIn("q_proj", targets)
+        self.assertIn("v_proj", targets)
+        self.assertIn("k_proj", targets)
+        self.assertIn("o_proj", targets)
+
     # ------------------------------------------------------------------
     # Chat template selection
     # ------------------------------------------------------------------
@@ -182,6 +190,17 @@ class TestTrainerModelSelection(unittest.TestCase):
             self.assertIn("<start_of_turn>user", text)
             self.assertIn("<start_of_turn>model", text)
             self.assertNotIn("<|im_start|>", text)
+
+    def test_bitnet_uses_bitnet_template(self):
+        captured = self._run_trainer_with_mocks("microsoft/BitNet-b1.58-2B-4T")
+        texts = captured.get("formatted_texts", [])
+        self.assertGreater(len(texts), 0)
+        for text in texts:
+            self.assertIn("User:", text)
+            self.assertIn("Assistant:", text)
+            self.assertIn("<|eot_id|>", text)
+            self.assertNotIn("<|im_start|>", text)
+            self.assertNotIn("<start_of_turn>", text)
 
     # ------------------------------------------------------------------
     # HF auth error handling

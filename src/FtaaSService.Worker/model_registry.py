@@ -26,6 +26,7 @@ logger = logging.getLogger("FtaaSService.Worker.ModelRegistry")
 class ChatTemplate(str, Enum):
     CHATML = "chatml"
     GEMMA = "gemma"
+    BITNET = "bitnet"
 
 
 @dataclass(frozen=True)
@@ -74,11 +75,27 @@ _REGISTRY: dict = {
             "environment variable before starting the worker."
         ),
     ),
+    "microsoft/BitNet-b1.58-2B-4T": ModelSpec(
+        model_id="microsoft/BitNet-b1.58-2B-4T",
+        display_name="BitNet b1.58 2B-4T",
+        chat_template=ChatTemplate.BITNET,
+        lora_target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
+        parameter_count_display="2.4B",
+        context_length=4096,
+        min_gpu_vram_gb=0.0,
+        requires_hf_auth=False,
+        hardware_disclaimer=(
+            "1.58-bit ternary weight model. Executes natively on CPU using AVX2 SIMD "
+            "integer operations (zero GPU VRAM required). "
+            "Inference requires the bitnet.cpp C++ runtime."
+        ),
+    ),
 }
 
 # Convenience aliases (used by API layer for validation)
 SMOLLM2 = "HuggingFaceTB/SmolLM2-135M"
 GEMMA_2_2B_IT = "google/gemma-2-2b-it"
+BITNET_2B_4T = "microsoft/BitNet-b1.58-2B-4T"
 SUPPORTED_MODEL_IDS: frozenset = frozenset(_REGISTRY.keys())
 
 
@@ -119,6 +136,11 @@ def format_training_prompt(model_id: str, prompt: str, completion: str) -> str:
             f"<start_of_turn>user\n{prompt}<end_of_turn>\n"
             f"<start_of_turn>model\n{completion}<end_of_turn>"
         )
+    elif spec.chat_template == ChatTemplate.BITNET:
+        return (
+            f"User: {prompt}<|eot_id|>\n"
+            f"Assistant: {completion}<|eot_id|>"
+        )
     else:
         raise NotImplementedError(
             f"No training template for chat_template={spec.chat_template!r}"
@@ -136,6 +158,8 @@ def format_inference_prompt(model_id: str, prompt: str) -> str:
         return f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
     elif spec.chat_template == ChatTemplate.GEMMA:
         return f"<start_of_turn>user\n{prompt}<end_of_turn>\n<start_of_turn>model\n"
+    elif spec.chat_template == ChatTemplate.BITNET:
+        return f"User: {prompt}<|eot_id|>\nAssistant: "
     else:
         raise NotImplementedError(
             f"No inference template for chat_template={spec.chat_template!r}"

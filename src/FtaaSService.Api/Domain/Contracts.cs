@@ -241,11 +241,13 @@ public static class SupportedModels
 {
     public const string SmolLM2 = "HuggingFaceTB/SmolLM2-135M";
     public const string Gemma2_2B_IT = "google/gemma-2-2b-it";
+    public const string BitNet2B4T = "microsoft/BitNet-b1.58-2B-4T";
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         SmolLM2,
         Gemma2_2B_IT,
+        BitNet2B4T,
     };
 
     public static readonly IReadOnlyList<ModelCatalogEntry> Catalog = new List<ModelCatalogEntry>
@@ -270,6 +272,18 @@ public static class SupportedModels
                 "Requires ~8 GB GPU VRAM for training and ~5 GB for inference. " +
                 "Accept the Gemma license at huggingface.co/google/gemma-2-2b-it and " +
                 "set the HF_TOKEN environment variable before starting the worker."
+        ),
+        new(
+            ModelId: BitNet2B4T,
+            DisplayName: "BitNet b1.58 2B-4T",
+            ParameterCount: "2.4B",
+            ContextLength: 4096,
+            MinGpuVramGb: 0.0,
+            RequiresHfAuth: false,
+            HardwareDisclaimer:
+                "1.58-bit ternary weight model. Executes natively on CPU using AVX2 SIMD " +
+                "integer operations (zero GPU VRAM required). " +
+                "Inference requires the bitnet.cpp C++ runtime."
         ),
     };
 }

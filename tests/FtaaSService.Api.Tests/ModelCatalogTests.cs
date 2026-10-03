@@ -5,18 +5,19 @@ namespace FtaaSService.Api.Tests;
 public class ModelCatalogTests
 {
     [Fact]
-    public void SupportedModels_ContainsSmolLM2AndGemma2B()
+    public void SupportedModels_ContainsSmolLM2AndGemma2BAndBitNet()
     {
         Assert.Contains(SupportedModels.SmolLM2, SupportedModels.All);
         Assert.Contains(SupportedModels.Gemma2_2B_IT, SupportedModels.All);
-        Assert.Equal(2, SupportedModels.All.Count);
+        Assert.Contains(SupportedModels.BitNet2B4T, SupportedModels.All);
+        Assert.Equal(3, SupportedModels.All.Count);
     }
 
     [Fact]
     public void SupportedModelsCatalog_ExposesExpectedMetadataForBothModels()
     {
         var catalog = SupportedModels.Catalog;
-        Assert.Equal(2, catalog.Count);
+        Assert.Equal(3, catalog.Count);
 
         var smol = catalog.FirstOrDefault(m => m.ModelId == SupportedModels.SmolLM2);
         Assert.NotNull(smol);
@@ -34,11 +35,21 @@ public class ModelCatalogTests
         Assert.True(gemma.RequiresHfAuth);
         Assert.NotNull(gemma.HardwareDisclaimer);
         Assert.Contains("HF_TOKEN", gemma.HardwareDisclaimer);
+
+        var bitnet = catalog.FirstOrDefault(m => m.ModelId == SupportedModels.BitNet2B4T);
+        Assert.NotNull(bitnet);
+        Assert.Equal("2.4B", bitnet.ParameterCount);
+        Assert.Equal(4096, bitnet.ContextLength);
+        Assert.Equal(0.0, bitnet.MinGpuVramGb);
+        Assert.False(bitnet.RequiresHfAuth);
+        Assert.NotNull(bitnet.HardwareDisclaimer);
+        Assert.Contains("ternary", bitnet.HardwareDisclaimer);
     }
 
     [Theory]
     [InlineData("HuggingFaceTB/SmolLM2-135M", true)]
     [InlineData("google/gemma-2-2b-it", true)]
+    [InlineData("microsoft/BitNet-b1.58-2B-4T", true)]
     [InlineData("unsupported/arbitrary-model", false)]
     [InlineData("openai/gpt-4o", false)]
     [InlineData("", false)]

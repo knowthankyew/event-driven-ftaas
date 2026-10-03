@@ -5,7 +5,7 @@ An enterprise-grade, asynchronous, event-driven machine learning platform demons
 - **Compute Worker**: Python 3.12, PyTorch, Hugging Face PEFT / LoRA, AMQP Consumer
 - **Telemetry & Experiment Tracking**: OpenTelemetry ActivitySource + MLflow Tracking Server & Model Registry
 - **Message Broker**: RabbitMQ (AMQP) with DLX and retry handling
-- **Base Models**: Multi-model architecture supporting ultra-compact models (`HuggingFaceTB/SmolLM2-135M`) for zero-cost, instant local training, and high-capacity reasoning models (`google/gemma-2-2b-it`) with hardware preflight gates, float16 MPS optimization, and licensing guardrails.
+- **Base Models**: Multi-model architecture supporting ultra-compact models (`HuggingFaceTB/SmolLM2-135M`) for zero-cost instant local training, high-capacity reasoning models (`google/gemma-2-2b-it`) with hardware preflight gates and float16 MPS optimization, and 1.58-bit ternary foundation models (`microsoft/BitNet-b1.58-2B-4T`) executing natively on CPU via AVX2 integer addition/subtraction.
 - **Privacy & Observability Standard**: Complies with [PRIVACY_TELEMETRY_SCHEMA.md](docs/PRIVACY_TELEMETRY_SCHEMA.md).
 
 ## 📺 Interactive Video Demonstration
@@ -183,6 +183,7 @@ To test the entire live pipeline (Infra $\rightarrow$ .NET 10 Ingestion $\righta
 - [x] **Portfolio Phase 3a (The FTaaS Bridge Exporter)**: Edge ONNX Exporter (`src/FtaaSService.Worker/exporter.py`, `scripts/export_edge_adapter.py`) and Web API export endpoints (`GET/POST /api/v1/jobs/{id}/export/edge`) compiling LoRA adapters into web-optimized ONNX format with integrity checksums.
 - [x] **Portfolio Phase 3b (In-Browser Execution)**: Ingesting and executing exported ONNX packages directly inside client browser engines via WebGPU/WASM (`onnxruntime-web`), single-input ONNX export signature, and dynamic INT8 quantization.
 - [x] **Portfolio Phase 3c (Multi-Model Scaling & Gemma 2B Prototype)**: Dynamic multi-model registry (`model_registry.py`), `google/gemma-2-2b-it` support, hardware preflight warnings, float16 MPS optimization with gradient accumulation, and live benchmark evaluation documented in [GEMMA_PROTOTYPE_RESULTS.md](GEMMA_PROTOTYPE_RESULTS.md).
+- [x] **Portfolio Phase 3d (Ternary Weight Scaling & BitNet b1.58 Prototype)**: Microsoft `microsoft/BitNet-b1.58-2B-4T` 1.58-bit ternary foundation model, native CPU execution via AVX2 integer addition/subtraction (zero GPU required), and empirical scaling benchmarks documented in [BITNET_PROTOTYPE_RESULTS.md](BITNET_PROTOTYPE_RESULTS.md).
 
 ---
 

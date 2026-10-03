@@ -39,6 +39,11 @@ class TestInferencePromptFormatting(unittest.TestCase):
         self.assertTrue(result.endswith("<start_of_turn>model\n"))
         self.assertNotIn("<|im_start|>", result)
 
+    def test_bitnet_prompt_uses_bitnet_format(self):
+        from model_registry import format_inference_prompt
+        result = format_inference_prompt("microsoft/BitNet-b1.58-2B-4T", "Hello world")
+        self.assertEqual(result, "User: Hello world<|eot_id|>\nAssistant: ")
+
     def test_smollm2_prompt_preserves_content(self):
         from model_registry import format_inference_prompt
         prompt = "What is the ACH clearance period for transfers over $10,000?"
@@ -49,6 +54,12 @@ class TestInferencePromptFormatting(unittest.TestCase):
         from model_registry import format_inference_prompt
         prompt = "Analyze: Q3 gross margin expanded 340 bps YoY to 43.1%."
         result = format_inference_prompt("google/gemma-2-2b-it", prompt)
+        self.assertIn(prompt, result)
+
+    def test_bitnet_prompt_preserves_content(self):
+        from model_registry import format_inference_prompt
+        prompt = "Analyze: Q3 gross margin expanded 340 bps YoY to 43.1%."
+        result = format_inference_prompt("microsoft/BitNet-b1.58-2B-4T", prompt)
         self.assertIn(prompt, result)
 
 
@@ -112,6 +123,19 @@ class TestBasemodelMismatchDetection(unittest.TestCase):
         """Gemma adapter against Gemma-loaded service → no mismatch."""
         adapter_dir = self._make_adapter_dir("google/gemma-2-2b-it")
         result = self._simulate_mismatch_check(adapter_dir, "google/gemma-2-2b-it")
+        self.assertFalse(result["mismatch"])
+
+    def test_bitnet_adapter_against_smollm2_service_is_mismatch(self):
+        """BitNet adapter against SmolLM2-loaded service → mismatch detected."""
+        adapter_dir = self._make_adapter_dir("microsoft/BitNet-b1.58-2B-4T")
+        result = self._simulate_mismatch_check(adapter_dir, "HuggingFaceTB/SmolLM2-135M")
+        self.assertTrue(result["mismatch"])
+        self.assertEqual(result["adapter_base"], "microsoft/BitNet-b1.58-2B-4T")
+
+    def test_bitnet_adapter_against_bitnet_service_no_mismatch(self):
+        """BitNet adapter against BitNet-loaded service → no mismatch."""
+        adapter_dir = self._make_adapter_dir("microsoft/BitNet-b1.58-2B-4T")
+        result = self._simulate_mismatch_check(adapter_dir, "microsoft/BitNet-b1.58-2B-4T")
         self.assertFalse(result["mismatch"])
 
     def test_missing_base_model_field_does_not_trigger_mismatch(self):
