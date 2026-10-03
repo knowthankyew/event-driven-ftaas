@@ -6,6 +6,21 @@ import logging
 os.environ.setdefault("PYTORCH_MPS_HIGH_WATERMARK_RATIO", "0.0")
 import torch
 
+# Safe fallback for torch.compile on platforms/Python versions where TorchDynamo is unavailable (e.g. Python 3.12 + PyTorch < 2.4)
+_orig_torch_compile = torch.compile
+def _safe_torch_compile(*args, **kwargs):
+    try:
+        return _orig_torch_compile(*args, **kwargs)
+    except RuntimeError as ex:
+        if "Dynamo is not supported" in str(ex):
+            if len(args) == 1 and callable(args[0]):
+                return args[0]
+            def decorator(fn):
+                return fn
+            return decorator
+        raise
+torch.compile = _safe_torch_compile
+
 # Base directories
 WORKER_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = WORKER_DIR.parent.parent

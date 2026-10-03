@@ -1,7 +1,7 @@
 # Core ML Frameworks
-torch>=2.14.0
-transformers>=5.17.0,<5.18
-peft>=0.21.1
+torch>=2.2.0
+transformers>=4.57.0
+peft>=0.20.0
 accelerate>=1.15.0
 datasets>=5.0.1
 onnx>=1.23.0

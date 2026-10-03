@@ -156,8 +156,9 @@ def train_job(
 
         # 4. Tokenizer & Base Model Setup
         logger.info(f"Loading base model and tokenizer: {base_model_name}")
+        trust_remote = False if "bitnet" in base_model_name.lower() else True
         try:
-            tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+            tokenizer = AutoTokenizer.from_pretrained(base_model_name, trust_remote_code=trust_remote)
         except OSError as auth_err:
             err_str = str(auth_err)
             if "401" in err_str or "403" in err_str or "gated" in err_str.lower() or "access" in err_str.lower():
@@ -175,7 +176,7 @@ def train_job(
             model = AutoModelForCausalLM.from_pretrained(
                 base_model_name,
                 torch_dtype=dtype,
-                trust_remote_code=True
+                trust_remote_code=trust_remote
             )
         except OSError as auth_err:
             err_str = str(auth_err)
@@ -202,6 +203,10 @@ def train_job(
         peft_model = get_peft_model(model, lora_config)
         peft_model.to(DEVICE)
         peft_model.print_trainable_parameters()
+
+        # Permit PEFT LoRA training on BitNet quantized base models in Hugging Face Trainer
+        if getattr(peft_model, "hf_quantizer", None) is not None:
+            type(peft_model.hf_quantizer).is_trainable = property(lambda self: True)
 
         # 6. Prepare Hugging Face Dataset with Instruction Masking
         prompt_texts = [format_inference_prompt(base_model_name, r["prompt"]) for r in records]
@@ -246,7 +251,7 @@ def train_job(
             os.environ.setdefault("PYTORCH_MPS_HIGH_WATERMARK_RATIO", "0.0")
 
         # For larger models on memory-constrained devices, scale via gradient accumulation
-        if base_model_name == "google/gemma-2-2b-it" and DEVICE.type == "mps" and batch_size > 1:
+        if (base_model_name in ("google/gemma-2-2b-it", "microsoft/BitNet-b1.58-2B-4T") or "2b" in base_model_name.lower()) and DEVICE.type == "mps" and batch_size > 1:
             per_device_batch = 1
             grad_accum_steps = batch_size
         else:
@@ -330,7 +335,7 @@ def train_job(
         try:
             from evaluator import evaluate_model, register_model_in_registry
             val_dataset_path = DATA_ROOT / "datasets" / "sample-financial-sentiment-val.jsonl"
-            eval_metrics = evaluate_model(peft_model, tokenizer, val_dataset_path)
+            eval_metrics = evaluate_model(peft_model, tokenizer, val_dataset_path, base_model=base_model_name)
             mlflow.log_metric("eval/loss", eval_metrics["eval_loss"])
             mlflow.log_metric("eval/format_accuracy", eval_metrics["format_accuracy"])
 

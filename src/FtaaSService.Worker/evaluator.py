@@ -10,6 +10,7 @@ import mlflow
 from mlflow.tracking import MlflowClient
 
 from config import DATA_ROOT, DEVICE
+from model_registry import format_inference_prompt, format_training_prompt
 
 logger = logging.getLogger("FtaaSService.Worker.Evaluator")
 
@@ -17,7 +18,8 @@ def evaluate_model(
     model: PreTrainedModel,
     tokenizer: AutoTokenizer,
     val_dataset_path: Path,
-    max_eval_samples: int = 10
+    max_eval_samples: int = 10,
+    base_model: str = "HuggingFaceTB/SmolLM2-135M"
 ) -> Dict[str, float]:
     """
     Evaluates a trained model against a validation dataset split.
@@ -38,7 +40,7 @@ def evaluate_model(
     if not records:
         return {"eval_loss": 0.0, "format_accuracy": 100.0}
 
-    logger.info(f"Evaluating model on {len(records)} validation samples...")
+    logger.info(f"Evaluating model on {len(records)} validation samples using template for {base_model}...")
 
     correct_format = 0
     total_loss = 0.0
@@ -50,7 +52,7 @@ def evaluate_model(
             expected = record.get("completion", "")
 
             # 1. Compute Cross-Entropy Loss on prompt+completion
-            full_text = f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n{expected}<|im_end|>"
+            full_text = format_training_prompt(base_model, prompt, expected)
             inputs = tokenizer(full_text, return_tensors="pt", truncation=True, max_length=256)
             inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
             labels = inputs["input_ids"].clone()
@@ -59,7 +61,7 @@ def evaluate_model(
             total_loss += float(outputs.loss.item())
 
             # 2. Test generation format adherence
-            gen_prompt = f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+            gen_prompt = format_inference_prompt(base_model, prompt)
             gen_inputs = tokenizer(gen_prompt, return_tensors="pt").to(DEVICE)
 
             out_tokens = model.generate(

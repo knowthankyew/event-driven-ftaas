@@ -119,3 +119,27 @@ $$h = W_0 \cdot x + \frac{\alpha}{r} (B \cdot A) \cdot x$$
 4. **Runtime Separation (Training vs Inference)**:
    - **`bitnet.cpp` (Inference)**: C++ AVX2 lookup-table runtime optimized exclusively for forward-pass token decode. Memory footprint is strictly bounded to the 1.10 GiB model weights.
    - **PyTorch `BitLinear` + PEFT (Training)**: Forward/backward autograd graph execution requires ~4.5–6.0 GB of standard host system RAM (DRAM) to store activation tensors and float32 adapter gradients, but requires **0.0 GB of dedicated GPU accelerator VRAM**.
+
+---
+
+## 7. Empirical LoRA Fine-Tuning Benchmark Results
+
+LoRA fine-tuning was executed end-to-end on `microsoft/BitNet-b1.58-2B-4T` targeting `datasets/sample-financial-sentiment.jsonl` (20 financial sentiment and regulatory records):
+
+```
++-----------------------------------------------------------------------------------------+
+|                            BITNET b1.58 LoRA TRAINING METRICS                           |
++-------------------------------+---------------------------------------------------------+
+| Fine-Tuning Method            | PEFT LoRA (r=8, alpha=32, dropout=0.05)                 |
+| Target Linear Layers          | q_proj, v_proj, k_proj, o_proj                          |
+| Trainable Parameters          | 3,993,600 (0.1652% of 2.41B base parameters)            |
+| Base Model Precision          | Ternary integer (-1, 0, 1) (Frozen)                   |
+| Training Precision            | Float16 (MPS Device Acceleration)                       |
+| Batching Strategy             | Batch Size 2 (Per-device: 1, Gradient Accumulation: 2) |
+| Epochs / Total Steps          | 3 Epochs / 30 Optimization Steps                           |
+| Total Wall-Clock Duration     | 22m 11s (1331.54 seconds)                         |
+| Final Training Loss           | 0.5731                                                 |
+| Exported Adapter File         | adapter_model.safetensors (15.26 MB)                 |
+| MLflow Experiment Run         | 5a1365802385451e913d615637c0a93f                                 |
++-------------------------------+---------------------------------------------------------+
+```

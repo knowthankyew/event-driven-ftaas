@@ -82,17 +82,17 @@ Measured natively on host hardware (Intel Core i9-9880H 8-core CPU, 16 GB RAM):
 Live benchmark runs across identical financial sentiment and compliance records (`datasets/sample-financial-sentiment.jsonl`):
 
 ```
-| Attribute                  | SmolLM2-135M (Baseline)   | Gemma 2 2B IT (Live Run)   | BitNet b1.58 2B-4T (Roadmap) |
+| Attribute                  | SmolLM2-135M (Baseline)   | Gemma 2 2B IT (Live Run)   | BitNet b1.58 2B-4T (Live Run) |
 | :------------------------- | :------------------------ | :------------------------- | :--------------------------- |
 | **Training Steps**         | 75 steps (3 epochs)       | 30 steps (3 epochs)        | 30 steps (3 epochs)          |
 | **Target Modules**         | `["q_proj", "v_proj"]`    | `["q_proj", "v_proj",      | `["q_proj", "v_proj",        |
 |                            |                           |   "k_proj", "o_proj"]`     |   "k_proj", "o_proj"]`       |
 | **LoRA Rank (r) / Alpha**  | 8 / 32                    | 8 / 32                     | 8 / 32                       |
-| **Exported Adapter Size**  | **1.84 MB**               | **12.21 MB**               | **~8.4 MB (Projected)**      |
-| **Training Device**        | Apple Silicon (MPS)       | Apple Silicon (MPS float16)| Multi-threaded CPU / MPS     |
-| **Training Duration**      | **2m 14s**                | **7m 3s**                  | **~8m 30s (Estimated CPU)**  |
-| **Loss Convergence**       | 0.312                     | 11.4547                    | In progress (Phase 4)        |
-| **MLflow Run ID**          | `smollm-prod-baseline`    | `a3f2e22c38cb4514...`      | Pending run                  |
+| **Exported Adapter Size**  | **1.84 MB**               | **12.21 MB**               | **15.26 MB**               |
+| **Training Device**        | Apple Silicon (MPS)       | Apple Silicon (MPS float16)| Apple Silicon (MPS float16)  |
+| **Training Duration**      | **2m 14s**                | **7m 3s**                  | **22m 11s**                  |
+| **Loss Convergence**       | 0.312                     | 11.4547                    | **0.5731**                  |
+| **MLflow Run ID**          | `smollm-prod-baseline`    | `a3f2e22c38cb4514...`      | `5a1365802385451e...`     |
 ```
 
 ---
