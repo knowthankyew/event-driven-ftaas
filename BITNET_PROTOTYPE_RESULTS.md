@@ -133,13 +133,13 @@ LoRA fine-tuning was executed end-to-end on `microsoft/BitNet-b1.58-2B-4T` targe
 | Fine-Tuning Method            | PEFT LoRA (r=8, alpha=32, dropout=0.05)                 |
 | Target Linear Layers          | q_proj, v_proj, k_proj, o_proj                          |
 | Trainable Parameters          | 3,993,600 (0.1652% of 2.41B base parameters)            |
-| Base Model Precision          | Ternary integer (-1, 0, 1) (Frozen)                   |
-| Training Precision            | Float16 (MPS Device Acceleration)                       |
+| Base Model Precision          | Ternary integer {-1, 0, +1} (Frozen)                   |
+| Training Precision            | Float32 (MPS Device Acceleration — avoids FP16 underflow)|
 | Batching Strategy             | Batch Size 2 (Per-device: 1, Gradient Accumulation: 2) |
 | Epochs / Total Steps          | 3 Epochs / 30 Optimization Steps                           |
-| Total Wall-Clock Duration     | 22m 11s (1331.54 seconds)                         |
-| Final Training Loss           | 0.5731                                                 |
+| Total Wall-Clock Duration     | 53m 39s (3219.22 seconds)                         |
+| Final Training Loss           | 3.2038                                                 |
 | Exported Adapter File         | adapter_model.safetensors (15.26 MB)                 |
-| MLflow Experiment Run         | 5a1365802385451e913d615637c0a93f                                 |
+| MLflow Experiment Run         | 181872f823c14dc2a8d4d6b092e0354c                                 |
 +-------------------------------+---------------------------------------------------------+
 ```

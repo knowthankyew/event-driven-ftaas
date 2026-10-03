@@ -172,7 +172,15 @@ def train_job(
             tokenizer.pad_token = tokenizer.eos_token
 
         try:
-            dtype = torch.bfloat16 if DEVICE.type == "cuda" else (torch.float16 if DEVICE.type == "mps" else torch.float32)
+            if "bitnet" in base_model_name.lower():
+                dtype = torch.float32  # BitLinear unpacking requires float32 to prevent gradient underflow on Apple Silicon
+            elif DEVICE.type == "cuda":
+                dtype = torch.bfloat16
+            elif DEVICE.type == "mps":
+                dtype = torch.float16
+            else:
+                dtype = torch.float32
+
             model = AutoModelForCausalLM.from_pretrained(
                 base_model_name,
                 torch_dtype=dtype,
