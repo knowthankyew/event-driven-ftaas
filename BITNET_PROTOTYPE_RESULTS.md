@@ -116,3 +116,6 @@ $$h = W_0 \cdot x + \frac{\alpha}{r} (B \cdot A) \cdot x$$
 2. **Continuous Low-Rank Adapters**: Trainable rank decomposition matrices $A \in \mathbb{R}^{r \times d_{\text{in}}}$ and $B \in \mathbb{R}^{d_{\text{out}} \times r}$ train in standard float (`float16`/`bfloat16`), capturing nuanced domain representations.
 3. **Deployment Strategy**:
    - **Multi-Tenant Edge Serving**: Base BitNet weights stay in memory as 1.1 GB ternary integers; request-time forward passes execute ternary SIMD additions on CPU in parallel with tiny float LoRA adapter projections.
+4. **Runtime Separation (Training vs Inference)**:
+   - **`bitnet.cpp` (Inference)**: C++ AVX2 lookup-table runtime optimized exclusively for forward-pass token decode. Memory footprint is strictly bounded to the 1.10 GiB model weights.
+   - **PyTorch `BitLinear` + PEFT (Training)**: Forward/backward autograd graph execution requires ~4.5–6.0 GB of standard host system RAM (DRAM) to store activation tensors and float32 adapter gradients, but requires **0.0 GB of dedicated GPU accelerator VRAM**.

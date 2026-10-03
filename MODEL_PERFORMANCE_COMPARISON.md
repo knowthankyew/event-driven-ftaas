@@ -71,7 +71,8 @@ Measured natively on host hardware (Intel Core i9-9880H 8-core CPU, 16 GB RAM):
 | :--- | :--- | :--- | :--- | :--- |
 | **Weights on Disk** | 270 MB | 5,240 MB | **1,130 MB** | 78% storage reduction vs Gemma |
 | **Active Process RAM (Inference)**| ~310 MB | ~5,600 MB | **~1,150 MB** | 4.8× density improvement over FP16 |
-| **VRAM Required for LoRA Training**| 0.5 GB | ~8.0 GB | **0.0 GB** | Runs training pipeline on system RAM |
+| **GPU VRAM Required (LoRA Training)**| 0.5 GB | ~8.0 GB | **0.0 GB** | Zero dedicated GPU required |
+| **Host System RAM (LoRA Training)**| ~1.5 GB | ~12.0 GB | **~4.5 – 6.0 GB** | PyTorch autograd activations + float adapter gradients |
 | **Multi-Tenant Packing (16 GB Server)**| ~45 instances | 2 instances | **12 instances** | **6× higher concurrency than Gemma** |
 
 ---
