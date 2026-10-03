@@ -15,9 +15,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-# Add worker directory to sys.path so model_registry is importable
+# Add worker and inference directories to sys.path
 worker_dir = Path(__file__).resolve().parent.parent / "src" / "FtaaSService.Worker"
+inference_dir = Path(__file__).resolve().parent.parent / "src" / "FtaaSService.Inference"
 sys.path.insert(0, str(worker_dir))
+sys.path.insert(0, str(inference_dir))
 
 
 class TestInferencePromptFormatting(unittest.TestCase):
