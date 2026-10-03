@@ -165,6 +165,7 @@
 
           // Render Expandable Model Chips
           renderModelChips();
+          selectActiveBaseModel(state.activeBaseModel);
         }
       }
     } catch (err) {
@@ -203,9 +204,6 @@
 
       elements.modelChipsContainer.appendChild(btn);
     });
-
-    // Ensure tags and headers are updated with the active model
-    selectActiveBaseModel(state.activeBaseModel);
   }
 
   function selectActiveBaseModel(modelId) {

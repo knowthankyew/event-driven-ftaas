@@ -87,18 +87,7 @@
         </div>
         <div id="model-chips-container" class="model-chips-group">
           <!-- Dynamically populated from /api/v1/studio/models -->
-          <button class="model-chip-btn active" data-model="microsoft/BitNet-b1.58-2B-4T" type="button">
-            <span class="model-chip-name">BitNet b1.58 2B-4T</span>
-            <span class="model-chip-badge ternary">1.58-bit CPU</span>
-          </button>
-          <button class="model-chip-btn" data-model="HuggingFaceTB/SmolLM2-135M" type="button">
-            <span class="model-chip-name">SmolLM2-135M</span>
-            <span class="model-chip-badge edge">135M Edge</span>
-          </button>
-          <button class="model-chip-btn" data-model="google/gemma-2-2b-it" type="button">
-            <span class="model-chip-name">Gemma 2 2B IT</span>
-            <span class="model-chip-badge gpu">2B GPU</span>
-          </button>
+          <div class="model-chips-loading"><span>⏳</span> Loading model catalog...</div>
         </div>
       </div>
 

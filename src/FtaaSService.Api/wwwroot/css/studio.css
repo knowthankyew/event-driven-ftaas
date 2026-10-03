@@ -1032,6 +1032,15 @@ main.app-main {
   flex-wrap: wrap;
 }
 
+.model-chips-loading {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  padding: 0.4rem 0.2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .model-chip-btn {
   display: inline-flex;
   align-items: center;
