@@ -15,7 +15,8 @@
     isLiveEngine: false,
     consecutiveProbeFailures: 0,
     isProbingEngine: false,
-    supportedModels: []
+    supportedModels: [],
+    activeBaseModel: 'microsoft/BitNet-b1.58-2B-4T'
   };
 
   // DOM Elements
@@ -38,8 +39,10 @@
     modeStatusPill: document.getElementById('mode-status-pill'),
     modeStatusIndicator: document.getElementById('mode-status-indicator'),
     modeStatusText: document.getElementById('mode-status-text'),
+    headerModelPill: document.getElementById('header-model-pill'),
     baseModeTag: document.getElementById('base-mode-tag'),
     tunedModeTag: document.getElementById('tuned-mode-tag'),
+    modelChipsContainer: document.getElementById('model-chips-container'),
     datasetTableBody: document.getElementById('dataset-table-body'),
     addRowBtn: document.getElementById('btn-add-row'),
     loadTemplateBtn: document.getElementById('btn-load-template'),
@@ -138,21 +141,99 @@
       const res = await fetch('/api/v1/studio/models');
       if (res.ok) {
         state.supportedModels = await res.json();
-        if (elements.baseModelSelect && Array.isArray(state.supportedModels) && state.supportedModels.length > 0) {
-          const prevVal = elements.baseModelSelect.value;
-          elements.baseModelSelect.innerHTML = state.supportedModels.map(m => `
-            <option value="${escapeHtml(m.modelId)}">
-              ${escapeHtml(m.displayName)} (${escapeHtml(m.parameterCount)}, ${m.minGpuVramGb > 1 ? '~' + m.minGpuVramGb + 'GB VRAM' : 'zero cloud fee'})
-            </option>
-          `).join('');
-          if (prevVal && state.supportedModels.some(m => m.modelId === prevVal)) {
-            elements.baseModelSelect.value = prevVal;
+        if (Array.isArray(state.supportedModels) && state.supportedModels.length > 0) {
+          // If active model is not set or not in catalog, default to first (BitNet)
+          if (!state.activeBaseModel || !state.supportedModels.some(m => m.modelId === state.activeBaseModel)) {
+            state.activeBaseModel = state.supportedModels[0].modelId;
           }
-          updateModelDisclaimer();
+
+          // Populate Deploy Settings <select>
+          if (elements.baseModelSelect) {
+            const prevVal = elements.baseModelSelect.value;
+            elements.baseModelSelect.innerHTML = state.supportedModels.map(m => `
+              <option value="${escapeHtml(m.modelId)}">
+                ${escapeHtml(m.displayName)} (${escapeHtml(m.parameterCount)}, ${m.minGpuVramGb > 0 ? '~' + m.minGpuVramGb + 'GB VRAM' : 'zero cloud fee'})
+              </option>
+            `).join('');
+            if (prevVal && state.supportedModels.some(m => m.modelId === prevVal)) {
+              elements.baseModelSelect.value = prevVal;
+            } else {
+              elements.baseModelSelect.value = state.activeBaseModel;
+            }
+            updateModelDisclaimer();
+          }
+
+          // Render Expandable Model Chips
+          renderModelChips();
         }
       }
     } catch (err) {
       console.warn('Could not load dynamic model catalog from API:', err);
+    }
+  }
+
+  function renderModelChips() {
+    if (!elements.modelChipsContainer || !Array.isArray(state.supportedModels) || state.supportedModels.length === 0) return;
+    elements.modelChipsContainer.innerHTML = '';
+    state.supportedModels.forEach(m => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const isActive = (m.modelId === state.activeBaseModel);
+      btn.className = `model-chip-btn ${isActive ? 'active' : ''}`;
+      btn.dataset.model = m.modelId;
+
+      let badgeClass = 'edge';
+      let badgeText = `${m.parameterCount} Edge`;
+      if (m.modelId.toLowerCase().includes('bitnet')) {
+        badgeClass = 'ternary';
+        badgeText = '1.58-bit CPU';
+      } else if (m.minGpuVramGb >= 5) {
+        badgeClass = 'gpu';
+        badgeText = `${m.parameterCount} GPU`;
+      }
+
+      btn.innerHTML = `
+        <span class="model-chip-name">${escapeHtml(m.displayName)}</span>
+        <span class="model-chip-badge ${badgeClass}">${badgeText}</span>
+      `;
+
+      btn.addEventListener('click', () => {
+        selectActiveBaseModel(m.modelId);
+      });
+
+      elements.modelChipsContainer.appendChild(btn);
+    });
+
+    // Ensure tags and headers are updated with the active model
+    selectActiveBaseModel(state.activeBaseModel);
+  }
+
+  function selectActiveBaseModel(modelId) {
+    state.activeBaseModel = modelId;
+    const model = (state.supportedModels || []).find(m => m.modelId === modelId);
+    const displayName = model ? model.displayName : modelId.split('/').pop();
+
+    // Update active state in chip buttons
+    if (elements.modelChipsContainer) {
+      elements.modelChipsContainer.querySelectorAll('.model-chip-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.model === modelId);
+      });
+    }
+
+    // Update Arena base model tag
+    if (elements.baseModeTag) {
+      elements.baseModeTag.textContent = `${displayName}${modelId.toLowerCase().includes('bitnet') ? ' (CPU)' : ''}`;
+    }
+
+    // Update header status pill
+    if (elements.headerModelPill) {
+      elements.headerModelPill.innerHTML = `Base Model: <strong>${escapeHtml(displayName)}</strong>`;
+    }
+
+    // Synchronize Deploy Settings select dropdown
+    if (elements.baseModelSelect && elements.baseModelSelect.value !== modelId) {
+      elements.baseModelSelect.value = modelId;
+      updateModelDisclaimer();
     }
   }
 
@@ -312,7 +393,7 @@
         maxTokens: parseInt(elements.maxTokensInput.value, 10) || 64,
         temperature: parseFloat(elements.tempInput.value) || 0.2,
         jobId: jobId,
-        baseModel: completedJob ? completedJob.baseModel : undefined,
+        baseModel: state.activeBaseModel || (completedJob ? completedJob.baseModel : undefined),
         adapterPath: adapterPath
       };
 
@@ -639,7 +720,7 @@
     const formData = new FormData();
     formData.append('file', blob, `${jobName}.jsonl`);
     formData.append('jobName', jobName);
-    const selectedModel = (elements.baseModelSelect && elements.baseModelSelect.value) || 'HuggingFaceTB/SmolLM2-135M';
+    const selectedModel = (elements.baseModelSelect && elements.baseModelSelect.value) || state.activeBaseModel || 'microsoft/BitNet-b1.58-2B-4T';
     formData.append('baseModel', selectedModel);
     formData.append('hyperparameters', JSON.stringify({
       epochs: 3,
@@ -849,9 +930,14 @@
         statusBadge = `<span class="persona-tag" style="background: rgba(239, 68, 68, 0.15); color: #f87171;" title="${escapeHtml(job.errorMessage || 'Training process error')}">Failed</span>`;
       }
 
-      const modelDisplay = (job.baseModel && job.baseModel.toLowerCase().includes('gemma')) 
-        ? 'Gemma 2 2B IT' 
-        : 'SmolLM2-135M';
+      let modelDisplay = 'BitNet b1.58 2B-4T';
+      if (job.baseModel) {
+        const lower = job.baseModel.toLowerCase();
+        if (lower.includes('bitnet')) modelDisplay = 'BitNet b1.58 2B-4T';
+        else if (lower.includes('gemma')) modelDisplay = 'Gemma 2 2B IT';
+        else if (lower.includes('smollm')) modelDisplay = 'SmolLM2-135M';
+        else modelDisplay = job.baseModel.split('/').pop();
+      }
 
       card.innerHTML = `
         <div class="library-card-header">

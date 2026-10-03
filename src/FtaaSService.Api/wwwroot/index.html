@@ -61,7 +61,7 @@
       </div>
       <div class="status-pill">
         <span class="status-indicator"></span>
-        <span>Base Model: <strong>SmolLM2</strong></span>
+        <span id="header-model-pill">Base Model: <strong>BitNet b1.58 (2B-4T CPU)</strong></span>
       </div>
     </div>
   </header>
@@ -77,6 +77,28 @@
         <div class="persona-strip-title">Select Business Team Persona</div>
         <div id="persona-grid" class="persona-cards-grid">
           <!-- Populated dynamically via JS -->
+        </div>
+      </div>
+
+      <!-- Expandable Model Selector Bar -->
+      <div class="model-selector-bar">
+        <div class="model-selector-label">
+          <span>🧠</span> Primary Foundation Model:
+        </div>
+        <div id="model-chips-container" class="model-chips-group">
+          <!-- Dynamically populated from /api/v1/studio/models -->
+          <button class="model-chip-btn active" data-model="microsoft/BitNet-b1.58-2B-4T" type="button">
+            <span class="model-chip-name">BitNet b1.58 2B-4T</span>
+            <span class="model-chip-badge ternary">1.58-bit CPU</span>
+          </button>
+          <button class="model-chip-btn" data-model="HuggingFaceTB/SmolLM2-135M" type="button">
+            <span class="model-chip-name">SmolLM2-135M</span>
+            <span class="model-chip-badge edge">135M Edge</span>
+          </button>
+          <button class="model-chip-btn" data-model="google/gemma-2-2b-it" type="button">
+            <span class="model-chip-name">Gemma 2 2B IT</span>
+            <span class="model-chip-badge gpu">2B GPU</span>
+          </button>
         </div>
       </div>
 
@@ -137,7 +159,7 @@
                 <span class="model-badge base">Generic AI</span>
                 <span class="model-title">Standard Foundation Model</span>
               </div>
-              <span id="base-mode-tag" class="model-meta">SmolLM2-135M</span>
+              <span id="base-mode-tag" class="model-meta">BitNet-b1.58-2B-4T (CPU)</span>
             </div>
 
             <div id="base-completion" class="completion-box placeholder">
@@ -260,9 +282,9 @@
                 Base Model:
               </label>
               <select id="base-model-select" class="dataset-input" style="background: rgba(15, 23, 42, 0.7); color: var(--text-main); border: 1px solid var(--border-color); cursor: pointer;">
+                <option value="microsoft/BitNet-b1.58-2B-4T">BitNet b1.58 2B-4T (1.58-bit ternary, pure CPU)</option>
                 <option value="HuggingFaceTB/SmolLM2-135M">SmolLM2-135M (Ultra-compact, zero cloud fee)</option>
                 <option value="google/gemma-2-2b-it">Gemma 2 2B IT (High-capability reasoning)</option>
-                <option value="microsoft/BitNet-b1.58-2B-4T">BitNet b1.58 2B-4T (1.58-bit ternary, pure CPU)</option>
               </select>
               <div id="model-disclaimer" style="display: none; margin-top: 0.6rem; font-size: 0.75rem; color: #fde047; background: rgba(234, 179, 8, 0.12); border: 1px solid rgba(234, 179, 8, 0.35); border-radius: var(--radius-sm); padding: 0.6rem 0.8rem; line-height: 1.45;">
               </div>

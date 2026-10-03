@@ -36,7 +36,7 @@ PROJECT_ROOT = INFERENCE_DIR.parent.parent
 DEFAULT_DATA_ROOT = PROJECT_ROOT / "data"
 DATA_ROOT = Path(os.getenv("DATA_ROOT", str(DEFAULT_DATA_ROOT))).resolve()
 
-DEFAULT_BASE_MODEL = os.getenv("BASE_MODEL_NAME", "HuggingFaceTB/SmolLM2-135M")
+DEFAULT_BASE_MODEL = os.getenv("BASE_MODEL_NAME", "microsoft/BitNet-b1.58-2B-4T")
 
 # Make model_registry importable from the Worker source directory
 import sys as _sys

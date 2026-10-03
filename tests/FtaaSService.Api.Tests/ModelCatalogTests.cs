@@ -58,4 +58,19 @@ public class ModelCatalogTests
         bool isSupported = SupportedModels.All.Contains(modelId);
         Assert.Equal(expectedAllowed, isSupported);
     }
+
+    [Fact]
+    public void SupportedModelsCatalog_HasBitNetAsFirstPrimaryEntry()
+    {
+        var catalog = SupportedModels.Catalog;
+        Assert.NotEmpty(catalog);
+        Assert.Equal(SupportedModels.BitNet2B4T, catalog[0].ModelId);
+    }
+
+    [Fact]
+    public void SubmitJobRequest_DefaultsToBitNetPrimaryModel()
+    {
+        var request = new SubmitJobRequest();
+        Assert.Equal(SupportedModels.BitNet2B4T, request.BaseModel);
+    }
 }
