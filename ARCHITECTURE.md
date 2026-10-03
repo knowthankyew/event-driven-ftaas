@@ -40,14 +40,14 @@ flowchart TD
     subgraph Compute["Training Compute Worker (Python)"]
         RMQ -->|3. Consume job| PW[Python Training Worker]
         PW -->|Load JSONL via datasetPath| DISK
-        PW -->|Apply LoRA & Train| HF[SmolLM2-135M / TinyLlama Base]
+        PW -->|Apply LoRA & Train| HF[SmolLM2-135M / Gemma-2-2B IT]
         PW -->|4. Stream step loss & hardware metrics| MLF
         PW -->|Save adapter weights| ART
     end
 
     subgraph Serving["Dynamic Model Serving"]
         API -->|Proxy or Call| INF
-        INF -->|Load Base Weights| HF
+        INF -->|Load Base Weights (SmolLM2 or Gemma)| HF
         INF -->|Mount LoRA Adapter by JobId or URI| ART
         INF -->|Return Side-by-Side Completions| API
     end
@@ -65,7 +65,9 @@ flowchart TD
    - Web requests return immediately with `Accepted (202)` and a unique `JobId`.
 3. **Hardware-Adaptive & Local-First (Zero Cloud Cost)**:
    - Automated device detection (`mps` on Apple Silicon, `cuda` on Nvidia, or multi-threaded `cpu`).
-   - Compact baseline models (`HuggingFaceTB/SmolLM2-135M` or `TinyLlama-1.1B`) fine-tuned via LoRA (rank 8, alpha 32) in 2–4 minutes locally.
+   - Tiered baseline models:
+     - **SmolLM2-135M** (`HuggingFaceTB/SmolLM2-135M`): Ultra-compact baseline (LoRA rank 8, alpha 32, ~1.8 MB adapter) fine-tuning in 2–4 minutes on Apple Silicon (M1–M4) or CUDA.
+     - **Google Gemma 2 2B IT** (`google/gemma-2-2b-it`): High-capacity reasoning tier (LoRA rank 8, alpha 32, ~6.5 MB adapter) utilizing Gemma chat templates (`<start_of_turn>`) with hardware preflight gates (~8 GB VRAM requirement and Hugging Face license check).
 4. **Observable MLOps & Distributed Tracing**:
    - Unified `JobId` correlation across HTTP headers, AMQP properties, Python structured logs, and MLflow experiment tags.
    - Step-level loss curves, learning rate, and duration recorded in MLflow.
@@ -192,9 +194,52 @@ The .NET status consumer validates `updatedAt` / `sequenceNumber` against the cu
     "baseModel": 182,
     "fineTuned": 195
   }
+}
+```
+
+**Conflict / Base Model Mismatch Response (`409 Conflict`):**
+If an adapter was trained on a model different from the currently running base model, the inference server intercepts the mismatch and returns:
+```json
+{
+  "status_code": 409,
+  "detail": {
+    "error": "base_model_mismatch",
+    "message": "Adapter was trained on 'google/gemma-2-2b-it' but the inference service has 'HuggingFaceTB/SmolLM2-135M' loaded. Outputs would be garbage.",
+    "adapterBaseModel": "google/gemma-2-2b-it",
+    "loadedBaseModel": "HuggingFaceTB/SmolLM2-135M",
+    "hint": "Restart the inference service with BASE_MODEL_NAME=google/gemma-2-2b-it"
+  }
+}
+```
+
 ### E. Studio Presentation Contracts
 
-#### 1. Persona Catalog (`GET /api/v1/studio/personas`)
+#### 1. Supported Models Catalog (`GET /api/v1/studio/models`)
+Returns the dynamic model catalog, parameter specifications, and hardware disclaimers:
+```json
+[
+  {
+    "modelId": "HuggingFaceTB/SmolLM2-135M",
+    "displayName": "SmolLM2 135M (Default • Fast / Zero-Cost)",
+    "parameterCount": "135M",
+    "contextLength": 2048,
+    "minVramGb": 0.5,
+    "requiresAuth": false,
+    "disclaimer": null
+  },
+  {
+    "modelId": "google/gemma-2-2b-it",
+    "displayName": "Gemma 2 2B IT (Reasoning Tier • Gated)",
+    "parameterCount": "2.6B",
+    "contextLength": 8192,
+    "minVramGb": 8.0,
+    "requiresAuth": true,
+    "disclaimer": "Requires HF_TOKEN with access granted at huggingface.co/google/gemma-2-2b-it. Minimum 8GB VRAM (or Apple Silicon MPS float16) recommended."
+  }
+]
+```
+
+#### 2. Persona Catalog (`GET /api/v1/studio/personas`)
 Returns curated business personas, sample customer tickets, compliance checklists, and seed prompt-completion pairs.
 ```json
 [
@@ -303,6 +348,13 @@ stateDiagram-v2
   - Architecture breakdown and "Why this architecture?" design trade-off rationale.
   - Cloud mapping runbook (AWS SQS + SageMaker Training Jobs + ECR / GCP Vertex AI equivalents).
 
+### Phase 6: Multi-Model Scaling & Gemma 2B Prototype
+- Dynamic `model_registry.py` module defining `ModelSpec`, model-specific chat templates (`chatml` vs `gemma`), and target projection modules (`q_proj, v_proj` vs `q_proj, v_proj, k_proj, o_proj`).
+- `google/gemma-2-2b-it` support with Hugging Face gated licensing verification (401/403 friendly error guidance) and hardware preflight warnings (8GB VRAM).
+- Precision & Memory Optimization: `torch.float16` on Apple Silicon MPS with dynamic gradient accumulation (`per_device_batch=1`, `accum_steps=batch_size`) and watermark ceiling bypass.
+- Dynamic inference conflict guard: HTTP 409 Conflict with actionable restart hint on base model mismatch.
+- Documented live prototype benchmark in `GEMMA_PROTOTYPE_RESULTS.md`.
+
 ---
 
 ## 6. Production Cloud & FinOps Architecture Mapping
@@ -341,10 +393,13 @@ Dynamic Inference Server   SageMaker Multi-Model / Triton Inference    Vertex AI
 ├── docker-compose.yml            # RabbitMQ + MLflow server
 ├── README.md                     # Executive summary, trade-offs & runbook
 ├── ARCHITECTURE.md               # Detailed architecture specifications & contracts
+├── STUDIO_GUIDE.md               # Visual walkthrough & non-technical guide
+├── GEMMA_PROTOTYPE_RESULTS.md    # Multi-model Gemma 2B benchmark & evaluation
 ├── scripts/
 │   ├── dev-up.sh                 # Start infra, check health, seed datasets
 │   ├── dev-down.sh               # Tear down infra
 │   ├── verify-e2e.sh             # Master single-command verification script
+│   ├── run_gemma_benchmark.py    # Standalone Gemma 2B live benchmark runner
 │   └── seed_dataset.py           # Domain dataset generator
 ├── data/
 │   ├── datasets/                 # Ingested and sample JSONL datasets
@@ -352,19 +407,22 @@ Dynamic Inference Server   SageMaker Multi-Model / Triton Inference    Vertex AI
 │   └── storage/                  # SQLite db files
 ├── src/
 │   ├── FtaaSService.Api/         # .NET 10 Ingestion Gateway & Control Plane
-│   │   ├── Domain/               # Job state machine, entities, validation
-│   │   ├── Endpoints/            # Minimal API endpoints (Jobs, Inference, Health)
+│   │   ├── Domain/               # Job state machine, entities, validation, ModelCatalog
+│   │   ├── Endpoints/            # Minimal API endpoints (Jobs, Inference, Studio, Health)
 │   │   ├── Messaging/            # RabbitMQ producer & status consumer
 │   │   ├── Storage/              # SQLite repository
+│   │   ├── wwwroot/              # FTaaS Studio Single Page App (index.html, studio.js)
 │   │   ├── FtaaSService.Api.csproj
 │   │   └── Program.cs
 │   ├── FtaaSService.Worker/      # Python Training Worker
 │   │   ├── config.py             # Settings & device detection
+│   │   ├── model_registry.py     # Multi-model registry, specs & chat templates
 │   │   ├── consumer.py           # RabbitMQ consumer & DLQ logic
 │   │   ├── trainer.py            # LoRA fine-tuning & MLflow telemetry
+│   │   ├── exporter.py           # Edge ONNX manifest & adapter exporter
 │   │   ├── evaluator.py          # Benchmark metric calculation
 │   │   └── requirements.txt
 │   └── FtaaSService.Inference/   # Dynamic Adapter Serving Engine
-│       ├── app.py                # FastAPI dynamic serving endpoint
+│       ├── app.py                # FastAPI dynamic serving endpoint & routing
 │       └── requirements.txt
 ```

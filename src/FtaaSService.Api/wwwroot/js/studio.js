@@ -14,7 +14,8 @@
     pollInterval: null,
     isLiveEngine: false,
     consecutiveProbeFailures: 0,
-    isProbingEngine: false
+    isProbingEngine: false,
+    supportedModels: []
   };
 
   // DOM Elements
@@ -44,6 +45,8 @@
     loadTemplateBtn: document.getElementById('btn-load-template'),
     submitJobBtn: document.getElementById('btn-submit-job'),
     jobNameInput: document.getElementById('job-name-input'),
+    baseModelSelect: document.getElementById('base-model-select'),
+    modelDisclaimer: document.getElementById('model-disclaimer'),
     fileInput: document.getElementById('file-input'),
     dropZone: document.getElementById('drop-zone'),
     libraryGrid: document.getElementById('library-grid'),
@@ -57,6 +60,7 @@
     setupDropzone();
     setupEventListeners();
     await checkEngineHealth();
+    await loadModelCatalog();
     await loadPersonas();
     await loadJobs();
     startPolling();
@@ -125,6 +129,43 @@
     renderPersonas();
     if (state.personas.length > 0) {
       selectPersona(state.personas[0].id);
+    }
+  }
+
+  // Load Model Catalog from API
+  async function loadModelCatalog() {
+    try {
+      const res = await fetch('/api/v1/studio/models');
+      if (res.ok) {
+        state.supportedModels = await res.json();
+        if (elements.baseModelSelect && Array.isArray(state.supportedModels) && state.supportedModels.length > 0) {
+          const prevVal = elements.baseModelSelect.value;
+          elements.baseModelSelect.innerHTML = state.supportedModels.map(m => `
+            <option value="${escapeHtml(m.modelId)}">
+              ${escapeHtml(m.displayName)} (${escapeHtml(m.parameterCount)}, ${m.minGpuVramGb > 1 ? '~' + m.minGpuVramGb + 'GB VRAM' : 'zero cloud fee'})
+            </option>
+          `).join('');
+          if (prevVal && state.supportedModels.some(m => m.modelId === prevVal)) {
+            elements.baseModelSelect.value = prevVal;
+          }
+          updateModelDisclaimer();
+        }
+      }
+    } catch (err) {
+      console.warn('Could not load dynamic model catalog from API:', err);
+    }
+  }
+
+  function updateModelDisclaimer() {
+    if (!elements.baseModelSelect || !elements.modelDisclaimer) return;
+    const selectedId = elements.baseModelSelect.value;
+    const model = (state.supportedModels || []).find(m => m.modelId === selectedId);
+    if (model && model.hardwareDisclaimer) {
+      elements.modelDisclaimer.textContent = `⚠️ Hardware & Auth Notice: ${model.hardwareDisclaimer}`;
+      elements.modelDisclaimer.style.display = 'block';
+    } else {
+      elements.modelDisclaimer.style.display = 'none';
+      elements.modelDisclaimer.textContent = '';
     }
   }
 
@@ -271,6 +312,7 @@
         maxTokens: parseInt(elements.maxTokensInput.value, 10) || 64,
         temperature: parseFloat(elements.tempInput.value) || 0.2,
         jobId: jobId,
+        baseModel: completedJob ? completedJob.baseModel : undefined,
         adapterPath: adapterPath
       };
 
@@ -584,7 +626,8 @@
     const formData = new FormData();
     formData.append('file', blob, `${jobName}.jsonl`);
     formData.append('jobName', jobName);
-    formData.append('baseModel', 'HuggingFaceTB/SmolLM2-135M');
+    const selectedModel = (elements.baseModelSelect && elements.baseModelSelect.value) || 'HuggingFaceTB/SmolLM2-135M';
+    formData.append('baseModel', selectedModel);
     formData.append('hyperparameters', JSON.stringify({
       epochs: 3,
       learningRate: 0.0003,
@@ -793,6 +836,10 @@
         statusBadge = `<span class="persona-tag" style="background: rgba(239, 68, 68, 0.15); color: #f87171;" title="${escapeHtml(job.errorMessage || 'Training process error')}">Failed</span>`;
       }
 
+      const modelDisplay = (job.baseModel && job.baseModel.toLowerCase().includes('gemma')) 
+        ? 'Gemma 2 2B IT' 
+        : 'SmolLM2-135M';
+
       card.innerHTML = `
         <div class="library-card-header">
           <div>
@@ -804,7 +851,7 @@
         <div class="library-metrics">
           <div class="library-metric-box">
             <div class="library-metric-label">Base Model</div>
-            <div class="library-metric-val">SmolLM2-135M</div>
+            <div class="library-metric-val">${escapeHtml(modelDisplay)}</div>
           </div>
           <div class="library-metric-box">
             <div class="library-metric-label">Artifact Footprint</div>
@@ -876,6 +923,9 @@
     }
     if (elements.submitJobBtn) {
       elements.submitJobBtn.addEventListener('click', submitFineTuningJob);
+    }
+    if (elements.baseModelSelect) {
+      elements.baseModelSelect.addEventListener('change', updateModelDisclaimer);
     }
   }
 

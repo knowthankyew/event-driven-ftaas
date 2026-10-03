@@ -12,6 +12,7 @@ from typing import Dict, Any, Optional
 import torch
 
 from config import DATA_ROOT, ARTIFACTS_ROOT, DEVICE
+from model_registry import get_model_spec, SMOLLM2
 
 logger = logging.getLogger("FtaaSService.Worker.Exporter")
 
@@ -64,7 +65,7 @@ def export_to_edge_onnx(
     with open(config_file, "r", encoding="utf-8") as f:
         adapter_config = json.load(f)
 
-    base_model_name = adapter_config.get("base_model_name_or_path", "HuggingFaceTB/SmolLM2-135M")
+    base_model_name = adapter_config.get("base_model_name_or_path", SMOLLM2)
 
     safetensors_file = adapter_dir / "adapter_model.safetensors"
     bin_file = adapter_dir / "adapter_model.bin"
@@ -156,21 +157,33 @@ def export_to_edge_onnx(
     onnx_size_bytes = model_onnx_path.stat().st_size
     onnx_sha256 = compute_file_sha256(model_onnx_path)
 
+    # Resolve model-specific manifest metadata from the registry (safe fallback for unknowns)
+    try:
+        _manifest_spec = get_model_spec(base_model_name)
+        _param_count = _manifest_spec.parameter_count_display
+        _context_length = _manifest_spec.context_length
+        _chat_template = _manifest_spec.chat_template.value
+    except ValueError:
+        logger.warning(f"Model '{base_model_name}' not in registry — using fallback manifest metadata.")
+        _param_count = "unknown"
+        _context_length = 2048
+        _chat_template = "unknown"
+
     # 6. Generate Edge Model Manifest
     manifest = {
         "jobId": job_id,
         "modelName": f"ftaas-edge-{job_id[:8]}",
         "baseModel": base_model_name,
         "architecture": "CausalLM",
-        "parameterCount": "135M",
+        "parameterCount": _param_count,
         "adapterSizeBytes": adapter_size_bytes,
         "onnxFileName": "model.onnx",
         "onnxSizeBytes": onnx_size_bytes,
         "onnxSha256": onnx_sha256,
         "quantization": quantization_type,
-        "contextLength": 2048,
+        "contextLength": _context_length,
         "supportedExecutionProviders": ["webgpu", "wasm"],
-        "chatTemplate": "smollm2",
+        "chatTemplate": _chat_template,
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "zeroEgressInvariant": True
     }

@@ -5,7 +5,7 @@ An enterprise-grade, asynchronous, event-driven machine learning platform demons
 - **Compute Worker**: Python 3.12, PyTorch, Hugging Face PEFT / LoRA, AMQP Consumer
 - **Telemetry & Experiment Tracking**: OpenTelemetry ActivitySource + MLflow Tracking Server & Model Registry
 - **Message Broker**: RabbitMQ (AMQP) with DLX and retry handling
-- **Base Models**: Ultra-compact models (`HuggingFaceTB/SmolLM2-135M` or `TinyLlama-1.1B`) for zero-cost, fast local execution on consumer hardware (Apple Silicon MPS / CPU / CUDA).
+- **Base Models**: Multi-model architecture supporting ultra-compact models (`HuggingFaceTB/SmolLM2-135M`) for zero-cost, instant local training, and high-capacity reasoning models (`google/gemma-2-2b-it`) with hardware preflight gates, float16 MPS optimization, and licensing guardrails.
 - **Privacy & Observability Standard**: Complies with [PRIVACY_TELEMETRY_SCHEMA.md](docs/PRIVACY_TELEMETRY_SCHEMA.md).
 
 ## 📺 Interactive Video Demonstration
@@ -40,9 +40,9 @@ Then open your browser to **[http://localhost:5100](http://localhost:5100)**.
 ### What You Can Do in the Studio:
 1. **⚡ Side-by-Side Comparison Arena**: Select a business persona (e.g. *Fintech Support & Compliance*, *Enterprise SaaS Ops*, or *Financial Earnings*) and test realistic inquiries. Observe how a **Generic Foundation Model** contrasts with your **Company Custom AI** (incorporating team SLAs, policy limits, and required regulatory disclaimers).
 2. **🛡️ Team Policy & Disclaimer Inspector**: Pattern-matching verification checking whether designated training guidelines and statutory tags appear in completions *(demonstration aid; not legal advice or statutory regulatory certification)*.
-3. **🛠️ No-Code Adapter Studio**: Define your department's question-and-answer pairs in an intuitive table editor, or drag-and-drop a `.csv` document. Click **"Train & Deploy Team Adapter"** to submit the job in milliseconds without waiting on background compute.
+3. **🛠️ No-Code Adapter Studio**: Define your department's question-and-answer pairs in an intuitive table editor, or drag-and-drop a `.csv` document. Select your target base model (**SmolLM2-135M** for lightweight deployment or **Gemma 2 2B IT** for deeper reasoning capacity) with built-in hardware disclaimers. Click **"Train & Deploy Team Adapter"** to submit the job in milliseconds without waiting on background compute.
 4. **🔄 Live Event Pipeline Visualizer**: An animated diagram demonstrating how incoming user requests decouple from background training compute.
-5. **📚 Adapter Library**: View trained department models, inspect their lightweight footprint (~1.8 MB), and load them into the arena with one click.
+5. **📚 Adapter Library**: View trained department models with base model indicators, inspect their lightweight footprint (~1.8 MB for SmolLM2, ~12.2 MB for Gemma 2B), and load them into the arena with one click.
 
 > [!NOTE]
 > **Preview vs. Live Compute**: When launched standalone via `start-studio.sh`, the studio operates in **Interactive Preview Mode** with pre-formatted demonstration outputs so you can evaluate the interface without spinning up Docker containers or downloading multi-gigabyte models. To run live on-device GPU inference, start Docker and the Python services via `./scripts/dev-up.sh`.
@@ -140,6 +140,7 @@ Validates compliance boundaries, data sanitization, and state machine idempotenc
 - **False-Positive Immunity**: Verifies that non-contextual 9-digit integers (order IDs, invoice numbers) pass unhindered.
 - **Full-Row Unmapped Column Scanning**: Scans all metadata columns/properties; strips unmapped fields upon normalization.
 - **Zero-Disk In-Memory Guarantee**: Verifies zero bytes are written to disk upon compliance rejection.
+- **Model Catalog & Validation**: Enforces allowlisted base models via `GET /api/v1/studio/models`, ensuring invalid or unverified model identifiers are rejected at ingestion with `400 Bad Request`.
 - **Ingestion Ceilings**: Enforces 25 MB file size and 50,000 record limits.
 - **State Machine Idempotency**: Rejects out-of-order sequence updates and prevents terminal state regressions in SQLite.
 
@@ -148,14 +149,17 @@ Validates compliance boundaries, data sanitization, and state machine idempotenc
 dotnet test tests/FtaaSService.Api.Tests --collect:"XPlat Code Coverage"
 ```
 
-### 2. Python Worker & Inference Tests (unittest)
-Validates model serving resilience and file integrity:
+### 2. Python Worker & Inference Tests (unittest / pytest)
+Validates model serving resilience, registry lookups, and file integrity:
+- **Model Registry & Dynamic LoRA Targeting**: Verifies target module selection (`["q_proj", "v_proj"]` vs `["q_proj", "v_proj", "k_proj", "o_proj"]`) and template rendering across supported model architectures.
+- **Inference Model Mismatch Protection**: Returns actionable 409 Conflict responses when adapters are mounted against mismatched base models.
+- **Hardware Preflight & Licensing**: Intercepts Hugging Face gated license/auth failures (401/403) and surfaces actionable user remediation instructions.
 - **Adapter Weight Integrity**: Rejects truncated, zero-byte, or incomplete writes (<100 KB weights, <10 bytes config).
 - **Bounded LRU Cache Eviction**: Verifies dynamic eviction of least-recently-used LoRA adapters under memory pressure.
 
 ```bash
 # Run all Python unit tests:
-src/FtaaSService.Worker/.venv/bin/python -m unittest discover -s tests
+PYTHONPATH=src/FtaaSService.Worker:src/FtaaSService.Inference src/FtaaSService.Worker/.venv/bin/python -m pytest tests/
 ```
 
 ---
@@ -178,6 +182,7 @@ To test the entire live pipeline (Infra $\rightarrow$ .NET 10 Ingestion $\righta
 - [x] **Phase 4**: Dynamic Model Serving & Side-by-Side Comparison (LoRA dynamic adapter mounting, comparison API)
 - [x] **Portfolio Phase 3a (The FTaaS Bridge Exporter)**: Edge ONNX Exporter (`src/FtaaSService.Worker/exporter.py`, `scripts/export_edge_adapter.py`) and Web API export endpoints (`GET/POST /api/v1/jobs/{id}/export/edge`) compiling LoRA adapters into web-optimized ONNX format with integrity checksums.
 - [x] **Portfolio Phase 3b (In-Browser Execution)**: Ingesting and executing exported ONNX packages directly inside client browser engines via WebGPU/WASM (`onnxruntime-web`), single-input ONNX export signature, and dynamic INT8 quantization.
+- [x] **Portfolio Phase 3c (Multi-Model Scaling & Gemma 2B Prototype)**: Dynamic multi-model registry (`model_registry.py`), `google/gemma-2-2b-it` support, hardware preflight warnings, float16 MPS optimization with gradient accumulation, and live benchmark evaluation documented in [GEMMA_PROTOTYPE_RESULTS.md](GEMMA_PROTOTYPE_RESULTS.md).
 
 ---
 

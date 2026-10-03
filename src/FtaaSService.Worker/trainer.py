@@ -25,6 +25,7 @@ from config import (
     MLFLOW_EXPERIMENT_NAME,
     DEVICE
 )
+from model_registry import get_model_spec, format_training_prompt, preflight_check
 
 logger = logging.getLogger("FtaaSService.Worker.Trainer")
 
@@ -71,11 +72,6 @@ class StatusReportingCallback(TrainerCallback):
                 logger.warning(f"Error executing status reporting callback: {ex}")
 
 
-def format_chat_prompt(prompt: str, completion: str) -> str:
-    """Standard instruction formatting for causal LM training."""
-    return f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n{completion}<|im_end|>"
-
-
 def train_job(
     job_id: str,
     job_name: str,
@@ -90,6 +86,9 @@ def train_job(
     Streams metrics to MLflow and saves the resulting LoRA adapter weights.
     """
     logger.info(f"Starting training run for Job {job_id} ({job_name}) on device {DEVICE}")
+
+    # Hardware & auth preflight check (non-blocking — warns but does not fail)
+    preflight_result = preflight_check(base_model_name)
 
     # 1. Resolve Dataset
     full_dataset_path = DATA_ROOT / dataset_path
@@ -147,35 +146,60 @@ def train_job(
             "framework": "peft-lora"
         })
 
+        if preflight_result["warning"]:
+            mlflow.set_tag("hardware.warning", preflight_result["warning"][:250])
+
         # 4. Tokenizer & Base Model Setup
         logger.info(f"Loading base model and tokenizer: {base_model_name}")
-        tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+        except OSError as auth_err:
+            err_str = str(auth_err)
+            if "401" in err_str or "403" in err_str or "gated" in err_str.lower() or "access" in err_str.lower():
+                raise ValueError(
+                    f"Cannot load tokenizer for '{base_model_name}': Hugging Face authentication required. "
+                    f"Accept the model license at huggingface.co/{base_model_name} "
+                    f"and set the HF_TOKEN environment variable. Original error: {auth_err}"
+                ) from auth_err
+            raise
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
-        model = AutoModelForCausalLM.from_pretrained(
-            base_model_name,
-            # Use bfloat16 on CUDA; PyTorch MPS does not support bfloat16 so use float32
-            torch_dtype=torch.bfloat16 if DEVICE.type == "cuda" else torch.float32,
-            trust_remote_code=True
-        )
+        try:
+            dtype = torch.bfloat16 if DEVICE.type == "cuda" else (torch.float16 if DEVICE.type == "mps" else torch.float32)
+            model = AutoModelForCausalLM.from_pretrained(
+                base_model_name,
+                torch_dtype=dtype,
+                trust_remote_code=True
+            )
+        except OSError as auth_err:
+            err_str = str(auth_err)
+            if "401" in err_str or "403" in err_str or "gated" in err_str.lower() or "access" in err_str.lower():
+                raise ValueError(
+                    f"Cannot load '{base_model_name}': Hugging Face authentication required. "
+                    f"Accept the model license at huggingface.co/{base_model_name} "
+                    f"and set the HF_TOKEN environment variable. Original error: {auth_err}"
+                ) from auth_err
+            raise
 
         # 5. Inject LoRA Adapters
         logger.info(f"Applying LoRA (r={lora_r}, alpha={lora_alpha})")
+        model_spec = get_model_spec(base_model_name)
         lora_config = LoraConfig(
             r=lora_r,
             lora_alpha=lora_alpha,
             lora_dropout=lora_dropout,
-            target_modules=["q_proj", "v_proj"],
+            target_modules=model_spec.lora_target_modules,
             bias="none",
             task_type="CAUSAL_LM"
         )
+        mlflow.log_param("lora_target_modules", ",".join(model_spec.lora_target_modules))
         peft_model = get_peft_model(model, lora_config)
         peft_model.to(DEVICE)
         peft_model.print_trainable_parameters()
 
         # 6. Prepare Hugging Face Dataset
-        formatted_texts = [format_chat_prompt(r["prompt"], r["completion"]) for r in records]
+        formatted_texts = [format_training_prompt(base_model_name, r["prompt"], r["completion"]) for r in records]
         
         def tokenize_batch(examples):
             tokenized = tokenizer(
@@ -198,8 +222,20 @@ def train_job(
         raw_dataset = Dataset.from_dict({"text": formatted_texts})
         tokenized_dataset = raw_dataset.map(tokenize_batch, batched=True)
 
+        # Ensure MPS memory high watermark doesn't choke on 2B+ models
+        if DEVICE.type == "mps":
+            os.environ.setdefault("PYTORCH_MPS_HIGH_WATERMARK_RATIO", "0.0")
+
+        # For larger models on memory-constrained devices, scale via gradient accumulation
+        if base_model_name == "google/gemma-2-2b-it" and DEVICE.type == "mps" and batch_size > 1:
+            per_device_batch = 1
+            grad_accum_steps = batch_size
+        else:
+            per_device_batch = batch_size
+            grad_accum_steps = 1
+
         # Calculate step counts
-        steps_per_epoch = math.ceil(len(records) / batch_size)
+        steps_per_epoch = math.ceil(len(records) / (per_device_batch * grad_accum_steps))
         total_steps = steps_per_epoch * epochs
 
         # 7. Training Arguments
@@ -209,7 +245,8 @@ def train_job(
         training_args = TrainingArguments(
             output_dir=str(scratch_output_dir),
             num_train_epochs=epochs,
-            per_device_train_batch_size=batch_size,
+            per_device_train_batch_size=per_device_batch,
+            gradient_accumulation_steps=grad_accum_steps,
             learning_rate=learning_rate,
             logging_steps=1,
             save_strategy="no",

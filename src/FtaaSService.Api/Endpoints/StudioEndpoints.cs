@@ -35,7 +35,13 @@ public static class StudioEndpoints
         group.MapGet("/personas", GetPersonas);
         group.MapGet("/overview", GetOverviewAsync);
         group.MapGet("/engine-health", CheckEngineHealthAsync);
+        group.MapGet("/models", GetModelCatalog);
         return group;
+    }
+
+    private static IResult GetModelCatalog()
+    {
+        return Results.Ok(SupportedModels.Catalog);
     }
 
     private static IResult GetPersonas()
@@ -180,7 +186,7 @@ public static class StudioEndpoints
             succeededJobs = succeeded,
             trainingJobs = training,
             queuedJobs = queued,
-            baseModel = "HuggingFaceTB/SmolLM2-135M",
+            baseModel = SupportedModels.SmolLM2,
             adapterFootprint = "~1.8 MB",
             architecture = new
             {

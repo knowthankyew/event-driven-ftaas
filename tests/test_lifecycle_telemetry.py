@@ -19,6 +19,8 @@ class TestLifecycleTelemetry(unittest.TestCase):
                 logged_messages.append(record.getMessage())
 
         logger = logging.getLogger("FtaaSService.Worker.Consumer")
+        prev_level = logger.level
+        logger.setLevel(logging.INFO)
         handler = TestHandler()
         logger.addHandler(handler)
 
@@ -66,6 +68,7 @@ class TestLifecycleTelemetry(unittest.TestCase):
 
         finally:
             logger.removeHandler(handler)
+            logger.setLevel(prev_level)
 
 if __name__ == '__main__':
     unittest.main()

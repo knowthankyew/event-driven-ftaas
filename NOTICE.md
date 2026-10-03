@@ -15,4 +15,9 @@ All lifecycle spans emitted across the API and worker layers enforce a strict al
 ## 3. Software Bill of Materials (SBOM)
 Complete CycloneDX Software Bills of Materials (`bom.json`) for both .NET dependencies and Python virtual environments are generated on build in CI via OWASP `@cyclonedx/cdxgen` and attached to release artifacts.
 
+## 4. Third-Party Foundation Models Attribution
+This platform enables fine-tuning and inference orchestration with third-party foundation models:
+- **`HuggingFaceTB/SmolLM2-135M`**: Licensed under the Apache License 2.0 by Hugging Face, Inc.
+- **`google/gemma-2-2b-it`**: Developed and published by Google LLC. Available under the Google Gemma Terms of Use. Users and operators must accept Google's terms and adhere to the Gemma Prohibited Use Policy prior to downloading or fine-tuning weights.
+
 See [LICENSE](./LICENSE) for root license terms.

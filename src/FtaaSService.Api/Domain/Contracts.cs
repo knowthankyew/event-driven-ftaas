@@ -8,7 +8,7 @@ public sealed record SubmitJobRequest
     public string JobName { get; init; } = "default-finetune";
 
     [JsonPropertyName("baseModel")]
-    public string BaseModel { get; init; } = "HuggingFaceTB/SmolLM2-135M";
+    public string BaseModel { get; init; } = SupportedModels.SmolLM2;
 
     [JsonPropertyName("datasetPath")]
     public string? DatasetPath { get; init; }
@@ -232,3 +232,54 @@ public sealed record LatencyBreakdown
     [JsonPropertyName("fineTuned")]
     public double FineTuned { get; init; }
 }
+
+/// <summary>
+/// Validated catalog of supported base model IDs for LoRA fine-tuning.
+/// Single source of truth on the .NET side — mirrors model_registry.py.
+/// </summary>
+public static class SupportedModels
+{
+    public const string SmolLM2 = "HuggingFaceTB/SmolLM2-135M";
+    public const string Gemma2_2B_IT = "google/gemma-2-2b-it";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
+    {
+        SmolLM2,
+        Gemma2_2B_IT,
+    };
+
+    public static readonly IReadOnlyList<ModelCatalogEntry> Catalog = new List<ModelCatalogEntry>
+    {
+        new(
+            ModelId: SmolLM2,
+            DisplayName: "SmolLM2-135M",
+            ParameterCount: "135M",
+            ContextLength: 2048,
+            MinGpuVramGb: 0.5,
+            RequiresHfAuth: false,
+            HardwareDisclaimer: null
+        ),
+        new(
+            ModelId: Gemma2_2B_IT,
+            DisplayName: "Gemma 2 2B IT",
+            ParameterCount: "2B",
+            ContextLength: 8192,
+            MinGpuVramGb: 8.0,
+            RequiresHfAuth: true,
+            HardwareDisclaimer:
+                "Requires ~8 GB GPU VRAM for training and ~5 GB for inference. " +
+                "Accept the Gemma license at huggingface.co/google/gemma-2-2b-it and " +
+                "set the HF_TOKEN environment variable before starting the worker."
+        ),
+    };
+}
+
+public sealed record ModelCatalogEntry(
+    string ModelId,
+    string DisplayName,
+    string ParameterCount,
+    int ContextLength,
+    double MinGpuVramGb,
+    bool RequiresHfAuth,
+    string? HardwareDisclaimer
+);

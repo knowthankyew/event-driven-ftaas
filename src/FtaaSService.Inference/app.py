@@ -1,4 +1,5 @@
 import os
+import json
 import time
 import logging
 from pathlib import Path
@@ -37,6 +38,14 @@ DATA_ROOT = Path(os.getenv("DATA_ROOT", str(DEFAULT_DATA_ROOT))).resolve()
 
 DEFAULT_BASE_MODEL = os.getenv("BASE_MODEL_NAME", "HuggingFaceTB/SmolLM2-135M")
 
+# Make model_registry importable from the Worker source directory
+import sys as _sys
+_worker_src = str(PROJECT_ROOT / "src" / "FtaaSService.Worker")
+if _worker_src not in _sys.path:
+    _sys.path.insert(0, _worker_src)
+
+from model_registry import get_model_spec, format_inference_prompt
+
 def get_device() -> torch.device:
     if torch.backends.mps.is_available():
         return torch.device("mps")
@@ -65,8 +74,7 @@ async def lifespan(app: FastAPI):
     if model_store.tokenizer.pad_token is None:
         model_store.tokenizer.pad_token = model_store.tokenizer.eos_token
 
-    # Use bfloat16 on CUDA; PyTorch MPS does not support bfloat16 so use float32
-    dtype = torch.bfloat16 if DEVICE.type == "cuda" else torch.float32
+    dtype = torch.bfloat16 if DEVICE.type == "cuda" else (torch.float16 if DEVICE.type == "mps" else torch.float32)
     model_store.base_model = AutoModelForCausalLM.from_pretrained(
         DEFAULT_BASE_MODEL,
         torch_dtype=dtype,
@@ -109,7 +117,7 @@ class GenerateRequest(BaseModel):
     temperature: float = Field(default=0.2, ge=0.0, le=1.0)
 
 def generate_tokens(model, tokenizer, prompt: str, max_tokens: int, temperature: float) -> tuple[str, float]:
-    formatted = f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+    formatted = format_inference_prompt(DEFAULT_BASE_MODEL, prompt)
     inputs = tokenizer(formatted, return_tensors="pt").to(DEVICE)
 
     start_t = time.perf_counter()
@@ -165,6 +173,31 @@ def load_or_get_adapter(adapter_rel_path: str) -> PeftModel:
             detail=f"Adapter at '{adapter_rel_path}' is corrupted: weight file is missing or truncated (<100KB)"
         )
 
+    # Verify the adapter was trained on the same base model currently loaded.
+    # Mismatched base models produce garbage output — return a 409 with an actionable restart hint.
+    try:
+        with open(config_file, "r", encoding="utf-8") as _cf:
+            _adapter_cfg = json.load(_cf)
+        adapter_base_model = _adapter_cfg.get("base_model_name_or_path", "")
+        if adapter_base_model and adapter_base_model != DEFAULT_BASE_MODEL:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "base_model_mismatch",
+                    "message": (
+                        f"Adapter was trained on '{adapter_base_model}' but the inference "
+                        f"service has '{DEFAULT_BASE_MODEL}' loaded. Outputs would be garbage."
+                    ),
+                    "adapterBaseModel": adapter_base_model,
+                    "loadedBaseModel": DEFAULT_BASE_MODEL,
+                    "hint": f"Restart the inference service with BASE_MODEL_NAME={adapter_base_model}",
+                }
+            )
+    except HTTPException:
+        raise
+    except Exception as _cfg_err:
+        logger.warning(f"Could not read adapter base model for mismatch check: {_cfg_err}")
+
     logger.info(f"Mounting verified LoRA adapter ({weights_file.stat().st_size / 1024 / 1024:.2f} MB) on-the-fly from {full_adapter_path}...")
     try:
         peft_model = PeftModel.from_pretrained(
@@ -187,12 +220,19 @@ def load_or_get_adapter(adapter_rel_path: str) -> PeftModel:
 
 @app.get("/healthz")
 def healthz():
+    try:
+        _spec = get_model_spec(DEFAULT_BASE_MODEL)
+        _chat_template = _spec.chat_template.value
+    except Exception:
+        _chat_template = "unknown"
+
     return {
         "status": "Healthy",
         "device": str(DEVICE),
         "baseModel": DEFAULT_BASE_MODEL,
         "baseModelLoaded": model_store.base_model is not None,
-        "cachedAdapters": list(model_store.adapter_cache.keys())
+        "cachedAdapters": list(model_store.adapter_cache.keys()),
+        "chatTemplate": _chat_template,
     }
 
 @app.post("/api/v1/inference/compare")

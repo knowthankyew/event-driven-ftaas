@@ -34,7 +34,7 @@ public static class JobEndpoints
     {
         string jobId = Guid.NewGuid().ToString("N");
         string jobName = "default-finetune";
-        string baseModel = "HuggingFaceTB/SmolLM2-135M";
+        string baseModel = SupportedModels.SmolLM2;
         string? datasetPath = null;
         IFormFile? uploadedFile = null;
         Hyperparameters hyperparameters = new();
@@ -90,7 +90,18 @@ public static class JobEndpoints
             }
         }
 
-        // 1. Validate and normalize dataset
+        // 1. Validate base model against the supported catalog
+        if (!SupportedModels.All.Contains(baseModel))
+        {
+            return Results.BadRequest(new
+            {
+                error = "unsupported_base_model",
+                message = $"Base model '{baseModel}' is not supported.",
+                supported = SupportedModels.All
+            });
+        }
+
+        // 2. Validate and normalize dataset
         var normResult = await datasetService.NormalizeAndStoreAsync(jobId, uploadedFile, datasetPath, cancellationToken);
         if (!normResult.IsValid)
         {
@@ -101,7 +112,7 @@ public static class JobEndpoints
             });
         }
 
-        // 2. Persist Initial Queued Job
+        // 3. Persist Initial Queued Job
         var hpJson = JsonSerializer.Serialize(hyperparameters);
         var job = new FinetuneJob
         {
@@ -125,7 +136,7 @@ public static class JobEndpoints
             ["dataset_relative_path"] = normResult.RelativePath!
         });
 
-        // 3. Publish AMQP Event
+        // 4. Publish AMQP Event
         var requestedEvent = new JobRequestedEvent
         {
             JobId = jobId,

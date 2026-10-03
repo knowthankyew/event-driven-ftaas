@@ -105,7 +105,12 @@ Use this tab to create or modify custom rules for your team:
 2. **Or Upload an Existing File**:
    - Drag and drop a `.csv` or `.jsonl` document from your computer into the upload box.
    - *Dataset Guidelines*: LoRA policy adapters typically only need 20 to 500 focused examples for high-quality convergence. The system enforces a **25 MB file size ceiling** and a **50,000 record maximum** to maintain optimal server performance and memory safety.
-3. **Deploy Team Adapter**:
+3. **Select Your Target Base Model**:
+   - Use the **Base Model Selector** dropdown to choose between:
+     - **SmolLM2 135M** *(Default • Fast / Zero-Cost)*: Fine-tunes in ~2 minutes with ~1.8 MB adapter footprint. Perfect for rapid prototyping and edge devices.
+     - **Gemma 2 2B IT** *(Reasoning Tier • Gated)*: Full instruction-tuned reasoning model fine-tuning into a ~12.2 MB adapter. Supports longer context (8,192 tokens).
+   - *Hardware & Licensing Guardrail*: Selecting Gemma 2B dynamically displays an amber guidance box detailing the 8 GB VRAM recommendation and reminding operators to accept Google's model license on Hugging Face and provide an `HF_TOKEN`.
+4. **Deploy Team Adapter**:
    - Give your model a name (e.g., `support-team-v1`).
    - Click **"Train & Deploy Team Adapter"**.
    - The platform accepts your job immediately without freezing your browser and switches you to the Event Pipeline view to monitor background processing.
@@ -119,8 +124,8 @@ If you need to explain the system to an executive, engineering director, or clie
 1. **Business Lead (You)**: Submits 20–50 policy examples through the web interface.
 2. **Ingestion Gateway (.NET 10)**: Instantly accepts the job in milliseconds so the web browser never hangs waiting on machine learning compute.
 3. **Message Broker (RabbitMQ)**: Sends a lightweight pointer to the dataset, preventing system bottlenecks.
-4. **ML Worker (PyTorch / LoRA)**: Trains a tiny **~1.8 megabyte adapter file** instead of duplicating a massive 7 gigabyte model.
-   - *Training Time*: ~2–3 minutes on Apple Silicon (M1–M4) or an NVIDIA GPU (~10–15 minutes on standard CPU-only machines).
+4. **ML Worker (PyTorch / LoRA)**: Trains a tiny **~1.8 MB adapter file** (for SmolLM2) or **~12.2 MB adapter** (for Gemma 2B) instead of duplicating massive multi-gigabyte models.
+   - *Training Time*: ~2–3 minutes for SmolLM2 (or ~7 minutes for Gemma 2B) on Apple Silicon (M1–M4) / NVIDIA GPU.
 5. **Dynamic Serving Engine**: Keeps one core model warm in memory and mounts your team's adapter on the fly in milliseconds.
 
 ---
@@ -128,7 +133,7 @@ If you need to explain the system to an executive, engineering director, or clie
 ### Tab 4: 📚 Adapter Library (Active Models)
 
 - Shows all trained company models stored on your machine.
-- Displays adapter footprint (~1.8 MB), creation date, and status (*"Ready to Serve"*).
+- Displays adapter footprint (~1.8 MB for SmolLM2, ~12.2 MB for Gemma 2B), target base model badge (`SmolLM2-135M` or `gemma-2-2b-it`), creation date, and status (*"Ready to Serve"*).
 - Click **"⚡ Load in Arena"** on any model card to immediately test it in the Comparison Arena.
 
 ---
@@ -140,6 +145,15 @@ If you need to explain the system to an executive, engineering director, or clie
 
 #### Q: Why does the app emphasize "1.8 MB Adapter"?
 **A:** Traditional AI fine-tuning requires copying and saving the entire model (often 7 to 70 Gigabytes), which requires expensive dedicated GPUs and massive disk storage. FTaaS uses **LoRA (Low-Rank Adaptation)**, which freezes the base model and only trains a tiny mathematical adapter layer (~1.8 Megabytes). This allows an enterprise to run hundreds of custom department adapters on a single shared model.
+
+#### Q: What is the difference between SmolLM2-135M and Gemma 2 2B IT?
+**A:** `SmolLM2-135M` is an ultra-compact ~135M parameter baseline. It trains in ~2 minutes and requires under 1 GB VRAM, making it ideal for instant iteration, CI tests, and edge execution. `gemma-2-2b-it` is Google's 2.6B parameter instruction-tuned model. It offers substantially deeper language reasoning, handles long contexts (up to 8,192 tokens), and produces ~12.2 MB adapters, but requires ~8 GB VRAM (or Apple Silicon unified memory in `float16`) and ~7 minutes of training time.
+
+#### Q: Why does Gemma 2B ask for Hugging Face authentication?
+**A:** Google publishes Gemma under open-weights terms that require accepting the Gemma Terms of Use on [huggingface.co/google/gemma-2-2b-it](https://huggingface.co/google/gemma-2-2b-it). Once accepted, set your `HF_TOKEN` environment variable with a Read-scoped token so the worker can securely download the model weights.
+
+#### Q: How does the Inference Server handle switching between models?
+**A:** The inference server keeps one base model loaded in GPU/MPS memory to guarantee fast latency. If you ask to evaluate an adapter that was trained on Gemma while the inference server is hosting SmolLM2 (or vice versa), the server returns a friendly HTTP 409 Conflict explaining that the adapter's base model doesn't match the loaded model and providing the restart command (`BASE_MODEL_NAME=google/gemma-2-2b-it`).
 
 #### Q: How do I share this with a colleague on the same office network?
 **A:** Find your machine's local network IP address (e.g., `192.168.1.50`). Your colleague can open `http://192.168.1.50:5100` on their laptop or tablet and interact with the studio with you in real time.

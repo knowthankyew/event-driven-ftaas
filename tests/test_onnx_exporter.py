@@ -100,3 +100,77 @@ class TestOnnxExporter(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestOnnxExporterGemmaManifest(unittest.TestCase):
+    """
+    Verifies that the exporter correctly populates manifest metadata for Gemma 2B
+    and that the SmolLM2 regression case still produces correct metadata post-refactor.
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.data_root = Path(self.temp_dir.name)
+        self.artifacts_root = self.data_root / "artifacts"
+        self.job_id = "job-test-gemma-export"
+
+        import exporter
+        self.orig_artifacts_root = exporter.ARTIFACTS_ROOT
+        exporter.ARTIFACTS_ROOT = self.artifacts_root
+
+        self.adapter_dir = self.artifacts_root / self.job_id / "model_adapters"
+        self.adapter_dir.mkdir(parents=True, exist_ok=True)
+        (self.adapter_dir / "adapter_model.safetensors").write_bytes(b"A" * (120 * 1024))
+        (self.adapter_dir / "tokenizer.json").write_text('{"mock": "tokenizer"}')
+
+    def tearDown(self):
+        import exporter
+        exporter.ARTIFACTS_ROOT = self.orig_artifacts_root
+        self.temp_dir.cleanup()
+
+    def _write_adapter_config(self, base_model_name: str):
+        (self.adapter_dir / "adapter_config.json").write_text(json.dumps({
+            "base_model_name_or_path": base_model_name,
+            "peft_type": "LORA",
+            "r": 8,
+            "lora_alpha": 32,
+        }))
+
+    def test_gemma_manifest_has_correct_metadata(self):
+        self._write_adapter_config("google/gemma-2-2b-it")
+        out_dir = self.data_root / "gemma_edge_out"
+        res = export_to_edge_onnx(job_id=self.job_id, output_dir=out_dir, quantize=False, mock_for_test=True)
+        manifest = res["manifest"]
+
+        self.assertEqual(manifest["baseModel"], "google/gemma-2-2b-it")
+        self.assertEqual(manifest["parameterCount"], "2B")
+        self.assertEqual(manifest["contextLength"], 8192)
+        self.assertEqual(manifest["chatTemplate"], "gemma")
+        self.assertEqual(manifest["quantization"], "fp32")
+        self.assertTrue(manifest["zeroEgressInvariant"])
+        self.assertEqual(manifest["supportedExecutionProviders"], ["webgpu", "wasm"])
+
+    def test_smollm2_manifest_regression(self):
+        """SmolLM2 manifest fields must still be correct after the registry refactor."""
+        self._write_adapter_config("HuggingFaceTB/SmolLM2-135M")
+        out_dir = self.data_root / "smollm2_regression_out"
+        res = export_to_edge_onnx(job_id=self.job_id, output_dir=out_dir, quantize=False, mock_for_test=True)
+        manifest = res["manifest"]
+
+        self.assertEqual(manifest["baseModel"], "HuggingFaceTB/SmolLM2-135M")
+        self.assertEqual(manifest["parameterCount"], "135M")
+        self.assertEqual(manifest["contextLength"], 2048)
+        self.assertEqual(manifest["chatTemplate"], "chatml")
+        self.assertTrue(manifest["zeroEgressInvariant"])
+
+    def test_unknown_model_uses_fallback_metadata(self):
+        """A model ID not in the registry should use the fallback values, not crash."""
+        self._write_adapter_config("some/future-model-v9")
+        out_dir = self.data_root / "unknown_edge_out"
+        res = export_to_edge_onnx(job_id=self.job_id, output_dir=out_dir, quantize=False, mock_for_test=True)
+        manifest = res["manifest"]
+
+        self.assertEqual(manifest["baseModel"], "some/future-model-v9")
+        self.assertEqual(manifest["parameterCount"], "unknown")
+        self.assertEqual(manifest["chatTemplate"], "unknown")
+        self.assertEqual(manifest["contextLength"], 2048)
