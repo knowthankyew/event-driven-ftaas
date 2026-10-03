@@ -323,6 +323,19 @@
       });
 
       if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        if (res.status === 409 && (errData?.detail?.error === 'base_model_mismatch' || errData?.error === 'base_model_mismatch')) {
+          const detail = errData.detail || errData;
+          showToast(`⚠️ Model Mismatch: ${detail.message}`, 'error');
+          if (elements.previewNotice) {
+            elements.previewNotice.style.display = 'block';
+            elements.previewNotice.style.background = 'rgba(239, 68, 68, 0.15)';
+            elements.previewNotice.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+            elements.previewNotice.style.color = '#fca5a5';
+            elements.previewNotice.innerHTML = `<strong>⚠️ Model Mismatch:</strong> ${detail.message}<br><small style="opacity:0.9">💡 ${detail.hint || ''}</small>`;
+          }
+          return;
+        }
         throw new Error(`Inference API error: ${res.status}`);
       }
 

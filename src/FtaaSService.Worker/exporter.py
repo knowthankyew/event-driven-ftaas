@@ -163,11 +163,19 @@ def export_to_edge_onnx(
         _param_count = _manifest_spec.parameter_count_display
         _context_length = _manifest_spec.context_length
         _chat_template = _manifest_spec.chat_template.value
+        # Ground runtime providers: <= 500M models (like SmolLM2) support in-browser webgpu/wasm.
+        # Larger models (>= 1B like Gemma 2B) require desktop/server execution providers.
+        _execution_providers = (
+            ["webgpu", "wasm"]
+            if _manifest_spec.min_gpu_vram_gb < 2.0
+            else ["cuda", "cpu", "directml"]
+        )
     except ValueError:
         logger.warning(f"Model '{base_model_name}' not in registry — using fallback manifest metadata.")
         _param_count = "unknown"
         _context_length = 2048
         _chat_template = "unknown"
+        _execution_providers = ["cpu"]
 
     # 6. Generate Edge Model Manifest
     manifest = {
@@ -182,7 +190,7 @@ def export_to_edge_onnx(
         "onnxSha256": onnx_sha256,
         "quantization": quantization_type,
         "contextLength": _context_length,
-        "supportedExecutionProviders": ["webgpu", "wasm"],
+        "supportedExecutionProviders": _execution_providers,
         "chatTemplate": _chat_template,
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "zeroEgressInvariant": True

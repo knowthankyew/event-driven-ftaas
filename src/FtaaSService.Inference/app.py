@@ -116,8 +116,15 @@ class GenerateRequest(BaseModel):
     maxTokens: int = Field(default=64, ge=1, le=256)
     temperature: float = Field(default=0.2, ge=0.0, le=1.0)
 
-def generate_tokens(model, tokenizer, prompt: str, max_tokens: int, temperature: float) -> tuple[str, float]:
-    formatted = format_inference_prompt(DEFAULT_BASE_MODEL, prompt)
+def generate_tokens(
+    model,
+    tokenizer,
+    prompt: str,
+    max_tokens: int,
+    temperature: float,
+    base_model_id: str = DEFAULT_BASE_MODEL
+) -> tuple[str, float]:
+    formatted = format_inference_prompt(base_model_id, prompt)
     inputs = tokenizer(formatted, return_tensors="pt").to(DEVICE)
 
     start_t = time.perf_counter()
@@ -240,13 +247,30 @@ def compare_completions(req: CompareRequest):
     if not model_store.base_model or not model_store.tokenizer:
         raise HTTPException(status_code=503, detail="Model is still loading.")
 
+    # Guard: if req.baseModel is specified and doesn't match loaded model, reject with 409
+    if req.baseModel and req.baseModel != DEFAULT_BASE_MODEL:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "base_model_mismatch",
+                "message": (
+                    f"Requested base model '{req.baseModel}' does not match "
+                    f"loaded inference model '{DEFAULT_BASE_MODEL}'."
+                ),
+                "adapterBaseModel": req.baseModel,
+                "loadedBaseModel": DEFAULT_BASE_MODEL,
+                "hint": f"Restart the inference service with BASE_MODEL_NAME={req.baseModel}",
+            }
+        )
+
     # 1. Generate with raw Base Model
     base_completion, base_latency = generate_tokens(
         model_store.base_model,
         model_store.tokenizer,
         req.prompt,
         req.maxTokens,
-        req.temperature
+        req.temperature,
+        base_model_id=DEFAULT_BASE_MODEL
     )
 
     # 2. Generate with Fine-Tuned LoRA Adapter
@@ -262,12 +286,13 @@ def compare_completions(req: CompareRequest):
         model_store.tokenizer,
         req.prompt,
         req.maxTokens,
-        req.temperature
+        req.temperature,
+        base_model_id=DEFAULT_BASE_MODEL
     )
 
     return {
         "jobId": req.jobId,
-        "baseModel": req.baseModel or DEFAULT_BASE_MODEL,
+        "baseModel": DEFAULT_BASE_MODEL,
         "adapterPath": req.adapterPath,
         "prompt": req.prompt,
         "baseCompletion": base_completion,
@@ -289,7 +314,8 @@ def generate(req: GenerateRequest):
         model_store.tokenizer,
         req.prompt,
         req.maxTokens,
-        req.temperature
+        req.temperature,
+        base_model_id=DEFAULT_BASE_MODEL
     )
 
     return {

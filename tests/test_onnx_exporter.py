@@ -148,7 +148,7 @@ class TestOnnxExporterGemmaManifest(unittest.TestCase):
         self.assertEqual(manifest["chatTemplate"], "gemma")
         self.assertEqual(manifest["quantization"], "fp32")
         self.assertTrue(manifest["zeroEgressInvariant"])
-        self.assertEqual(manifest["supportedExecutionProviders"], ["webgpu", "wasm"])
+        self.assertEqual(manifest["supportedExecutionProviders"], ["cuda", "cpu", "directml"])
 
     def test_smollm2_manifest_regression(self):
         """SmolLM2 manifest fields must still be correct after the registry refactor."""

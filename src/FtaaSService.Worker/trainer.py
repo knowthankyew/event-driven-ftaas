@@ -25,7 +25,12 @@ from config import (
     MLFLOW_EXPERIMENT_NAME,
     DEVICE
 )
-from model_registry import get_model_spec, format_training_prompt, preflight_check
+from model_registry import (
+    get_model_spec,
+    format_training_prompt,
+    format_inference_prompt,
+    preflight_check
+)
 
 logger = logging.getLogger("FtaaSService.Worker.Trainer")
 
@@ -198,7 +203,8 @@ def train_job(
         peft_model.to(DEVICE)
         peft_model.print_trainable_parameters()
 
-        # 6. Prepare Hugging Face Dataset
+        # 6. Prepare Hugging Face Dataset with Instruction Masking
+        prompt_texts = [format_inference_prompt(base_model_name, r["prompt"]) for r in records]
         formatted_texts = [format_training_prompt(base_model_name, r["prompt"], r["completion"]) for r in records]
         
         def tokenize_batch(examples):
@@ -208,18 +214,31 @@ def train_job(
                 max_length=256,
                 padding="max_length"
             )
-            # For Causal LM, labels are the input_ids (with padding tokens masked as -100)
+            prompt_tokenized = tokenizer(
+                examples["prompt_text"],
+                truncation=True,
+                max_length=256
+            )
+            # For Causal LM instruction tuning, labels are input_ids with prompt tokens
+            # and padding tokens masked as -100 so loss is computed solely on the assistant completion.
+            # Using attention_mask to identify padding prevents masking legitimate EOS tokens
+            # when pad_token_id == eos_token_id.
             labels = []
-            for input_id_seq in tokenized["input_ids"]:
+            for i, input_id_seq in enumerate(tokenized["input_ids"]):
+                prompt_len = len(prompt_tokenized["input_ids"][i])
+                att_mask = tokenized["attention_mask"][i]
                 seq_labels = [
-                    token_id if token_id != tokenizer.pad_token_id else -100
-                    for token_id in input_id_seq
+                    token_id if (j >= prompt_len and att_mask[j] == 1) else -100
+                    for j, token_id in enumerate(input_id_seq)
                 ]
                 labels.append(seq_labels)
             tokenized["labels"] = labels
             return tokenized
 
-        raw_dataset = Dataset.from_dict({"text": formatted_texts})
+        raw_dataset = Dataset.from_dict({
+            "text": formatted_texts,
+            "prompt_text": prompt_texts
+        })
         tokenized_dataset = raw_dataset.map(tokenize_batch, batched=True)
 
         # Ensure MPS memory high watermark doesn't choke on 2B+ models

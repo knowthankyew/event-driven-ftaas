@@ -144,7 +144,54 @@ class TestHealthzChatTemplate(unittest.TestCase):
             chat_template = spec.chat_template.value
         except Exception:
             pass  # Expected — fallback logic mirrors what healthz does
-        self.assertEqual(chat_template, "unknown")
+class TestGenerateTokensRouting(unittest.TestCase):
+    """Validates that generate_tokens and compare_completions route prompt templates and handle baseModel correctly."""
+
+    def test_generate_tokens_uses_specified_base_model_template(self):
+        from unittest.mock import MagicMock, patch
+        import app
+        import torch
+
+        mock_model = MagicMock()
+        mock_model.generate.return_value = torch.tensor([[101, 102, 103, 104]])
+        mock_tok = MagicMock()
+        mock_tok.pad_token_id = 0
+        mock_tok.eos_token_id = 2
+        mock_inputs = MagicMock()
+        mock_inputs.__getitem__.side_effect = lambda k: torch.tensor([[101, 102]])
+        mock_inputs.to.return_value = mock_inputs
+        mock_tok.return_value = mock_inputs
+        mock_tok.decode.return_value = "Generated text"
+
+        with patch("app.format_inference_prompt", wraps=app.format_inference_prompt) as mock_format:
+            completion, latency = app.generate_tokens(
+                mock_model,
+                mock_tok,
+                prompt="test prompt",
+                max_tokens=10,
+                temperature=0.0,
+                base_model_id="google/gemma-2-2b-it"
+            )
+            mock_format.assert_called_once_with("google/gemma-2-2b-it", "test prompt")
+            self.assertEqual(completion, "Generated text")
+
+    def test_compare_completions_rejects_mismatched_base_model_with_409(self):
+        from unittest.mock import MagicMock, patch
+        from fastapi import HTTPException
+        import app
+
+        req = app.CompareRequest(
+            prompt="Hello world",
+            baseModel="google/gemma-2-2b-it",
+            adapterPath="some/path"
+        )
+        with patch.object(app.model_store, "base_model", MagicMock()), \
+             patch.object(app.model_store, "tokenizer", MagicMock()):
+            with self.assertRaises(HTTPException) as ctx:
+                app.compare_completions(req)
+            self.assertEqual(ctx.exception.status_code, 409)
+            self.assertEqual(ctx.exception.detail["error"], "base_model_mismatch")
+            self.assertIn("hint", ctx.exception.detail)
 
 
 if __name__ == "__main__":

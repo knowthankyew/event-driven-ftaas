@@ -257,5 +257,27 @@ class TestTrainerModelSelection(unittest.TestCase):
             self.assertIn("HF_TOKEN", str(ctx.exception))
 
 
+class TestInstructionMasking(unittest.TestCase):
+    """Validates that instruction tuning masks prompt tokens and pad tokens as -100 while preserving completion and EOS tokens."""
+
+    def test_prompt_tokens_and_padding_are_masked(self):
+        full_ids = [1, 2, 3, 4, 10, 11, 2, 0, 0, 0, 0, 0]
+        prompt_ids = [1, 2, 3, 4]
+        att_mask = [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
+
+        prompt_len = len(prompt_ids)
+        seq_labels = [
+            token_id if (j >= prompt_len and att_mask[j] == 1) else -100
+            for j, token_id in enumerate(full_ids)
+        ]
+
+        # First 4 tokens (prompt) should be -100
+        self.assertEqual(seq_labels[:4], [-100, -100, -100, -100])
+        # Next 3 tokens (completion + EOS) should retain their IDs
+        self.assertEqual(seq_labels[4:7], [10, 11, 2])
+        # Trailing padding tokens should be -100
+        self.assertEqual(seq_labels[7:], [-100, -100, -100, -100, -100])
+
+
 if __name__ == "__main__":
     unittest.main()

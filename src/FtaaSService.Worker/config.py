@@ -1,6 +1,9 @@
 import os
 from pathlib import Path
 import logging
+
+# Set Apple Metal memory watermark ceiling before PyTorch backend initialization
+os.environ.setdefault("PYTORCH_MPS_HIGH_WATERMARK_RATIO", "0.0")
 import torch
 
 # Base directories

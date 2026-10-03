@@ -1,8 +1,8 @@
-#!/usr/bin/env python3
 import os
 import sys
 import time
 import json
+import re
 import hashlib
 from pathlib import Path
 
@@ -103,10 +103,11 @@ def main():
             f"{len(records)} | 3 | 8 / 32 | {DEVICE} | {final_loss:.4f} | "
             f"{int(duration // 60)}m {int(duration % 60)}s | Live Benchmark Run (Adapter: {adapter_size_mb:.2f} MB) |"
         )
-        content = content.replace(
-            "| *Prototype* | `gemma-2-2b-it` | `fintech-compliance` | 100 | 3 | 8 / 32 | Apple Silicon (MPS) / CUDA | TBD | TBD | Prototype verification run |",
-            row
-        )
+        pattern = r"\| (?:[0-9]{4}-[0-9]{2}-[0-9]{2}|\*Prototype\*) \| `gemma-2-2b-it` \|.*"
+        if re.search(pattern, content):
+            content = re.sub(pattern, row, content)
+        else:
+            content += f"\n{row}\n"
         doc_path.write_text(content, encoding="utf-8")
         print(f"✓ Updated {doc_path.name} with live benchmark metrics!")
 
