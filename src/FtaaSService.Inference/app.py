@@ -36,7 +36,7 @@ PROJECT_ROOT = INFERENCE_DIR.parent.parent
 DEFAULT_DATA_ROOT = PROJECT_ROOT / "data"
 DATA_ROOT = Path(os.getenv("DATA_ROOT", str(DEFAULT_DATA_ROOT))).resolve()
 
-DEFAULT_BASE_MODEL = os.getenv("BASE_MODEL_NAME", "HuggingFaceTB/SmolLM2-135M")
+DEFAULT_BASE_MODEL = os.getenv("BASE_MODEL_NAME", "microsoft/BitNet-b1.58-2B-4T")
 
 # Make model_registry importable from the Worker source directory
 import sys as _sys
@@ -45,6 +45,13 @@ if _worker_src not in _sys.path:
     _sys.path.insert(0, _worker_src)
 
 from model_registry import get_model_spec, format_inference_prompt
+from bitnet_engine import (
+    is_bitnet_model,
+    is_bitnet_available,
+    get_bitnet_status,
+    generate_bitnet_sync,
+    generate_bitnet,
+)
 
 def get_device() -> torch.device:
     if torch.backends.mps.is_available():
@@ -63,26 +70,46 @@ MAX_CACHED_ADAPTERS = int(os.getenv("MAX_CACHED_ADAPTERS", "5"))
 class ModelStore:
     tokenizer = None
     base_model = None
+    is_bitnet: bool = False
+    backend: str = "transformers"
     adapter_cache: OrderedDict[str, PeftModel] = OrderedDict()
 
 model_store = ModelStore()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info(f"Pre-warming base model '{DEFAULT_BASE_MODEL}' on device {DEVICE}...")
-    model_store.tokenizer = AutoTokenizer.from_pretrained(DEFAULT_BASE_MODEL)
-    if model_store.tokenizer.pad_token is None:
-        model_store.tokenizer.pad_token = model_store.tokenizer.eos_token
+    logger.info(f"Configuring base model '{DEFAULT_BASE_MODEL}'...")
 
-    dtype = torch.bfloat16 if DEVICE.type == "cuda" else (torch.float16 if DEVICE.type == "mps" else torch.float32)
-    model_store.base_model = AutoModelForCausalLM.from_pretrained(
-        DEFAULT_BASE_MODEL,
-        torch_dtype=dtype,
-        trust_remote_code=True
-    ).to(DEVICE)
-    model_store.base_model.eval()
+    if is_bitnet_model(DEFAULT_BASE_MODEL):
+        logger.info(f"Initializing native BitNet C++ runtime for '{DEFAULT_BASE_MODEL}'...")
+        try:
+            model_store.tokenizer = AutoTokenizer.from_pretrained(DEFAULT_BASE_MODEL)
+        except Exception as ex:
+            logger.warning(f"Could not load HuggingFace tokenizer for BitNet: {ex}")
+        model_store.is_bitnet = True
+        model_store.backend = "bitnet_cpp"
+        model_store.base_model = None
+        if is_bitnet_available():
+            logger.info("BitNet native C++ runtime verified and ready.")
+        else:
+            logger.warning("BitNet C++ runtime binary or model weights not detected at configured path.")
+    else:
+        logger.info(f"Pre-warming PyTorch base model '{DEFAULT_BASE_MODEL}' on device {DEVICE}...")
+        model_store.tokenizer = AutoTokenizer.from_pretrained(DEFAULT_BASE_MODEL)
+        if model_store.tokenizer.pad_token is None:
+            model_store.tokenizer.pad_token = model_store.tokenizer.eos_token
 
-    logger.info("Base model loaded and ready in memory.")
+        dtype = torch.bfloat16 if DEVICE.type == "cuda" else (torch.float16 if DEVICE.type == "mps" else torch.float32)
+        model_store.base_model = AutoModelForCausalLM.from_pretrained(
+            DEFAULT_BASE_MODEL,
+            torch_dtype=dtype,
+            trust_remote_code=True
+        ).to(DEVICE)
+        model_store.base_model.eval()
+        model_store.is_bitnet = False
+        model_store.backend = "transformers"
+        logger.info("Base model loaded and ready in memory.")
+
     yield
     logger.info("Shutting down inference engine...")
 
@@ -111,6 +138,7 @@ class CompareRequest(BaseModel):
     temperature: float = Field(default=0.2, ge=0.0, le=1.0)
 
 class GenerateRequest(BaseModel):
+    baseModel: Optional[str] = DEFAULT_BASE_MODEL
     adapterPath: Optional[str] = None
     prompt: str = Field(..., min_length=3)
     maxTokens: int = Field(default=64, ge=1, le=256)
@@ -233,33 +261,85 @@ def healthz():
     except Exception:
         _chat_template = "unknown"
 
+    base_model_loaded = (model_store.is_bitnet and is_bitnet_available()) or (model_store.base_model is not None)
+
     return {
         "status": "Healthy",
         "device": str(DEVICE),
         "baseModel": DEFAULT_BASE_MODEL,
-        "baseModelLoaded": model_store.base_model is not None,
+        "baseModelLoaded": base_model_loaded,
+        "backend": model_store.backend,
+        "bitnet": get_bitnet_status(),
         "cachedAdapters": list(model_store.adapter_cache.keys()),
         "chatTemplate": _chat_template,
     }
 
 @app.post("/api/v1/inference/compare")
 def compare_completions(req: CompareRequest):
+    target_base = req.baseModel or DEFAULT_BASE_MODEL
+
+    # Route 1: Native BitNet C++ runtime
+    if is_bitnet_model(target_base):
+        if not is_bitnet_available():
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "BitNet C++ native runtime is not available on this host. "
+                    "Check BITNET_CLI_PATH and BITNET_MODEL_PATH."
+                )
+            )
+        if not req.adapterPath:
+            raise HTTPException(
+                status_code=400,
+                detail="adapterPath is required for side-by-side comparison"
+            )
+
+        # 1. Base model completion via C++ engine
+        base_completion, base_latency = generate_bitnet_sync(
+            req.prompt,
+            req.maxTokens,
+            req.temperature
+        )
+
+        # 2. Fine-tuned adapter completion
+        full_adapter_path = str(DATA_ROOT / req.adapterPath)
+        fine_tuned_completion, fine_tuned_latency = generate_bitnet_sync(
+            req.prompt,
+            req.maxTokens,
+            req.temperature,
+            adapter_path=full_adapter_path
+        )
+
+        return {
+            "jobId": req.jobId,
+            "baseModel": target_base,
+            "adapterPath": req.adapterPath,
+            "prompt": req.prompt,
+            "baseCompletion": base_completion,
+            "fineTunedCompletion": fine_tuned_completion,
+            "latencyMs": {
+                "baseModel": base_latency,
+                "fineTuned": fine_tuned_latency
+            }
+        }
+
+    # Route 2: Standard PyTorch HuggingFace runtime
     if not model_store.base_model or not model_store.tokenizer:
         raise HTTPException(status_code=503, detail="Model is still loading.")
 
-    # Guard: if req.baseModel is specified and doesn't match loaded model, reject with 409
-    if req.baseModel and req.baseModel != DEFAULT_BASE_MODEL:
+    # Guard: if req.baseModel is specified and doesn't match loaded PyTorch model, reject with 409
+    if target_base != DEFAULT_BASE_MODEL:
         raise HTTPException(
             status_code=409,
             detail={
                 "error": "base_model_mismatch",
                 "message": (
-                    f"Requested base model '{req.baseModel}' does not match "
+                    f"Requested base model '{target_base}' does not match "
                     f"loaded inference model '{DEFAULT_BASE_MODEL}'."
                 ),
-                "adapterBaseModel": req.baseModel,
+                "adapterBaseModel": target_base,
                 "loadedBaseModel": DEFAULT_BASE_MODEL,
-                "hint": f"Restart the inference service with BASE_MODEL_NAME={req.baseModel}",
+                "hint": f"Restart the inference service with BASE_MODEL_NAME={target_base}",
             }
         )
 
@@ -305,6 +385,34 @@ def compare_completions(req: CompareRequest):
 
 @app.post("/api/v1/inference/generate")
 def generate(req: GenerateRequest):
+    target_base = req.baseModel or DEFAULT_BASE_MODEL
+
+    # Route 1: Native BitNet C++ runtime
+    if is_bitnet_model(target_base):
+        if not is_bitnet_available():
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "BitNet C++ native runtime is not available on this host. "
+                    "Check BITNET_CLI_PATH and BITNET_MODEL_PATH."
+                )
+            )
+        full_adapter = str(DATA_ROOT / req.adapterPath) if req.adapterPath else None
+        completion, latency = generate_bitnet_sync(
+            req.prompt,
+            req.maxTokens,
+            req.temperature,
+            adapter_path=full_adapter
+        )
+        return {
+            "baseModel": target_base,
+            "adapterPath": req.adapterPath,
+            "prompt": req.prompt,
+            "completion": completion,
+            "latencyMs": latency
+        }
+
+    # Route 2: Standard PyTorch HuggingFace runtime
     if not model_store.base_model or not model_store.tokenizer:
         raise HTTPException(status_code=503, detail="Model is still loading.")
 
@@ -319,6 +427,7 @@ def generate(req: GenerateRequest):
     )
 
     return {
+        "baseModel": target_base,
         "adapterPath": req.adapterPath,
         "prompt": req.prompt,
         "completion": completion,
