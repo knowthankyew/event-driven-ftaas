@@ -3,8 +3,8 @@
 > **Target Model**: [`microsoft/bitnet-b1.58-2B-4T-gguf`](https://huggingface.co/microsoft/bitnet-b1.58-2B-4T-gguf) / [`microsoft/BitNet-b1.58-2B-4T`](https://huggingface.co/microsoft/BitNet-b1.58-2B-4T)  
 > **Toolchain Engine**: `bitnet.cpp` (AVX2 SIMD build on Apple Clang)  
 > **Host Environment**: macOS (Darwin x86_64, Intel Core i9-9880H @ 2.3 GHz 8-Core, 16 GB RAM)  
-> **Primary Authority**: [`KNOWTHANKYEW_PORTFOLIO_MASTER_BRIEF.md`](../KNOWTHANKYEW_PORTFOLIO_MASTER_BRIEF.md)  
-> **Roadmap Reference**: [`BITNET_TERNARY_LORA_ROADMAP.md`](file:///Users/cl0rkster/.gemini/antigravity/brain/6d189298-3f35-4110-91df-7ccfd49f6987/BITNET_TERNARY_LORA_ROADMAP.md)  
+> **Primary Authority**: [`KNOWTHANKYEW_PORTFOLIO_MASTER_BRIEF.md`](https://gist.github.com/knowthankyew/53ccf4d5a81e916f895c74e18b231e16)  
+> **Roadmap Reference**: [`BITNET_TERNARY_LORA_ROADMAP.md`](BITNET_TERNARY_LORA_ROADMAP.md)  
 > **Evaluation Date**: October 3, 2026  
 
 ---
