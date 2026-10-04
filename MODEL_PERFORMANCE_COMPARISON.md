@@ -6,7 +6,7 @@
 > 2. [`google/gemma-2-2b-it`](https://huggingface.co/google/gemma-2-2b-it) (High-Capacity Reasoning Tier)
 > 3. [`microsoft/bitnet-b1.58-2B-4T`](https://huggingface.co/microsoft/BitNet-b1.58-2B-4T) (1.58-bit Ternary CPU Tier)
 > **Host Environment**: macOS (Darwin x86_64, Intel Core i9-9880H 8-Core @ 2.3 GHz, 16 GB RAM)  
-> **Primary Authority**: [`KNOWTHANKYEW_PORTFOLIO_MASTER_BRIEF.md`](../KNOWTHANKYEW_PORTFOLIO_MASTER_BRIEF.md)  
+> **Primary Authority**: [`KNOWTHANKYEW_PORTFOLIO_MASTER_BRIEF.md`](https://gist.github.com/knowthankyew/53ccf4d5a81e916f895c74e18b231e16)  
 > **Date**: October 3, 2026  
 
 ---
