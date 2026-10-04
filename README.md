@@ -184,6 +184,7 @@ To test the entire live pipeline (Infra $\rightarrow$ .NET 10 Ingestion $\righta
 - [x] **Portfolio Phase 3b (In-Browser Execution)**: Ingesting and executing exported ONNX packages directly inside client browser engines via WebGPU/WASM (`onnxruntime-web`), single-input ONNX export signature, and dynamic INT8 quantization.
 - [x] **Portfolio Phase 3c (Multi-Model Scaling & Gemma 2B Prototype)**: Dynamic multi-model registry (`model_registry.py`), `google/gemma-2-2b-it` support, hardware preflight warnings, float16 MPS optimization with gradient accumulation, and live benchmark evaluation documented in [GEMMA_PROTOTYPE_RESULTS.md](GEMMA_PROTOTYPE_RESULTS.md).
 - [x] **Portfolio Phase 3d (Ternary Weight Scaling & BitNet b1.58 Prototype)**: Microsoft `microsoft/BitNet-b1.58-2B-4T` 1.58-bit ternary foundation model, native CPU execution via AVX2 integer addition/subtraction (zero GPU required), and empirical scaling benchmarks documented in [BITNET_PROTOTYPE_RESULTS.md](BITNET_PROTOTYPE_RESULTS.md).
+- [x] **BitNet b1.58 Ternary Integration & Engineering Roadmap**: Multi-phase engineering roadmap covering native C++ kernel build, ternary LoRA training, multi-model catalog integration, upstream toolchain contributions, and dual-backend inference serving documented in [ROADMAP.md](ROADMAP.md).
 - [x] **Comparative Performance Analysis**: Empirical cross-architecture differentials across all three models documented in [MODEL_PERFORMANCE_COMPARISON.md](MODEL_PERFORMANCE_COMPARISON.md).
 
 ---

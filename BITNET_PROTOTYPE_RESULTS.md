@@ -4,7 +4,7 @@
 > **Toolchain Engine**: `bitnet.cpp` (AVX2 SIMD build on Apple Clang)  
 > **Host Environment**: macOS (Darwin x86_64, Intel Core i9-9880H @ 2.3 GHz 8-Core, 16 GB RAM)  
 > **Primary Authority**: [`KNOWTHANKYEW_PORTFOLIO_MASTER_BRIEF.md`](https://gist.github.com/knowthankyew/53ccf4d5a81e916f895c74e18b231e16)  
-> **Roadmap Reference**: [`BITNET_TERNARY_LORA_ROADMAP.md`](BITNET_TERNARY_LORA_ROADMAP.md)  
+> **Roadmap Reference**: [`ROADMAP.md`](ROADMAP.md)  
 > **Evaluation Date**: October 3, 2026  
 
 ---
