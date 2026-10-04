@@ -141,3 +141,15 @@ When should an enterprise architect choose each model in FTaaS?
             • Instant offline audit   • Dedicated GPU servers  • 2.4B capacity without
                                                                  GPU energy footprint
 ```
+
+---
+
+## 6. Cross-References & Prototype Documentation
+
+Detailed empirical benchmarking and evaluation records for each tier:
+- **Baseline Edge Tier**: [`SMOL_PROTOTYPE_RESULTS.md`](SMOL_PROTOTYPE_RESULTS.md)
+- **High-Capacity Reasoning Tier**: [`GEMMA_PROTOTYPE_RESULTS.md`](GEMMA_PROTOTYPE_RESULTS.md)
+- **Ternary CPU Tier**: [`BITNET_PROTOTYPE_RESULTS.md`](BITNET_PROTOTYPE_RESULTS.md)
+- **Ternary Implementation Roadmap**: [`ROADMAP.md`](ROADMAP.md)
+- **System Architecture**: [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- **Primary Authority**: [`KNOWTHANKYEW_PORTFOLIO_MASTER_BRIEF.md`](https://gist.github.com/knowthankyew/53ccf4d5a81e916f895c74e18b231e16)

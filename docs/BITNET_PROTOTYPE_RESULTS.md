@@ -143,3 +143,13 @@ LoRA fine-tuning was executed end-to-end on `microsoft/BitNet-b1.58-2B-4T` targe
 | MLflow Experiment Run         | 181872f823c14dc2a8d4d6b092e0354c                                 |
 +-------------------------------+---------------------------------------------------------+
 ```
+
+---
+
+## 8. Cross-References & Related Documents
+
+- **Baseline Ultra-Compact Sibling**: [`SMOL_PROTOTYPE_RESULTS.md`](SMOL_PROTOTYPE_RESULTS.md)
+- **High-Capacity Reasoning Sibling**: [`GEMMA_PROTOTYPE_RESULTS.md`](GEMMA_PROTOTYPE_RESULTS.md)
+- **Comparative Analysis**: [`MODEL_PERFORMANCE_COMPARISON.md`](MODEL_PERFORMANCE_COMPARISON.md)
+- **Ternary Implementation Roadmap**: [`ROADMAP.md`](ROADMAP.md)
+- **Primary Authority**: [`KNOWTHANKYEW_PORTFOLIO_MASTER_BRIEF.md`](https://gist.github.com/knowthankyew/53ccf4d5a81e916f895c74e18b231e16)

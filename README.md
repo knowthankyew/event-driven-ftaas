@@ -35,7 +35,7 @@ Run one command to launch the full interactive web application:
 
 Then open your browser to **[http://localhost:5100](http://localhost:5100)**.
 
-📖 **Looking for a guided walkthrough? Read the [FTaaS Enterprise Studio Guide](STUDIO_GUIDE.md) for step-by-step instructions, visual explanations, and FAQs.**
+📖 **Looking for a guided walkthrough? Read the [FTaaS Enterprise Studio Guide](docs/STUDIO_GUIDE.md) for step-by-step instructions, visual explanations, and FAQs.**
 
 ### What You Can Do in the Studio:
 1. **⚡ Side-by-Side Comparison Arena**: Select a business persona (e.g. *Fintech Support & Compliance*, *Enterprise SaaS Ops*, or *Financial Earnings*) and test realistic inquiries. Observe how a **Generic Foundation Model** contrasts with your **Company Custom AI** (incorporating team SLAs, policy limits, and required regulatory disclaimers).
@@ -175,17 +175,35 @@ To test the entire live pipeline (Infra $\rightarrow$ .NET 10 Ingestion $\righta
 
 ## Roadmap & Implementation Status
 
-- [x] **Architecture Specification & Design Contracts** ([ARCHITECTURE.md](ARCHITECTURE.md))
+- [x] **Architecture Specification & Design Contracts** ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
 - [x] **Phase 1**: Local Infrastructure Foundation (`docker-compose.yml`, `scripts/dev-up.sh`, RabbitMQ + MLflow healthchecks)
 - [x] **Phase 2**: Ingestion & Control Plane (.NET 10 Minimal API, JSONL validation, SQLite state machine, AMQP producer/consumer)
 - [x] **Phase 3**: Python Compute Worker & LoRA Pipeline (AMQP consumer, PyTorch MPS/CPU detection, PEFT/LoRA, MLflow telemetry)
 - [x] **Phase 4**: Dynamic Model Serving & Side-by-Side Comparison (LoRA dynamic adapter mounting, comparison API)
-- [x] **Portfolio Phase 3a (The FTaaS Bridge Exporter)**: Edge ONNX Exporter (`src/FtaaSService.Worker/exporter.py`, `scripts/export_edge_adapter.py`) and Web API export endpoints (`GET/POST /api/v1/jobs/{id}/export/edge`) compiling LoRA adapters into web-optimized ONNX format with integrity checksums.
+- [x] **Portfolio Phase 3a (The FTaaS Bridge Exporter)**: Edge ONNX Exporter (`src/FtaaSService.Worker/exporter.py`, `scripts/export_edge_adapter.py`) and Web API export endpoints (`GET/POST /api/v1/jobs/{id}/export/edge`) compiling LoRA adapters into web-optimized ONNX format with integrity checksums, documented in [docs/SMOL_PROTOTYPE_RESULTS.md](docs/SMOL_PROTOTYPE_RESULTS.md).
 - [x] **Portfolio Phase 3b (In-Browser Execution)**: Ingesting and executing exported ONNX packages directly inside client browser engines via WebGPU/WASM (`onnxruntime-web`), single-input ONNX export signature, and dynamic INT8 quantization.
-- [x] **Portfolio Phase 3c (Multi-Model Scaling & Gemma 2B Prototype)**: Dynamic multi-model registry (`model_registry.py`), `google/gemma-2-2b-it` support, hardware preflight warnings, float16 MPS optimization with gradient accumulation, and live benchmark evaluation documented in [GEMMA_PROTOTYPE_RESULTS.md](GEMMA_PROTOTYPE_RESULTS.md).
-- [x] **Portfolio Phase 3d (Ternary Weight Scaling & BitNet b1.58 Prototype)**: Microsoft `microsoft/BitNet-b1.58-2B-4T` 1.58-bit ternary foundation model, native CPU execution via AVX2 integer addition/subtraction (zero GPU required), and empirical scaling benchmarks documented in [BITNET_PROTOTYPE_RESULTS.md](BITNET_PROTOTYPE_RESULTS.md).
-- [x] **BitNet b1.58 Ternary Integration & Engineering Roadmap**: Multi-phase engineering roadmap covering native C++ kernel build, ternary LoRA training, multi-model catalog integration, upstream toolchain contributions, and dual-backend inference serving documented in [ROADMAP.md](ROADMAP.md).
-- [x] **Comparative Performance Analysis**: Empirical cross-architecture differentials across all three models documented in [MODEL_PERFORMANCE_COMPARISON.md](MODEL_PERFORMANCE_COMPARISON.md).
+- [x] **Portfolio Phase 3c (Multi-Model Scaling & Gemma 2B Prototype)**: Dynamic multi-model registry (`model_registry.py`), `google/gemma-2-2b-it` support, hardware preflight warnings, float16 MPS optimization with gradient accumulation, and live benchmark evaluation documented in [docs/GEMMA_PROTOTYPE_RESULTS.md](docs/GEMMA_PROTOTYPE_RESULTS.md).
+- [x] **Portfolio Phase 3d (Ternary Weight Scaling & BitNet b1.58 Prototype)**: Microsoft `microsoft/BitNet-b1.58-2B-4T` 1.58-bit ternary foundation model, native CPU execution via AVX2 integer addition/subtraction (zero GPU required), and empirical scaling benchmarks documented in [docs/BITNET_PROTOTYPE_RESULTS.md](docs/BITNET_PROTOTYPE_RESULTS.md).
+- [x] **BitNet b1.58 Ternary Integration & Engineering Roadmap**: Multi-phase engineering roadmap covering native C++ kernel build, ternary LoRA training, multi-model catalog integration, upstream toolchain contributions, and dual-backend inference serving documented in [docs/ROADMAP.md](docs/ROADMAP.md).
+- [x] **Comparative Performance Analysis**: Empirical cross-architecture differentials across all three models documented in [docs/MODEL_PERFORMANCE_COMPARISON.md](docs/MODEL_PERFORMANCE_COMPARISON.md).
+
+---
+
+## 📚 Repository Documentation Index
+
+All technical design documents, prototype evaluations, and implementation roadmaps are organized under [`docs/`](docs/):
+
+| Document | Purpose |
+| :--- | :--- |
+| **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** | End-to-end system architecture, polyglot microservice boundaries, AMQP messaging contracts, and cloud mapping. |
+| **[`docs/ROADMAP.md`](docs/ROADMAP.md)** | 7-phase BitNet b1.58 ternary integration roadmap, execution status, and upstream contribution tracking. |
+| **[`docs/STUDIO_GUIDE.md`](docs/STUDIO_GUIDE.md)** | Non-technical visual walkthrough and operational runbook for the FTaaS Enterprise Studio web application. |
+| **[`docs/MODEL_PERFORMANCE_COMPARISON.md`](docs/MODEL_PERFORMANCE_COMPARISON.md)** | Symmetrical cross-architecture benchmark differentials across SmolLM2-135M, Gemma 2 2B IT, and BitNet b1.58. |
+| **[`docs/SMOL_PROTOTYPE_RESULTS.md`](docs/SMOL_PROTOTYPE_RESULTS.md)** | Ultra-compact baseline (135M) empirical LoRA training metrics, ONNX export profile, and in-browser WASM execution. |
+| **[`docs/GEMMA_PROTOTYPE_RESULTS.md`](docs/GEMMA_PROTOTYPE_RESULTS.md)** | High-capacity reasoning tier (2.6B) empirical benchmarks, Apple Silicon MPS tuning, and licensing guards. |
+| **[`docs/BITNET_PROTOTYPE_RESULTS.md`](docs/BITNET_PROTOTYPE_RESULTS.md)** | 1.58-bit ternary CPU execution (2.4B) AVX2 SIMD scaling benchmarks, memory profiling, and PyTorch LoRA metrics. |
+| **[`docs/PRIVACY_TELEMETRY_SCHEMA.md`](docs/PRIVACY_TELEMETRY_SCHEMA.md)** | Portfolio governance standard for strict attribute allowlists, burn-to-purge invariants, and OpenTelemetry overlay. |
+| **[`NOTICE.md`](NOTICE.md)** | Root statutory disclaimers, consumer privacy invariants, and third-party foundation model attribution. |
 
 ---
 

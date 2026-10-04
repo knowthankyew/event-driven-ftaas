@@ -101,7 +101,9 @@ def main():
     print("=" * 65)
 
     # 1. Update MODEL_PERFORMANCE_COMPARISON.md
-    comp_path = DEV_ROOT / "MODEL_PERFORMANCE_COMPARISON.md"
+    comp_path = DEV_ROOT / "docs" / "MODEL_PERFORMANCE_COMPARISON.md"
+    if not comp_path.exists():
+        comp_path = DEV_ROOT / "MODEL_PERFORMANCE_COMPARISON.md"
     if comp_path.exists():
         comp_content = comp_path.read_text(encoding="utf-8")
         # Replace the BitNet column in table (Section 3)
@@ -144,7 +146,9 @@ def main():
         print(f"✓ Updated {comp_path.name} with live BitNet benchmark metrics and Section 4.3 qualitative profile!")
 
     # 2. Update BITNET_PROTOTYPE_RESULTS.md
-    proto_path = DEV_ROOT / "BITNET_PROTOTYPE_RESULTS.md"
+    proto_path = DEV_ROOT / "docs" / "BITNET_PROTOTYPE_RESULTS.md"
+    if not proto_path.exists():
+        proto_path = DEV_ROOT / "BITNET_PROTOTYPE_RESULTS.md"
     if proto_path.exists():
         proto_content = proto_path.read_text(encoding="utf-8")
         results_section = (

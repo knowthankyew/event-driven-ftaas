@@ -363,13 +363,15 @@ stateDiagram-v2
 - `google/gemma-2-2b-it` support with Hugging Face gated licensing verification (401/403 friendly error guidance) and hardware preflight warnings (8GB VRAM).
 - Precision & Memory Optimization: `torch.float16` on Apple Silicon MPS with dynamic gradient accumulation (`per_device_batch=1`, `accum_steps=batch_size`) and watermark ceiling bypass.
 - Dynamic inference conflict guard: HTTP 409 Conflict with actionable restart hint on base model mismatch.
-- Documented live prototype benchmark in `GEMMA_PROTOTYPE_RESULTS.md`.
+- Documented live prototype benchmark in [`GEMMA_PROTOTYPE_RESULTS.md`](GEMMA_PROTOTYPE_RESULTS.md).
 
 ### Phase 7: Ternary Weight Scaling & BitNet b1.58 Prototype
 - `microsoft/BitNet-b1.58-2B-4T` catalog integration in `model_registry.py` and `SupportedModels`.
 - Ternary weights $W \in \{-1, 0, +1\}$ executing on CPU via AVX2 SIMD integer operations (zero GPU VRAM required).
 - Native prompt formatting (`User: <prompt><|eot_id|>\nAssistant: <completion><|eot_id|>`).
-- Live CPU scaling benchmarks documented in `BITNET_PROTOTYPE_RESULTS.md` achieving up to 23.54 tokens/sec on Intel Core i9 CPU.
+- Live CPU scaling benchmarks documented in [`BITNET_PROTOTYPE_RESULTS.md`](BITNET_PROTOTYPE_RESULTS.md) achieving up to 23.54 tokens/sec on Intel Core i9 CPU.
+- Full 7-phase execution roadmap documented in [`ROADMAP.md`](ROADMAP.md).
+- Baseline edge model profile documented in [`SMOL_PROTOTYPE_RESULTS.md`](SMOL_PROTOTYPE_RESULTS.md).
 
 ---
 
@@ -408,9 +410,16 @@ Dynamic Inference Server   SageMaker Multi-Model / Triton Inference    Vertex AI
 /Users/cl0rkster/Dev/ml/
 ├── docker-compose.yml            # RabbitMQ + MLflow server
 ├── README.md                     # Executive summary, trade-offs & runbook
-├── ARCHITECTURE.md               # Detailed architecture specifications & contracts
-├── STUDIO_GUIDE.md               # Visual walkthrough & non-technical guide
-├── GEMMA_PROTOTYPE_RESULTS.md    # Multi-model Gemma 2B benchmark & evaluation
+├── NOTICE.md                     # Legal disclosures, privacy invariants & attribution
+├── docs/                         # Engineering documentation & benchmark records
+│   ├── ARCHITECTURE.md           # Detailed architecture specifications & contracts
+│   ├── ROADMAP.md                # BitNet b1.58 ternary integration roadmap & execution tracking
+│   ├── STUDIO_GUIDE.md           # Visual walkthrough & non-technical guide
+│   ├── MODEL_PERFORMANCE_COMPARISON.md # Tri-model comparative benchmarks & decision matrix
+│   ├── SMOL_PROTOTYPE_RESULTS.md # Baseline ultra-compact SmolLM2-135M benchmark & ONNX profile
+│   ├── GEMMA_PROTOTYPE_RESULTS.md # High-capacity reasoning Gemma 2 2B IT benchmark & evaluation
+│   ├── BITNET_PROTOTYPE_RESULTS.md # 1.58-bit ternary CPU BitNet b1.58 2B-4T benchmark & evaluation
+│   └── PRIVACY_TELEMETRY_SCHEMA.md # Portfolio privacy & telemetry governance schema
 ├── scripts/
 │   ├── dev-up.sh                 # Start infra, check health, seed datasets
 │   ├── dev-down.sh               # Tear down infra

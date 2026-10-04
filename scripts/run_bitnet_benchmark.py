@@ -69,7 +69,9 @@ def main():
     print(stdout)
 
     # Update BITNET_PROTOTYPE_RESULTS.md if present
-    doc_path = DEV_ROOT / "BITNET_PROTOTYPE_RESULTS.md"
+    doc_path = DEV_ROOT / "docs" / "BITNET_PROTOTYPE_RESULTS.md"
+    if not doc_path.exists():
+        doc_path = DEV_ROOT / "BITNET_PROTOTYPE_RESULTS.md"
     if doc_path.exists():
         print(f"Recorded results to {doc_path.name}")
 

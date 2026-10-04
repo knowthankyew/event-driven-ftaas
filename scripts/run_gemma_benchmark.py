@@ -95,7 +95,9 @@ def main():
     print("=" * 65)
 
     # Update GEMMA_PROTOTYPE_RESULTS.md
-    doc_path = DEV_ROOT / "GEMMA_PROTOTYPE_RESULTS.md"
+    doc_path = DEV_ROOT / "docs" / "GEMMA_PROTOTYPE_RESULTS.md"
+    if not doc_path.exists():
+        doc_path = DEV_ROOT / "GEMMA_PROTOTYPE_RESULTS.md"
     if doc_path.exists():
         content = doc_path.read_text(encoding="utf-8")
         row = (

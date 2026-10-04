@@ -219,11 +219,13 @@ flowchart TD
 ## 5. Architectural Record & Repository Status
 
 This roadmap is an authoritative, version-controlled engineering document tracked within the `ml` repository:
-- **File**: [`ROADMAP.md`](ROADMAP.md)
+- **File**: [`docs/ROADMAP.md`](ROADMAP.md)
 - **Repository**: `github.com/knowthankyew/ml` (`origin/main`)
 - **Status**: Tracked & Committed
 - **Related Documents**:
-  - Empirical Benchmarking: [`BITNET_PROTOTYPE_RESULTS.md`](BITNET_PROTOTYPE_RESULTS.md)
+  - Baseline Edge Results: [`SMOL_PROTOTYPE_RESULTS.md`](SMOL_PROTOTYPE_RESULTS.md)
+  - Reasoning Tier Results: [`GEMMA_PROTOTYPE_RESULTS.md`](GEMMA_PROTOTYPE_RESULTS.md)
+  - Empirical BitNet Benchmarking: [`BITNET_PROTOTYPE_RESULTS.md`](BITNET_PROTOTYPE_RESULTS.md)
   - Comparative Architecture Analysis: [`MODEL_PERFORMANCE_COMPARISON.md`](MODEL_PERFORMANCE_COMPARISON.md)
   - System Architecture & Polyglot Specification: [`ARCHITECTURE.md`](ARCHITECTURE.md)
   - Master Portfolio Brief: [`KNOWTHANKYEW_PORTFOLIO_MASTER_BRIEF.md`](https://gist.github.com/knowthankyew/53ccf4d5a81e916f895c74e18b231e16)

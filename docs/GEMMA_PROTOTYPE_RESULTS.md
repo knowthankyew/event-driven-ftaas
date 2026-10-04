@@ -66,3 +66,12 @@ The live prototype run completed 30 training steps (3 epochs over 20 records):
 - **Final Step Loss**: `11.4547`
 - **Artifacts Generated**: `adapter_config.json`, `adapter_model.safetensors` (12.21 MB), `tokenizer.json`, and `edge_model_manifest.json` under `ml/data/artifacts/gemma-bench-1791032257/model_adapters/`.
 
+---
+
+## 4. Cross-References & Related Documents
+
+- **Baseline Ultra-Compact Sibling**: [`SMOL_PROTOTYPE_RESULTS.md`](SMOL_PROTOTYPE_RESULTS.md)
+- **Ternary Weight Sibling**: [`BITNET_PROTOTYPE_RESULTS.md`](BITNET_PROTOTYPE_RESULTS.md)
+- **Comparative Analysis**: [`MODEL_PERFORMANCE_COMPARISON.md`](MODEL_PERFORMANCE_COMPARISON.md)
+- **Primary Authority**: [`KNOWTHANKYEW_PORTFOLIO_MASTER_BRIEF.md`](https://gist.github.com/knowthankyew/53ccf4d5a81e916f895c74e18b231e16)
+
