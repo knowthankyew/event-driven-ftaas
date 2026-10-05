@@ -5,8 +5,8 @@
 > 1. [`HuggingFaceTB/SmolLM2-135M`](https://huggingface.co/HuggingFaceTB/SmolLM2-135M) (Baseline Edge Tier &mdash; Hugging Face)
 > 2. [`google/gemma-2-2b-it`](https://huggingface.co/google/gemma-2-2b-it) (High-Capacity Reasoning Tier &mdash; Google DeepMind)
 > 3. [`microsoft/bitnet-b1.58-2B-4T`](https://huggingface.co/microsoft/BitNet-b1.58-2B-4T) (1.58-bit Ternary CPU Tier &mdash; Microsoft Research)
-> **Host Environment**: macOS (Darwin x86_64, Intel Core i9-9880H 8-Core @ 2.3 GHz, 16 GB RAM, AMD Radeon Pro 5500M 4GB Metal GPU)  
-> **Benchmark Scope**: Systems Engineering, Memory Footprint & Inference Throughput Benchmark (Edge Laptop Hardware Envelope). Language modeling quality baselines are cited from foundation model publications.  
+> **Host Environment**: macOS (Darwin x86_64, Intel Core i9-9880H 8-Core @ 2.3 GHz, 16 GB System RAM, AMD Radeon Pro 5500M 4GB Metal GPU)  
+> **Benchmark Scope**: Systems Engineering, Memory Footprint & Inference Throughput Benchmark (Edge Laptop Hardware Envelope). Task accuracy and language quality benchmarks are referenced from foundation model publications.  
 > **Primary Authority**: [`KNOWTHANKYEW_PORTFOLIO_MASTER_BRIEF.md`](https://gist.github.com/knowthankyew/53ccf4d5a81e916f895c74e18b231e16)  
 > **Date**: October 5, 2026  
 
@@ -31,24 +31,18 @@ To maintain clear open-source attribution and scientific transparency:
 
 ### Tri-Model Architecture Matrix
 
-```
-+--------------------------------------------------------------------------------------------------------+
-|                                    TRI-MODEL ARCHITECTURAL MATRIX                                      |
-+------------------------+--------------------------+---------------------------+------------------------+
-| Metric                 | SmolLM2-135M             | Gemma 2 2B IT             | BitNet b1.58 2B-4T     |
-+------------------------+--------------------------+---------------------------+------------------------+
-| Primary Architecture   | Ultra-compact Edge WASM  | Deep Context & Reasoning  | Pure-CPU Ternary Scale |
-| Native Precision       | FP16 / BF16              | FP16 / BF16               | Ternary {-1, 0, +1}    |
-| Parameter Count        | 134.5 Million            | 2.61 Billion              | 2.41 Billion           |
-| Model Storage (Disk)   | ~270 MB                  | ~5.20 GB                  | ~1.10 GB (GGUF i2_s)   |
-| Active Inference RAM   | ~310 MB                  | ~5,600 MB (FP16 CPU)      | ~1,150 MB (C++ AVX2)   |
-| Inference Compute      | Floating-Point MAC       | Floating-Point MAC        | Integer ADD / SUB      |
-| Inference Hardware     | Any CPU / MPS / WASM     | 8 GB+ VRAM or Metal MPS   | Zero GPU (Pure CPU)    |
-| LoRA Training Hardware | macOS Metal (MPS) / CPU  | macOS Metal (MPS float16) | macOS Metal (MPS flt32)|
-| LoRA Adapter Size      | 1.84 MB (q_proj, v_proj) | 12.21 MB (4 projections)  | 15.26 MB (4 projection)|
-| Foundation Licensing   | Apache 2.0               | Gated (Gemma Terms + Auth)| MIT License (Open)     |
-+------------------------+--------------------------+---------------------------+------------------------+
-```
+| Metric | SmolLM2-135M | Gemma 2 2B IT | BitNet b1.58 2B-4T |
+| :--- | :--- | :--- | :--- |
+| **Primary Architecture** | Ultra-compact Edge WASM | Deep Context & Reasoning | Pure-CPU Ternary Scale |
+| **Native Precision** | FP16 / BF16 | FP16 / BF16 | Ternary {-1, 0, +1} |
+| **Parameter Count** | 134.5 Million | 2.61 Billion | 2.41 Billion |
+| **Model Storage (Disk)** | ~270 MB | ~5.20 GB | ~1.10 GB (GGUF `i2_s`) |
+| **Active Inference RAM** | ~310 MB | ~5,600 MB (FP16 CPU) | ~1,150 MB (C++ AVX2) |
+| **Inference Compute** | Floating-Point MAC | Floating-Point MAC | Integer ADD / SUB |
+| **Inference Hardware** | Any CPU / MPS / WASM | 8 GB+ VRAM or Metal MPS | Zero GPU (Pure CPU) |
+| **LoRA Training Hardware**| macOS Metal (MPS) / CPU | macOS Metal (MPS float16) | macOS Metal (MPS float32) |
+| **LoRA Adapter Size** | 1.84 MB (`q_proj`, `v_proj`) | 12.21 MB (4 projections) | 15.26 MB (4 projections) |
+| **Foundation Licensing** | Apache 2.0 | Gated (Gemma Terms + Auth) | MIT License (Open) |
 
 ```mermaid
 flowchart TD
@@ -83,13 +77,10 @@ Measured natively on host hardware (Intel Core i9-9880H 8-core CPU @ 2.3 GHz, 16
 | **Time per Token (8-Core CPU)** | 10.2 ms / token | 90.1 ms / token | **42.4 ms / token** | 53% lower latency than Gemma FP16 |
 | **Inference Hardware Offload** | Optional | **Mandatory for real-time** | **Zero GPU (Pure CPU AVX2)**| Eliminates entry-level cloud GPU dependency |
 
-#### The Quantized Baseline Alternative: Gemma 2B Q4_K_M in llama.cpp
-A standard critique from machine learning practitioners is: *"Why compare BitNet's 2-bit kernels against Gemma 2B at unquantized FP16 on CPU instead of a 4-bit quantized baseline?"*
-
-This is an essential architectural distinction:
-1. **4-Bit Post-Training Quantization (PTQ)**: In `llama.cpp`, a 4-bit quantized Gemma 2B (`Q4_K_M`) occupies **~1.6 GB** of RAM and achieves **~18–25 tokens/sec** on an 8-core CPU. Under 4-bit quantization, Gemma's CPU decode rate is close to BitNet's 23.5 t/s.
-2. **Compute Primitives (Float MAC vs Integer ADD/SUB)**: 4-bit PTQ compresses weights but still requires floating-point scaling factors and multiplication-accumulation (MAC) routines during matrix multiplication. BitNet b1.58 replaces multipliers entirely with pure integer additions and subtractions across SIMD registers.
-3. **The 2-Bit Quantization Floor**: When standard FP16 models (like Gemma or Llama) are compressed below 4 bits (e.g. `Q2_K` or `IQ2_XXS`), they suffer catastrophic perplexity degradation and loss of reasoning coherence. BitNet b1.58, by contrast, was **trained natively from scratch at 1.58-bit ternary precision across 4 trillion tokens**, delivering coherent 2-bit density (~1.1 GB) without post-training quantization collapse.
+#### Context on Quantized Baselines
+A natural question for practitioners is how BitNet's 23.5 t/s decode compares against a 4-bit quantized Gemma 2B (such as `Q4_K_M` in `llama.cpp`). 
+- **Scope of This Study**: We measured Gemma 2 2B IT using standard unquantized FP16 CPU inference in PyTorch as our baseline. We did not benchmark a 4-bit quantized Gemma baseline on this machine.
+- **Architectural Distinction**: 4-bit post-training quantization (PTQ) compresses float models while continuing to evaluate via floating-point multiplication-accumulation (MAC) routines with scale factors. In contrast, BitNet b1.58 was pre-trained natively from scratch at 1.58-bit ternary precision across 4 trillion tokens, executing through pure integer additions and subtractions across SIMD registers without multipliers.
 
 ---
 
@@ -101,42 +92,27 @@ This is an essential architectural distinction:
 | **Active Process RAM (Inference)**| ~310 MB | ~5,600 MB (FP16) | **~1,150 MB (C++ AVX2)** | 4.8× density improvement over FP16 |
 | **Inference GPU VRAM** | 0.0 GB (CPU) | ~5.0 GB (Metal/CUDA) | **0.0 GB (Pure CPU)** | BitNet C++ runtime requires zero GPU VRAM |
 | **Host System RAM (LoRA Training)**| ~1.5 GB | ~12.0 GB | **~4.5 – 6.0 GB** | PyTorch autograd graph + adapter gradients |
-| **Static Memory Residency (16 GB Host)**| ~45 models | ~2 models | **~12 models** | Models resident in DRAM ready to serve |
 
-#### Static Memory Residency vs Active Execution Concurrency
-The figure of **12 instances on a 16 GB server** refers strictly to **static memory residency** (how many distinct tenant models can sit resident in system RAM simultaneously without paging to disk). 
-
-In production:
-- Running 12 *simultaneous active token generation threads* on an 8-core CPU will cause CPU core contention and drop per-model throughput.
-- For high-concurrency multi-tenant workloads, requests are queued across a shared worker pool (e.g., 4–8 execution threads), while the 12 model weights remain hot in memory. This eliminates the multi-second disk load latency associated with swapping 5.2 GB FP16 weights.
-
-#### Cloud Cost Reference
-Replacing GPU requirements for 2B-class inference eliminates dependency on dedicated cloud GPU instances:
-* Entry-level AWS EC2 GPU instances: `g4dn.xlarge` (NVIDIA T4, 16 GB GPU) costs **\$0.526/hr** on-demand; `g5.xlarge` (NVIDIA A10G, 24 GB GPU) costs **\$1.006/hr** on-demand.
-* General-purpose CPU instances: `c6i.xlarge` (4 vCPU, 8 GB RAM) costs **\$0.170/hr**, representing a **67–83% direct infrastructure savings** when serving workloads within CPU latency budgets.
+#### Memory & Hardware Notes
+* **Inference vs Training VRAM**: BitNet requires **0.0 GB GPU VRAM** for C++ inference (`bitnet.cpp` / `bitnet_engine.py`). For LoRA fine-tuning, training executed through PyTorch on macOS Metal (MPS), which utilizes unified/shared system memory managed by Metal on the host's AMD Radeon Pro 5500M discrete GPU.
+* **Concurrency vs Memory Residency**: In memory-constrained multi-tenant environments, models can remain resident in system DRAM (avoiding multi-second disk reload latency), while execution threads are scheduled across physical CPU cores.
 
 ---
 
-## 3. Training & LoRA Convergence Comparison
+## 3. Training Pipeline Verification (Smoke Test)
 
-Live benchmark runs were executed across identical financial sentiment and compliance records (`datasets/sample-financial-sentiment.jsonl`):
+Live fine-tuning pipeline verification was executed across financial sentiment records (`datasets/sample-financial-sentiment.jsonl`):
 
-```
-+----------------------------------------------------------------------------------------------------------+
-|                                      LoRA TRAINING RUN COMPARISON                                        |
-+--------------------------+----------------------------+----------------------------+---------------------+
-| Attribute                | SmolLM2-135M (Baseline)    | Gemma 2 2B IT (Live Run)   | BitNet b1.58 2B-4T  |
-+--------------------------+----------------------------+----------------------------+---------------------+
-| Training Steps           | 75 steps (3 epochs)        | 30 steps (3 epochs)        | 30 steps (3 epochs) |
-| Target Projection Layers | q_proj, v_proj             | q_proj, v_proj, k_proj, o  | q_proj, v_proj, k, o|
-| LoRA Rank (r) / Alpha    | 8 / 32                     | 8 / 32                     | 8 / 32              |
-| Exported Adapter Size    | 1.84 MB                    | 12.21 MB                   | 15.26 MB            |
-| Training Device          | macOS Metal (MPS)          | macOS Metal (MPS float16)  | macOS Metal (MPS f32|
-| Training Wall-Clock Time | 2m 14s (134s)              | 7m 03s (423s)              | 53m 39s (3219s)     |
-| Step Loss Progression    | 1.8540 -> 0.3120 (-83.2%)  | 12.1813 -> 11.4547 (-6.0%) | 4.8921 -> 3.2038    |
-| MLflow Experiment Run    | smollm-prod-baseline       | a3f2e22c38cb4514...        | 181872f823c14dc2... |
-+--------------------------+----------------------------+----------------------------+---------------------+
-```
+| Attribute | SmolLM2-135M (Baseline) | Gemma 2 2B IT (Live Run) | BitNet b1.58 2B-4T |
+| :--- | :--- | :--- | :--- |
+| Training Steps | 75 steps (3 epochs) | 30 steps (3 epochs) | 30 steps (3 epochs) |
+| Target Projection Layers | q_proj, v_proj | q_proj, v_proj, k_proj, o_proj | q_proj, v_proj, k_proj, o_proj |
+| LoRA Rank (r) / Alpha | 8 / 32 | 8 / 32 | 8 / 32 |
+| Exported Adapter Size | 1.84 MB | 12.21 MB | 15.26 MB |
+| Training Device | macOS Metal (MPS) | macOS Metal (MPS float16) | macOS Metal (MPS float32) |
+| Training Wall-Clock Time | 2m 14s (134s) | 7m 03s (423s) | 53m 39s (3,219s) |
+| Step Loss Progression | 1.8540 -> 0.3120 | 12.1813 -> 11.4547 | 4.8921 -> 3.2038 |
+| MLflow Experiment Run | `smollm-prod-baseline` | `a3f2e22c38cb4514...` | `181872f823c14dc2...` |
 
 ### Critical Findings on Training Mechanics
 
@@ -155,52 +131,33 @@ $$h = W_0 \cdot x + \frac{\alpha}{r} (B \cdot A) \cdot x$$
 * The trainable low-rank adapters $A$ and $B$ are updated in floating point (`float32` on Metal to prevent numerical underflow).
 * Training requires floating-point compute; only inference can execute via pure integer SIMD.
 
-#### 3. Cross-Entropy Loss Incomparability
-Cross-entropy loss cannot be ranked across disparate model families:
-$$\mathcal{L} = -\frac{1}{N} \sum_{i=1}^N \log P(w_i)$$
-* **Vocabulary Size Scaling**: Baseline cross-entropy loss scales with $\ln(V)$. Gemma 2 uses a massive 256,000-token vocabulary ($\ln(256000) \approx 12.45$), whereas SmolLM2 uses 49,152 tokens ($\ln(49152) \approx 10.80$) and BitNet uses 32,000 tokens ($\ln(32000) \approx 10.37$).
-* **Tokenization Granularity**: Different tokenizers split the same text into different numbers of tokens, making raw loss numbers non-comparable across architectures.
-* *Interpretation*: Loss numbers demonstrate **intra-model convergence delta** over 3 epochs, confirming that each model adapted to the target dataset syntax, rather than serving as a cross-model leaderboard rank.
+#### 3. Vocabulary & Loss Interpretation
+* **Tokenizer Vocabulary Sizes**: Gemma uses a 256,000-token vocabulary, BitNet uses the LLaMA 3 tokenizer with 128,256 tokens, and SmolLM2 uses 49,152 tokens.
+* **Loss Interpretation**: Cross-entropy loss values cannot be ranked directly across different model families or tokenizers. Furthermore, Gemma's initial loss of 12.18 (very close to $\ln(256,000) \approx 12.45$, the loss of uniform random token guessing) indicates that Gemma's training setup on MPS with FP16 soft-capping started with high loss, and its 6% reduction over 30 steps shows that this 20-sample run serves as an infrastructure smoke-test of the LoRA pipeline, rather than an evaluation of task adaptation or model competence.
 
 ---
 
 ## 4. Qualitative Behavioral Profiles
 
-How the three models respond to an identical enterprise compliance prompt:
+Illustrative completions from the multi-model comparison arena on an enterprise compliance prompt:
 
-> **Input Prompt**: *"Explain why banks place holds on deposited checks under Regulation CC in three concise bullet points."*
+> **Demonstration Prompt**: *"Customer ticket: User states their account transfer of $15,000 from external credit union is delayed past 2 business days. How should we advise them regarding clearance and compliance?"*
 
 ### 1. SmolLM2-135M (In-Browser Edge Tier)
-* **Response Output**:
-  ```text
-  [POLICY_REG_CC_APPLIED]
-  • Funds Availability Timelines: Financial institutions may delay availability up to two business days for local checks and seven business days for non-local checks under Expedited Funds Availability Act statutory rules.
-  • Statutory Exception Dollar Holds: Immediate availability applies to the first $225 of daily check deposits, while large deposits exceeding $5,525 qualify for exception hold extensions.
-  • Fraud and Solvency Safeguards: Holds protect financial institutions against unpaid returned items, uncollected funds risk, and account overdraft exposure during interbank clearing.
-  ```
-* **Response Character**: Concise and direct; strictly adheres to the 3-bullet constraint.
-* **Latency**: <150 ms in-browser (WASM/WebGPU) or on edge CPU.
-* **Crucial Domain Accuracy Finding (The 2025/2026 Inflation Update)**:
-  - SmolLM2 cited **\$225** (next-day availability) and **\$5,525** (large deposit threshold).
-  - *Statutory Truth*: Under the joint CFPB and Federal Reserve Board final rule effective **July 1, 2025** (12 CFR Part 229 inflation adjustment), these thresholds were raised to **\$275** and **\$6,725**.
-  - *Engineering Insight*: SmolLM2's output reflects historical pre-2025 data memorized during pre-training. This highlights a fundamental LLM reality: **foundation models carry outdated statutory cutoffs out-of-the-box**. FTaaS exists specifically to inject updated, enforceable corporate policy rules via fine-tuning without retraining from scratch.
+* **Response Character**: Concise and direct; outputs structured template response with compliance tags.
+* **Inference Latency**: Under 150 ms in-browser (WASM/WebGPU) or on edge CPU.
+* **Regulatory Invariant Note**: The platform uses fine-tuning to inject compliance notices (e.g. Regulation CC hold policies and FinCEN monitoring notices). As statutory thresholds change (such as the CFPB and Federal Reserve Board inflation adjustments under 12 CFR Part 229 effective July 1, 2025), fine-tuned adapters ensure models output legally updated rules without full foundation re-training.
 
 ### 2. Gemma 2 2B IT (Server Reasoning Tier)
 * **Response Character**: Formal, highly detailed, and authoritative; provides legal precision and settlement mechanics.
-* **Accuracy**: Explains check clearinghouse settlement processes, funds availability schedules, and exception hold guidelines.
-* **Latency**: ~1.2s on dedicated GPU (~11.8s total generation on 8-core CPU generating 120 tokens at 11.1 t/s plus prefill).
-* **Limitation**: Requires substantial RAM (5.2 GB FP16) and GPU compute for conversational throughput.
+* **Accuracy**: Explains interbank settlement processes, funds availability schedules, and exception hold guidelines.
+* **Limitation**: Requires substantial RAM (5.2 GB FP16) and GPU compute for conversational throughput on CPU.
 
 ### 3. BitNet b1.58 2B-4T (Commodity CPU Tier)
 * **Throughput & Efficiency**: 23.5 tokens/sec CPU decode (107 t/s prefill) with 2.41B parameter capacity at only 1.10 GB RAM footprint.
-* **Raw Foundation Behavior (Pre-Fine-Tuning)**:
-  - *Empirical Generation*: `Assistant: Inlining have used in have used in have used in have used in...` (Loops repetitive n-grams when prompted for conversational bullet lists).
-  - *Root Cause*: Pre-trained across 4 trillion tokens strictly for causal sequence continuation. Lacks instruction fine-tuning or conversational RLHF alignment out-of-the-box.
-* **LoRA Fine-Tuned Behavior (Post-FTaaS Domain Adaptation)**:
-  - *Response Character*: Adapts to structured regulatory key-value completions (`SENTIMENT`, `METRICS`, `ANALYSIS`) using the native `User: <prompt>\nAssistant: ` template.
-  - *Latency*: ~1.5s total generation on CPU (generating 35 concise tokens at 23.5 t/s).
-  - *Precision Critical Finding*: Fine-tuning requires `float32` on Apple Metal to avoid numerical gradient underflow in the ternary weight-unpacking kernels.
-* **Enterprise FTaaS Fit**: Validates the core FTaaS value proposition for ternary edge hardware: provides 2.4B reasoning capacity at zero GPU egress cost, with LoRA bridging the raw foundation model gap into strict enterprise compliance schemas.
+* **Instruction Alignment & Sampling**: Microsoft's model card indicates that BitNet b1.58 2B-4T underwent pre-training, SFT, and DPO. In early raw CLI testing without explicit chat templates or repetition penalties, repetitive n-gram continuation loops were observed. Applying the structured ChatML/BitNet template (`User: <prompt>\nAssistant: `) and proper sampling in the C++ engine resolves this continuation behavior.
+* **LoRA Fine-Tuning**: Fine-tuning verified on Metal in `float32`, producing a 15.26 MB adapter that structures output into enterprise compliance key-value schemas.
+* **Enterprise FTaaS Fit**: Demonstrates feasibility for ternary edge hardware: provides 2.4B capacity on commodity CPU hardware without cloud GPU egress cost.
 
 ---
 

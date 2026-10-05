@@ -108,16 +108,16 @@ def main():
         comp_content = comp_path.read_text(encoding="utf-8")
         # Replace the BitNet column in table (Section 3)
         new_table_col = (
-            f"| Attribute                | SmolLM2-135M (Baseline)    | Gemma 2 2B IT (Live Run)   | BitNet b1.58 2B-4T  |\n"
-            f"| :----------------------- | :------------------------- | :------------------------- | :------------------ |\n"
-            f"| Training Steps           | 75 steps (3 epochs)        | 30 steps (3 epochs)        | {total_steps} steps (3 epochs) |\n"
-            f"| Target Projection Layers | q_proj, v_proj             | q_proj, v_proj, k_proj, o  | q_proj, v_proj, k, o|\n"
-            f"| LoRA Rank (r) / Alpha    | 8 / 32                     | 8 / 32                     | 8 / 32              |\n"
-            f"| Exported Adapter Size    | 1.84 MB                    | 12.21 MB                   | {adapter_size_mb:.2f} MB            |\n"
-            f"| Training Device          | macOS Metal (MPS)          | macOS Metal (MPS float16)  | macOS Metal (MPS f32|\n"
-            f"| Training Wall-Clock Time | 2m 14s (134s)              | 7m 03s (423s)              | {dur_mins}m {dur_secs}s ({duration:.0f}s)     |\n"
-            f"| Step Loss Progression    | 1.8540 -> 0.3120 (-83.2%)  | 12.1813 -> 11.4547 (-6.0%) | 4.8921 -> {final_loss:.4f}    |\n"
-            f"| MLflow Experiment Run    | smollm-prod-baseline       | a3f2e22c38cb4514...        | {run_id[:16]}... |\n"
+            f"| Attribute | SmolLM2-135M (Baseline) | Gemma 2 2B IT (Live Run) | BitNet b1.58 2B-4T |\n"
+            f"| :--- | :--- | :--- | :--- |\n"
+            f"| Training Steps | 75 steps (3 epochs) | 30 steps (3 epochs) | {total_steps} steps (3 epochs) |\n"
+            f"| Target Projection Layers | q_proj, v_proj | q_proj, v_proj, k_proj, o_proj | q_proj, v_proj, k_proj, o_proj |\n"
+            f"| LoRA Rank (r) / Alpha | 8 / 32 | 8 / 32 | 8 / 32 |\n"
+            f"| Exported Adapter Size | 1.84 MB | 12.21 MB | {adapter_size_mb:.2f} MB |\n"
+            f"| Training Device | macOS Metal (MPS) | macOS Metal (MPS float16) | macOS Metal (MPS float32) |\n"
+            f"| Training Wall-Clock Time | 2m 14s (134s) | 7m 03s (423s) | {dur_mins}m {dur_secs}s ({duration:.0f}s) |\n"
+            f"| Step Loss Progression | 1.8540 -> 0.3120 | 12.1813 -> 11.4547 | 4.8921 -> {final_loss:.4f} |\n"
+            f"| MLflow Experiment Run | `smollm-prod-baseline` | `a3f2e22c38cb4514...` | `{run_id[:16]}...` |\n"
         )
         table_pattern = r"\| Attribute\s+\| SmolLM2-135M \(Baseline\).*?\| MLflow Experiment Run.*?\n"
         if re.search(table_pattern, comp_content, flags=re.DOTALL):
@@ -127,14 +127,9 @@ def main():
         sec_4_3_replacement = (
             f"### 3. BitNet b1.58 2B-4T (Commodity CPU Tier)\n"
             f"* **Throughput & Efficiency**: 23.5 tokens/sec CPU decode (107 t/s prefill) with 2.41B parameter capacity at only 1.10 GB RAM footprint.\n"
-            f"* **Raw Foundation Behavior (Pre-Fine-Tuning)**:\n"
-            f"  - *Empirical Generation*: `Assistant: Inlining have used in have used in have used in have used in...` (Loops repetitive n-grams when prompted for conversational bullet lists).\n"
-            f"  - *Root Cause*: Pre-trained across 4 trillion tokens strictly for causal sequence continuation. Lacks instruction fine-tuning or conversational RLHF alignment out-of-the-box.\n"
-            f"* **LoRA Fine-Tuned Behavior (Post-FTaaS Domain Adaptation)**:\n"
-            f"  - *Response Character*: Adapts to structured regulatory key-value completions (`SENTIMENT`, `METRICS`, `ANALYSIS`) using the native `User: <prompt>\\nAssistant: ` template.\n"
-            f"  - *Latency*: ~1.5s total generation on CPU (generating 35 concise tokens at 23.5 t/s).\n"
-            f"  - *Precision Critical Finding*: Fine-tuning requires `float32` on Apple Metal to avoid numerical gradient underflow in the ternary weight-unpacking kernels.\n"
-            f"* **Enterprise FTaaS Fit**: Validates the core FTaaS value proposition for ternary edge hardware: provides 2.4B reasoning capacity at zero GPU egress cost, with LoRA bridging the raw foundation model gap into strict enterprise compliance schemas.\n"
+            f"* **Instruction Alignment & Sampling**: Microsoft's model card indicates that BitNet b1.58 2B-4T underwent pre-training, SFT, and DPO. In early raw CLI testing without explicit chat templates or repetition penalties, repetitive n-gram continuation loops were observed. Applying the structured ChatML/BitNet template (`User: <prompt>\\nAssistant: `) and proper sampling in the C++ engine resolves this continuation behavior.\n"
+            f"* **LoRA Fine-Tuning**: Fine-tuning verified on Metal in `float32`, producing a {adapter_size_mb:.2f} MB adapter that structures output into enterprise compliance key-value schemas.\n"
+            f"* **Enterprise FTaaS Fit**: Demonstrates feasibility for ternary edge hardware: provides 2.4B capacity on commodity CPU hardware without cloud GPU egress cost.\n"
         )
         sec_4_3_pattern = r"### 3\. BitNet b1\.58 2B-4T \(.*?\)\n.*?(?=\n## 5\. Enterprise Architectural Decision Matrix)"
         if re.search(sec_4_3_pattern, comp_content, flags=re.DOTALL):
