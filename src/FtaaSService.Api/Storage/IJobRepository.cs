@@ -9,4 +9,5 @@ public interface IJobRepository
     Task<FinetuneJob?> GetByIdAsync(string id, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<FinetuneJob>> ListAsync(int limit = 50, CancellationToken cancellationToken = default);
     Task<bool> UpdateStatusIdempotentAsync(JobUpdatedEvent update, CancellationToken cancellationToken = default);
+    Task<IReadOnlyDictionary<string, int>> GetJobCountsByStatusAsync(CancellationToken cancellationToken = default);
 }

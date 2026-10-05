@@ -77,6 +77,19 @@ class StatusReportingCallback(TrainerCallback):
                 logger.warning(f"Error executing status reporting callback: {ex}")
 
 
+def create_instruction_mask(input_ids: list[int], prompt_len: int, attention_mask: list[int]) -> list[int]:
+    """
+    For Causal LM instruction tuning, labels are input_ids with prompt tokens
+    and padding tokens masked as -100 so loss is computed solely on the assistant completion.
+    Using attention_mask to identify padding prevents masking legitimate EOS tokens
+    when pad_token_id == eos_token_id.
+    """
+    return [
+        token_id if (j >= prompt_len and attention_mask[j] == 1) else -100
+        for j, token_id in enumerate(input_ids)
+    ]
+
+
 def train_job(
     job_id: str,
     job_name: str,
@@ -238,18 +251,11 @@ def train_job(
                 truncation=True,
                 max_length=256
             )
-            # For Causal LM instruction tuning, labels are input_ids with prompt tokens
-            # and padding tokens masked as -100 so loss is computed solely on the assistant completion.
-            # Using attention_mask to identify padding prevents masking legitimate EOS tokens
-            # when pad_token_id == eos_token_id.
             labels = []
             for i, input_id_seq in enumerate(tokenized["input_ids"]):
                 prompt_len = len(prompt_tokenized["input_ids"][i])
                 att_mask = tokenized["attention_mask"][i]
-                seq_labels = [
-                    token_id if (j >= prompt_len and att_mask[j] == 1) else -100
-                    for j, token_id in enumerate(input_id_seq)
-                ]
+                seq_labels = create_instruction_mask(input_id_seq, prompt_len, att_mask)
                 labels.append(seq_labels)
             tokenized["labels"] = labels
             return tokenized

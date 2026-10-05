@@ -1,76 +1,107 @@
+import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 from fastapi import HTTPException
+
+# Ensure inference directory is in sys.path
+inference_dir = Path(__file__).resolve().parent.parent / "src" / "FtaaSService.Inference"
+sys.path.insert(0, str(inference_dir))
+
+import app
+
 
 class TestAdapterIntegrity(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.data_root = Path(self.temp_dir.name)
+        self.orig_data_root = app.DATA_ROOT
+        app.DATA_ROOT = self.data_root
+        app.model_store.adapter_cache.clear()
 
     def tearDown(self):
+        app.DATA_ROOT = self.orig_data_root
+        app.model_store.adapter_cache.clear()
         self.temp_dir.cleanup()
 
-    def test_truncated_config_rejected(self):
-        adapter_dir = self.data_root / "adapters" / "job-truncated-config" / "model_adapters"
+    def test_truncated_config_rejected_by_production_loader(self):
+        """Exercises app.load_or_get_adapter() asserting it rejects truncated configs with HTTP 422."""
+        adapter_rel = "artifacts/job-truncated-config/model_adapters"
+        adapter_dir = self.data_root / adapter_rel
         adapter_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Zero-byte config
         (adapter_dir / "adapter_config.json").write_text("")
         (adapter_dir / "adapter_model.safetensors").write_bytes(b"x" * (150 * 1024))
 
-        # Check trainer integrity rule
-        config_file = adapter_dir / "adapter_config.json"
-        self.assertTrue(config_file.stat().st_size < 10)
+        with self.assertRaises(HTTPException) as ctx:
+            app.load_or_get_adapter(adapter_rel)
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertIn("missing or zero-byte adapter_config.json", str(ctx.exception.detail))
 
-    def test_truncated_weights_rejected(self):
-        adapter_dir = self.data_root / "adapters" / "job-truncated-weights" / "model_adapters"
+    def test_truncated_weights_rejected_by_production_loader(self):
+        """Exercises app.load_or_get_adapter() asserting it rejects <100KB weights with HTTP 422."""
+        adapter_rel = "artifacts/job-truncated-weights/model_adapters"
+        adapter_dir = self.data_root / adapter_rel
         adapter_dir.mkdir(parents=True, exist_ok=True)
 
-        (adapter_dir / "adapter_config.json").write_text('{"peft_type": "LORA"}')
+        (adapter_dir / "adapter_config.json").write_text(json.dumps({
+            "base_model_name_or_path": app.DEFAULT_BASE_MODEL,
+            "peft_type": "LORA"
+        }))
         # Only 500 bytes (incomplete/corrupted write)
         (adapter_dir / "adapter_model.safetensors").write_bytes(b"x" * 500)
 
-        weights_file = adapter_dir / "adapter_model.safetensors"
-        self.assertTrue(weights_file.stat().st_size < 100 * 1024)
+        with self.assertRaises(HTTPException) as ctx:
+            app.load_or_get_adapter(adapter_rel)
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertIn("truncated (<100KB)", str(ctx.exception.detail))
 
-    def test_valid_weights_pass_threshold(self):
-        adapter_dir = self.data_root / "adapters" / "job-valid" / "model_adapters"
-        adapter_dir.mkdir(parents=True, exist_ok=True)
+    def test_missing_adapter_raises_404(self):
+        """Exercises app.load_or_get_adapter() asserting it returns HTTP 404 for missing directories."""
+        with self.assertRaises(HTTPException) as ctx:
+            app.load_or_get_adapter("artifacts/non-existent-job/model_adapters")
+        self.assertEqual(ctx.exception.status_code, 404)
 
-        (adapter_dir / "adapter_config.json").write_text('{"peft_type": "LORA", "r": 8}')
-        # 1.8 MB standard SmolLM2 LoRA adapter
-        (adapter_dir / "adapter_model.safetensors").write_bytes(b"0" * (1800 * 1024))
+    @patch("app.PeftModel.from_pretrained")
+    def test_lru_cache_eviction_on_production_model_store(self, mock_from_pretrained):
+        """Validates that app.model_store.adapter_cache bounds entries to MAX_CACHED_ADAPTERS and evicts LRU."""
+        mock_model = MagicMock()
+        mock_model.to.return_value = mock_model
+        mock_model.eval.return_value = mock_model
+        mock_from_pretrained.return_value = mock_model
 
-        config_file = adapter_dir / "adapter_config.json"
-        weights_file = adapter_dir / "adapter_model.safetensors"
+        capacity = app.MAX_CACHED_ADAPTERS
+        # Create capacity + 1 valid adapter directories
+        for i in range(1, capacity + 2):
+            rel = f"artifacts/job-{i}/model_adapters"
+            ad = self.data_root / rel
+            ad.mkdir(parents=True, exist_ok=True)
+            (ad / "adapter_config.json").write_text(json.dumps({
+                "base_model_name_or_path": app.DEFAULT_BASE_MODEL,
+                "peft_type": "LORA"
+            }))
+            (ad / "adapter_model.safetensors").write_bytes(b"A" * (120 * 1024))
 
-        self.assertGreaterEqual(config_file.stat().st_size, 10)
-        self.assertGreaterEqual(weights_file.stat().st_size, 100 * 1024)
+        # Mount capacity adapters (filling cache capacity)
+        for i in range(1, capacity + 1):
+            app.load_or_get_adapter(f"artifacts/job-{i}/model_adapters")
+        self.assertEqual(len(app.model_store.adapter_cache), capacity)
+        self.assertIn("artifacts/job-1/model_adapters", app.model_store.adapter_cache)
 
-    def test_lru_cache_eviction_order(self):
-        from collections import OrderedDict
-        cache = OrderedDict()
-        max_cached = 3
+        # Access adapter 1 so it becomes most recently used
+        app.load_or_get_adapter("artifacts/job-1/model_adapters")
 
-        # Insert 3 items
-        for i in range(1, 4):
-            cache[f"adapter_{i}"] = f"model_{i}"
-        
-        self.assertEqual(list(cache.keys()), ["adapter_1", "adapter_2", "adapter_3"])
+        # Mount (capacity + 1)th adapter -> should evict adapter 2 (since adapter 1 was accessed recently)
+        app.load_or_get_adapter(f"artifacts/job-{capacity + 1}/model_adapters")
+        self.assertEqual(len(app.model_store.adapter_cache), capacity)
+        self.assertNotIn("artifacts/job-2/model_adapters", app.model_store.adapter_cache)
+        self.assertIn("artifacts/job-1/model_adapters", app.model_store.adapter_cache)
+        self.assertIn(f"artifacts/job-{capacity + 1}/model_adapters", app.model_store.adapter_cache)
 
-        # Access adapter_1 (moves to most recently used)
-        cache.move_to_end("adapter_1")
-        self.assertEqual(list(cache.keys()), ["adapter_2", "adapter_3", "adapter_1"])
-
-        # Add 4th item -> adapter_2 should be evicted as LRU
-        if len(cache) >= max_cached:
-            evicted, _ = cache.popitem(last=False)
-            self.assertEqual(evicted, "adapter_2")
-        cache["adapter_4"] = "model_4"
-
-        self.assertEqual(list(cache.keys()), ["adapter_3", "adapter_1", "adapter_4"])
 
 if __name__ == "__main__":
     unittest.main()

@@ -70,5 +70,63 @@ class TestLifecycleTelemetry(unittest.TestCase):
             logger.removeHandler(handler)
             logger.setLevel(prev_level)
 
+    def test_w3c_traceparent_extracted_and_linked_to_span(self):
+        """Verifies that W3C traceparent headers can be extracted and linked to child lifecycle spans."""
+        from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+        import opentelemetry.trace as trace
+
+        carrier = {
+            "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+        }
+        ctx = TraceContextTextMapPropagator().extract(carrier)
+        self.assertIsNotNone(ctx)
+
+        # Call emit_lifecycle_span with parent_context
+        emit_lifecycle_span(
+            span_name="job.consumed",
+            job_id="job-w3c-test",
+            status="Consumed",
+            attributes={"base_model": "HuggingFaceTB/SmolLM2-135M"},
+            parent_context=ctx
+        )
+
+    def test_job_failed_lifecycle_span_scrubs_attributes(self):
+        """Verifies that job.failed span allows 'error' attribute while scrubbing sensitive payload data."""
+        logged_messages = []
+
+        class TestHandler(logging.Handler):
+            def emit(self, record):
+                logged_messages.append(record.getMessage())
+
+        logger = logging.getLogger("FtaaSService.Worker.Consumer")
+        prev_level = logger.level
+        logger.setLevel(logging.INFO)
+        handler = TestHandler()
+        logger.addHandler(handler)
+
+        try:
+            emit_lifecycle_span(
+                span_name="job.failed",
+                job_id="job-err-1",
+                status="Failed",
+                attributes={
+                    "error": "CUDA out of memory",
+                    "secret_user_key": "sk-12345"
+                }
+            )
+
+            span_msg = next(msg for msg in logged_messages if "[TELEMETRY_SPAN] job.failed" in msg)
+            json_part = span_msg.split("::", 1)[1].strip()
+            data = json.loads(json_part)
+
+            self.assertEqual(data["job_id"], "job-err-1")
+            self.assertEqual(data["status"], "Failed")
+            self.assertEqual(data["error"], "CUDA out of memory")
+            self.assertEqual(data["secret_user_key"], "[REDACTED_NOT_IN_ALLOWLIST]")
+
+        finally:
+            logger.removeHandler(handler)
+            logger.setLevel(prev_level)
+
 if __name__ == '__main__':
     unittest.main()

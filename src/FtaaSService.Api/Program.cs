@@ -41,6 +41,7 @@ using (var scope = app.Services.CreateScope())
 
 // Map Endpoints
 app.MapHealthEndpoints();
+app.MapMetricsEndpoints();
 app.MapGroup("/api/v1/jobs").MapJobEndpoints();
 app.MapGroup("/api/v1/inference").MapInferenceEndpoints();
 app.MapGroup("/api/v1/studio").MapStudioEndpoints();

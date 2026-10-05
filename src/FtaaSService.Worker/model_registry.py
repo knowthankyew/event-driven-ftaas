@@ -16,6 +16,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Optional
 
 import torch
@@ -205,6 +206,19 @@ def preflight_check(model_id: str) -> dict:
                 "Set the HF_TOKEN environment variable before starting the worker, "
                 "and ensure you have accepted the license at huggingface.co/google/gemma-2-2b-it."
             )
+
+    # Air-gap / Zero-egress offline verification
+    if os.getenv("OFFLINE_MODE", "false").lower() in ("true", "1", "yes"):
+        from huggingface_hub import try_to_load_from_cache
+        try:
+            cached_config = try_to_load_from_cache(model_id, "config.json")
+            if cached_config is None and not Path(model_id).exists():
+                warnings.append(
+                    f"OFFLINE_MODE enabled: Model '{model_id}' is not cached locally on disk. "
+                    "Outbound network egress to huggingface.co is prohibited."
+                )
+        except Exception:
+            pass
 
     if warnings:
         combined = " | ".join(warnings)

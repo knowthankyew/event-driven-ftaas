@@ -24,17 +24,34 @@ from trainer import train_job
 
 logger = logging.getLogger("FtaaSService.Worker.Consumer")
 
+# OpenTelemetry Setup & W3C Trace Context Propagation
+try:
+    from opentelemetry import trace
+    from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.resources import Resource
+
+    if not isinstance(trace.get_tracer_provider(), TracerProvider):
+        resource = Resource.create({"service.name": "ftaas-worker"})
+        trace.set_tracer_provider(TracerProvider(resource=resource))
+    tracer = trace.get_tracer("FtaaSService.Worker")
+    HAS_OTEL = True
+except Exception:
+    HAS_OTEL = False
+    tracer = None
+
 SAFE_ALLOWLIST_KEYS = {
     "job_id", "status", "duration_sec", "base_model", "dataset_hash",
     "dataset_relative_path", "current_step", "total_steps", "steps",
     "progress_pct", "loss", "final_loss", "device", "adapter_path",
-    "adapter_size_bytes", "exchange", "routing_key", "action"
+    "adapter_size_bytes", "exchange", "routing_key", "action", "error"
 }
 
-def emit_lifecycle_span(span_name: str, job_id: str, status: str, duration_sec: float = 0.0, attributes: dict = None):
+def emit_lifecycle_span(span_name: str, job_id: str, status: str, duration_sec: float = 0.0, attributes: dict = None, parent_context=None):
     """
     Emits payload-scrubbed OpenTelemetry-style lifecycle span.
     Uses a strict allowlist. Any key not in SAFE_ALLOWLIST_KEYS is redacted by default.
+    Also creates a real OpenTelemetry span if the SDK is active.
     """
     clean_attrs = {
         "job_id": job_id,
@@ -48,6 +65,20 @@ def emit_lifecycle_span(span_name: str, job_id: str, status: str, duration_sec: 
                 clean_attrs[k] = "[REDACTED_NOT_IN_ALLOWLIST]"
                 continue
             clean_attrs[k] = v
+
+    # Record real OpenTelemetry span if available
+    if HAS_OTEL and tracer:
+        try:
+            span = tracer.start_span(span_name, context=parent_context)
+            for k, v in clean_attrs.items():
+                if isinstance(v, (int, float, bool)):
+                    span.set_attribute(k, v)
+                else:
+                    span.set_attribute(k, str(v))
+            span.end()
+        except Exception as otel_ex:
+            logger.debug(f"OpenTelemetry span record skipped: {otel_ex}")
+
     logger.info(f"[TELEMETRY_SPAN] {span_name} :: {json.dumps(clean_attrs)}")
 
 class JobConsumer:
@@ -55,6 +86,8 @@ class JobConsumer:
         self.connection = None
         self.channel = None
         self.sequence_map = {}
+        self.current_context = None
+        self.current_traceparent = None
 
     def get_connection(self):
         credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
@@ -102,6 +135,10 @@ class JobConsumer:
             "updatedAt": datetime.now(timezone.utc).isoformat()
         }
 
+        headers = {}
+        if self.current_traceparent:
+            headers["traceparent"] = self.current_traceparent
+
         try:
             self.channel.basic_publish(
                 exchange=EXCHANGE_NAME,
@@ -110,7 +147,8 @@ class JobConsumer:
                 properties=pika.BasicProperties(
                     content_type="application/json",
                     delivery_mode=2,
-                    correlation_id=job_id
+                    correlation_id=job_id,
+                    headers=headers if headers else None
                 )
             )
             logger.info(f"Published status [{status}] (seq={seq}, progress={progress_pct}%) for Job {job_id}")
@@ -120,6 +158,22 @@ class JobConsumer:
     def on_message(self, ch, method, properties, body):
         job_id = None
         started_at = datetime.now(timezone.utc).isoformat()
+
+        # Extract W3C trace context if present
+        carrier = {}
+        if properties and getattr(properties, "headers", None):
+            for k, v in properties.headers.items():
+                carrier[k] = v.decode("utf-8") if isinstance(v, bytes) else str(v)
+
+        extracted_ctx = None
+        traceparent_header = carrier.get("traceparent")
+        if HAS_OTEL and carrier:
+            try:
+                extracted_ctx = TraceContextTextMapPropagator().extract(carrier)
+            except Exception:
+                pass
+        self.current_context = extracted_ctx
+        self.current_traceparent = traceparent_header
 
         try:
             message = json.loads(body.decode("utf-8"))
@@ -134,7 +188,7 @@ class JobConsumer:
             emit_lifecycle_span("job.consumed", job_id, "Consumed", attributes={
                 "base_model": base_model,
                 "dataset_hash": dataset_hash
-            })
+            }, parent_context=self.current_context)
 
             # 1. Notify that training has started
             self.publish_status_update(
@@ -146,7 +200,7 @@ class JobConsumer:
             emit_lifecycle_span("job.training.started", job_id, "Training", attributes={
                 "device": str(DEVICE),
                 "base_model": base_model
-            })
+            }, parent_context=self.current_context)
 
             # 2. Define throttled progress callback
             def handle_progress(step: int, total_steps: int, loss: float, progress_pct: float):
@@ -176,7 +230,7 @@ class JobConsumer:
                 "steps": result["totalSteps"],
                 "final_loss": result["finalLoss"],
                 "device": str(DEVICE)
-            })
+            }, parent_context=self.current_context)
 
             # Calculate adapter directory size in bytes without inspecting file content
             adapter_size_bytes = 0
@@ -190,7 +244,7 @@ class JobConsumer:
             emit_lifecycle_span("job.registered", job_id, "Succeeded", attributes={
                 "adapter_path": result["adapterPath"],
                 "adapter_size_bytes": adapter_size_bytes
-            })
+            }, parent_context=self.current_context)
 
             # 4. Notify success
             finished_at = datetime.now(timezone.utc).isoformat()
@@ -234,6 +288,9 @@ class JobConsumer:
                     started_at=started_at,
                     finished_at=finished_at
                 )
+                emit_lifecycle_span("job.failed", job_id, "Failed", attributes={
+                    "error": str(ex)
+                }, parent_context=self.current_context)
 
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
             logger.warning(f"Rejected terminal failure for Job {job_id} -> routed to DLQ.")

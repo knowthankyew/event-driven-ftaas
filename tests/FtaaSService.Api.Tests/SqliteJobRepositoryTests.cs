@@ -169,4 +169,56 @@ public class SqliteJobRepositoryTests : IDisposable
         var finalJob = await _repository.GetByIdAsync("job-term-test");
         Assert.Equal(JobStatus.Succeeded, finalJob!.Status);
     }
+
+    [Fact]
+    public async Task GetJobCountsByStatusAsync_ReturnsAccurateCounts()
+    {
+        await _repository.InitializeAsync();
+
+        var job1 = new FinetuneJob
+        {
+            Id = "job-cnt-1",
+            JobName = "cnt-1",
+            Status = JobStatus.Queued,
+            BaseModel = "SmolLM2",
+            DatasetPath = "p.jsonl",
+            DatasetHash = "h",
+            HyperparametersJson = "{}",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        var job2 = new FinetuneJob
+        {
+            Id = "job-cnt-2",
+            JobName = "cnt-2",
+            Status = JobStatus.Succeeded,
+            BaseModel = "SmolLM2",
+            DatasetPath = "p.jsonl",
+            DatasetHash = "h",
+            HyperparametersJson = "{}",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        var job3 = new FinetuneJob
+        {
+            Id = "job-cnt-3",
+            JobName = "cnt-3",
+            Status = JobStatus.Succeeded,
+            BaseModel = "SmolLM2",
+            DatasetPath = "p.jsonl",
+            DatasetHash = "h",
+            HyperparametersJson = "{}",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+
+        await _repository.CreateAsync(job1);
+        await _repository.CreateAsync(job2);
+        await _repository.CreateAsync(job3);
+
+        var counts = await _repository.GetJobCountsByStatusAsync();
+        Assert.Equal(1, counts["Queued"]);
+        Assert.Equal(2, counts["Succeeded"]);
+        Assert.False(counts.ContainsKey("Failed"));
+    }
 }

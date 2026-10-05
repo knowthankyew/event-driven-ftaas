@@ -58,6 +58,27 @@ public static class HealthEndpoints
                 }
             }
 
+            // 3. Dead-Letter Queue (DLQ) Monitoring
+            if (checks.TryGetValue("rabbitmq", out var rStatus) && rStatus == "Healthy")
+            {
+                try
+                {
+                    var dlqCount = await eventPublisher.GetDlqMessageCountAsync(cancellationToken);
+                    if (dlqCount > 0)
+                    {
+                        checks["dlq"] = $"Warning: {dlqCount} message(s) in dead-letter queue";
+                    }
+                    else
+                    {
+                        checks["dlq"] = "Healthy (0 messages)";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    checks["dlq"] = $"Unavailable: {ex.Message}";
+                }
+            }
+
             var result = new
             {
                 status = healthy ? "Healthy" : "Degraded",

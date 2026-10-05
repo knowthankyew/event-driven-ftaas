@@ -231,10 +231,10 @@ public static class JobEndpoints
         };
     }
 
-    private static bool IsValidJobId(string id) =>
+    internal static bool IsValidJobId(string id) =>
         !string.IsNullOrWhiteSpace(id) && Regex.IsMatch(id, "^[a-zA-Z0-9_-]+$");
 
-    private static async Task<IResult> GetEdgeExportStatusAsync(
+    internal static async Task<IResult> GetEdgeExportStatusAsync(
         string id,
         [FromServices] IJobRepository jobRepository,
         [FromServices] IConfiguration configuration,
@@ -267,14 +267,14 @@ public static class JobEndpoints
         var json = await File.ReadAllTextAsync(manifestPath, cancellationToken);
         var manifest = JsonSerializer.Deserialize<JsonElement>(json);
         return Results.Ok(new 
-        { 
-            jobId = id, 
-            status = "Exported", 
-            manifest = manifest 
-        });
+            { 
+                jobId = id, 
+                status = "Exported", 
+                manifest = manifest 
+            });
     }
 
-    private static async Task<IResult> TriggerEdgeExportAsync(
+    internal static async Task<IResult> TriggerEdgeExportAsync(
         string id,
         [FromServices] IJobRepository jobRepository,
         [FromServices] IConfiguration configuration,

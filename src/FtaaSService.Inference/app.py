@@ -7,7 +7,7 @@ from typing import Optional, Dict
 from contextlib import asynccontextmanager
 
 import torch
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import transformers.pytorch_utils
@@ -75,6 +75,25 @@ class ModelStore:
     adapter_cache: OrderedDict[str, PeftModel] = OrderedDict()
 
 model_store = ModelStore()
+
+class InferenceMetrics:
+    def __init__(self):
+        self.start_time = time.time()
+        self.requests_total = {
+            "compare": {"success": 0, "error": 0},
+            "generate": {"success": 0, "error": 0}
+        }
+        self.latency_sum_ms = {"compare": 0.0, "generate": 0.0}
+        self.latency_count = {"compare": 0, "generate": 0}
+
+    def record_request(self, endpoint: str, status: str, latency_ms: float = 0.0):
+        if endpoint in self.requests_total:
+            self.requests_total[endpoint][status] = self.requests_total[endpoint].get(status, 0) + 1
+            if status == "success":
+                self.latency_sum_ms[endpoint] += latency_ms
+                self.latency_count[endpoint] += 1
+
+metrics = InferenceMetrics()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -274,45 +293,157 @@ def healthz():
         "chatTemplate": _chat_template,
     }
 
+@app.get("/metrics")
+def get_metrics():
+    uptime = time.time() - metrics.start_time
+    cached_adapters = len(model_store.adapter_cache)
+    base_loaded = 1 if ((model_store.is_bitnet and is_bitnet_available()) or (model_store.base_model is not None)) else 0
+
+    lines = [
+        "# HELP ftaas_inference_uptime_seconds Total runtime of inference service in seconds.",
+        "# TYPE ftaas_inference_uptime_seconds gauge",
+        f"ftaas_inference_uptime_seconds {uptime:.2f}",
+        "",
+        "# HELP ftaas_inference_cached_adapters Current number of LoRA adapters cached in memory.",
+        "# TYPE ftaas_inference_cached_adapters gauge",
+        f"ftaas_inference_cached_adapters {cached_adapters}",
+        "",
+        "# HELP ftaas_inference_max_cached_adapters Maximum capacity of the LRU adapter cache.",
+        "# TYPE ftaas_inference_max_cached_adapters gauge",
+        f"ftaas_inference_max_cached_adapters {MAX_CACHED_ADAPTERS}",
+        "",
+        "# HELP ftaas_inference_base_model_loaded Whether base model is pre-warmed and ready in memory (1=loaded, 0=unloaded).",
+        "# TYPE ftaas_inference_base_model_loaded gauge",
+        f'ftaas_inference_base_model_loaded{{model="{DEFAULT_BASE_MODEL}"}} {base_loaded}',
+        "",
+        "# HELP ftaas_inference_requests_total Total inference requests processed by endpoint and status.",
+        "# TYPE ftaas_inference_requests_total counter",
+    ]
+    for ep, status_dict in metrics.requests_total.items():
+        for st, count in status_dict.items():
+            lines.append(f'ftaas_inference_requests_total{{endpoint="{ep}",status="{st}"}} {count}')
+
+    lines.extend([
+        "",
+        "# HELP ftaas_inference_latency_ms_sum Total accumulated inference latency in milliseconds.",
+        "# TYPE ftaas_inference_latency_ms_sum counter",
+    ])
+    for ep, lat_sum in metrics.latency_sum_ms.items():
+        lines.append(f'ftaas_inference_latency_ms_sum{{endpoint="{ep}"}} {lat_sum:.2f}')
+
+    lines.extend([
+        "",
+        "# HELP ftaas_inference_latency_ms_count Count of measured requests for latency calculation.",
+        "# TYPE ftaas_inference_latency_ms_count counter",
+    ])
+    for ep, count in metrics.latency_count.items():
+        lines.append(f'ftaas_inference_latency_ms_count{{endpoint="{ep}"}} {count}')
+
+    lines.append("")
+    return Response(content="\n".join(lines), media_type="text/plain; version=0.0.4; charset=utf-8")
+
 @app.post("/api/v1/inference/compare")
 def compare_completions(req: CompareRequest):
-    target_base = req.baseModel or DEFAULT_BASE_MODEL
+    try:
+        target_base = req.baseModel or DEFAULT_BASE_MODEL
 
-    # Route 1: Native BitNet C++ runtime
-    if is_bitnet_model(target_base):
-        if not is_bitnet_available():
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "BitNet C++ native runtime is not available on this host. "
-                    "Check BITNET_CLI_PATH and BITNET_MODEL_PATH."
+        # Route 1: Native BitNet C++ runtime
+        if is_bitnet_model(target_base):
+            if not is_bitnet_available():
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        "BitNet C++ native runtime is not available on this host. "
+                        "Check BITNET_CLI_PATH and BITNET_MODEL_PATH."
+                    )
                 )
+            if not req.adapterPath:
+                raise HTTPException(
+                    status_code=400,
+                    detail="adapterPath is required for side-by-side comparison"
+                )
+
+            # 1. Base model completion via C++ engine
+            base_completion, base_latency = generate_bitnet_sync(
+                req.prompt,
+                req.maxTokens,
+                req.temperature
             )
+
+            # 2. Fine-tuned adapter completion
+            full_adapter_path = str(DATA_ROOT / req.adapterPath)
+            fine_tuned_completion, fine_tuned_latency = generate_bitnet_sync(
+                req.prompt,
+                req.maxTokens,
+                req.temperature,
+                adapter_path=full_adapter_path
+            )
+
+            metrics.record_request("compare", "success", max(base_latency, fine_tuned_latency))
+            return {
+                "jobId": req.jobId,
+                "baseModel": target_base,
+                "adapterPath": req.adapterPath,
+                "prompt": req.prompt,
+                "baseCompletion": base_completion,
+                "fineTunedCompletion": fine_tuned_completion,
+                "latencyMs": {
+                    "baseModel": base_latency,
+                    "fineTuned": fine_tuned_latency
+                }
+            }
+
+        # Route 2: Standard PyTorch HuggingFace runtime
+        if not model_store.base_model or not model_store.tokenizer:
+            raise HTTPException(status_code=503, detail="Model is still loading.")
+
+        # Guard: if req.baseModel is specified and doesn't match loaded PyTorch model, reject with 409
+        if target_base != DEFAULT_BASE_MODEL:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "base_model_mismatch",
+                    "message": (
+                        f"Requested base model '{target_base}' does not match "
+                        f"loaded inference model '{DEFAULT_BASE_MODEL}'."
+                    ),
+                    "adapterBaseModel": target_base,
+                    "loadedBaseModel": DEFAULT_BASE_MODEL,
+                    "hint": f"Restart the inference service with BASE_MODEL_NAME={target_base}",
+                }
+            )
+
+        # 1. Generate with raw Base Model
+        base_completion, base_latency = generate_tokens(
+            model_store.base_model,
+            model_store.tokenizer,
+            req.prompt,
+            req.maxTokens,
+            req.temperature,
+            base_model_id=DEFAULT_BASE_MODEL
+        )
+
+        # 2. Generate with Fine-Tuned LoRA Adapter
         if not req.adapterPath:
             raise HTTPException(
                 status_code=400,
                 detail="adapterPath is required for side-by-side comparison"
             )
 
-        # 1. Base model completion via C++ engine
-        base_completion, base_latency = generate_bitnet_sync(
-            req.prompt,
-            req.maxTokens,
-            req.temperature
-        )
-
-        # 2. Fine-tuned adapter completion
-        full_adapter_path = str(DATA_ROOT / req.adapterPath)
-        fine_tuned_completion, fine_tuned_latency = generate_bitnet_sync(
+        peft_model = load_or_get_adapter(req.adapterPath)
+        fine_tuned_completion, fine_tuned_latency = generate_tokens(
+            peft_model,
+            model_store.tokenizer,
             req.prompt,
             req.maxTokens,
             req.temperature,
-            adapter_path=full_adapter_path
+            base_model_id=DEFAULT_BASE_MODEL
         )
 
+        metrics.record_request("compare", "success", max(base_latency, fine_tuned_latency))
         return {
             "jobId": req.jobId,
-            "baseModel": target_base,
+            "baseModel": DEFAULT_BASE_MODEL,
             "adapterPath": req.adapterPath,
             "prompt": req.prompt,
             "baseCompletion": base_completion,
@@ -322,88 +453,56 @@ def compare_completions(req: CompareRequest):
                 "fineTuned": fine_tuned_latency
             }
         }
-
-    # Route 2: Standard PyTorch HuggingFace runtime
-    if not model_store.base_model or not model_store.tokenizer:
-        raise HTTPException(status_code=503, detail="Model is still loading.")
-
-    # Guard: if req.baseModel is specified and doesn't match loaded PyTorch model, reject with 409
-    if target_base != DEFAULT_BASE_MODEL:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error": "base_model_mismatch",
-                "message": (
-                    f"Requested base model '{target_base}' does not match "
-                    f"loaded inference model '{DEFAULT_BASE_MODEL}'."
-                ),
-                "adapterBaseModel": target_base,
-                "loadedBaseModel": DEFAULT_BASE_MODEL,
-                "hint": f"Restart the inference service with BASE_MODEL_NAME={target_base}",
-            }
-        )
-
-    # 1. Generate with raw Base Model
-    base_completion, base_latency = generate_tokens(
-        model_store.base_model,
-        model_store.tokenizer,
-        req.prompt,
-        req.maxTokens,
-        req.temperature,
-        base_model_id=DEFAULT_BASE_MODEL
-    )
-
-    # 2. Generate with Fine-Tuned LoRA Adapter
-    if not req.adapterPath:
-        raise HTTPException(
-            status_code=400,
-            detail="adapterPath is required for side-by-side comparison"
-        )
-
-    peft_model = load_or_get_adapter(req.adapterPath)
-    fine_tuned_completion, fine_tuned_latency = generate_tokens(
-        peft_model,
-        model_store.tokenizer,
-        req.prompt,
-        req.maxTokens,
-        req.temperature,
-        base_model_id=DEFAULT_BASE_MODEL
-    )
-
-    return {
-        "jobId": req.jobId,
-        "baseModel": DEFAULT_BASE_MODEL,
-        "adapterPath": req.adapterPath,
-        "prompt": req.prompt,
-        "baseCompletion": base_completion,
-        "fineTunedCompletion": fine_tuned_completion,
-        "latencyMs": {
-            "baseModel": base_latency,
-            "fineTuned": fine_tuned_latency
-        }
-    }
+    except Exception:
+        metrics.record_request("compare", "error")
+        raise
 
 @app.post("/api/v1/inference/generate")
 def generate(req: GenerateRequest):
-    target_base = req.baseModel or DEFAULT_BASE_MODEL
+    try:
+        target_base = req.baseModel or DEFAULT_BASE_MODEL
 
-    # Route 1: Native BitNet C++ runtime
-    if is_bitnet_model(target_base):
-        if not is_bitnet_available():
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "BitNet C++ native runtime is not available on this host. "
-                    "Check BITNET_CLI_PATH and BITNET_MODEL_PATH."
+        # Route 1: Native BitNet C++ runtime
+        if is_bitnet_model(target_base):
+            if not is_bitnet_available():
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        "BitNet C++ native runtime is not available on this host. "
+                        "Check BITNET_CLI_PATH and BITNET_MODEL_PATH."
+                    )
                 )
+            full_adapter = str(DATA_ROOT / req.adapterPath) if req.adapterPath else None
+            completion, latency = generate_bitnet_sync(
+                req.prompt,
+                req.maxTokens,
+                req.temperature,
+                adapter_path=full_adapter
             )
-        full_adapter = str(DATA_ROOT / req.adapterPath) if req.adapterPath else None
-        completion, latency = generate_bitnet_sync(
+            metrics.record_request("generate", "success", latency)
+            return {
+                "baseModel": target_base,
+                "adapterPath": req.adapterPath,
+                "prompt": req.prompt,
+                "completion": completion,
+                "latencyMs": latency
+            }
+
+        # Route 2: Standard PyTorch HuggingFace runtime
+        if not model_store.base_model or not model_store.tokenizer:
+            raise HTTPException(status_code=503, detail="Model is still loading.")
+
+        model = load_or_get_adapter(req.adapterPath) if req.adapterPath else model_store.base_model
+        completion, latency = generate_tokens(
+            model,
+            model_store.tokenizer,
             req.prompt,
             req.maxTokens,
             req.temperature,
-            adapter_path=full_adapter
+            base_model_id=DEFAULT_BASE_MODEL
         )
+
+        metrics.record_request("generate", "success", latency)
         return {
             "baseModel": target_base,
             "adapterPath": req.adapterPath,
@@ -411,28 +510,9 @@ def generate(req: GenerateRequest):
             "completion": completion,
             "latencyMs": latency
         }
-
-    # Route 2: Standard PyTorch HuggingFace runtime
-    if not model_store.base_model or not model_store.tokenizer:
-        raise HTTPException(status_code=503, detail="Model is still loading.")
-
-    model = load_or_get_adapter(req.adapterPath) if req.adapterPath else model_store.base_model
-    completion, latency = generate_tokens(
-        model,
-        model_store.tokenizer,
-        req.prompt,
-        req.maxTokens,
-        req.temperature,
-        base_model_id=DEFAULT_BASE_MODEL
-    )
-
-    return {
-        "baseModel": target_base,
-        "adapterPath": req.adapterPath,
-        "prompt": req.prompt,
-        "completion": completion,
-        "latencyMs": latency
-    }
+    except Exception:
+        metrics.record_request("generate", "error")
+        raise
 
 if __name__ == "__main__":
     import uvicorn

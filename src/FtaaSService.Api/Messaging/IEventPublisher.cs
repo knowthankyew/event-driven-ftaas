@@ -6,4 +6,6 @@ public interface IEventPublisher
 {
     bool IsConnected { get; }
     Task PublishJobRequestedAsync(JobRequestedEvent @event, CancellationToken cancellationToken = default);
+    Task<uint> GetDlqMessageCountAsync(CancellationToken cancellationToken = default);
 }
+

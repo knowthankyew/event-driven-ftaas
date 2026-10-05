@@ -194,6 +194,14 @@ class TestPreflightCheck(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertIn("HF_TOKEN", result["warning"])
 
+    def test_offline_mode_warns_when_model_not_cached(self):
+        """When OFFLINE_MODE is set and model is not locally cached, preflight_check should warn."""
+        with patch.dict(os.environ, {"OFFLINE_MODE": "true"}):
+            with patch("huggingface_hub.try_to_load_from_cache", return_value=None):
+                result = preflight_check(SMOLLM2)
+        self.assertFalse(result["passed"])
+        self.assertIn("OFFLINE_MODE", result["warning"])
+
     def test_unknown_model_raises_in_preflight(self):
         with self.assertRaises(ValueError):
             preflight_check("not/a-real-model")

@@ -16,4 +16,8 @@
     <ProjectReference Include="..\..\..\privacy-telemetry\packages\KnowThankYew.Privacy.Telemetry\KnowThankYew.Privacy.Telemetry.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="FtaaSService.Api.Tests" />
+  </ItemGroup>
+
 </Project>

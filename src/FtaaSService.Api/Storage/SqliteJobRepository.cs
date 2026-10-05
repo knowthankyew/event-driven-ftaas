@@ -207,6 +207,16 @@ public sealed class SqliteJobRepository : IJobRepository
         return affected > 0;
     }
 
+    public async Task<IReadOnlyDictionary<string, int>> GetJobCountsByStatusAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+
+        const string sql = "SELECT status, COUNT(*) as count FROM jobs GROUP BY status;";
+        var results = await connection.QueryAsync<(string Status, int Count)>(sql);
+        return results.ToDictionary(r => r.Status, r => r.Count, StringComparer.OrdinalIgnoreCase);
+    }
+
     private static FinetuneJob MapToEntity(JobDbRecord r)
     {
         return new FinetuneJob

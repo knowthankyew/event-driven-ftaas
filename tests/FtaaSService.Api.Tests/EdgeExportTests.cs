@@ -1,6 +1,10 @@
 using System.Text.Json;
 using FtaaSService.Api.Domain;
+using FtaaSService.Api.Endpoints;
+using FtaaSService.Api.Services;
 using FtaaSService.Api.Storage;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -11,6 +15,7 @@ public class EdgeExportTests : IDisposable
     private readonly string _testDir;
     private readonly SqliteJobRepository _repository;
     private readonly IConfiguration _configuration;
+    private readonly IFtaasTelemetry _telemetry;
 
     public EdgeExportTests()
     {
@@ -25,6 +30,7 @@ public class EdgeExportTests : IDisposable
             .Build();
 
         _repository = new SqliteJobRepository(_configuration, NullLogger<SqliteJobRepository>.Instance);
+        _telemetry = new FtaasTelemetry(_configuration);
     }
 
     public void Dispose()
@@ -35,14 +41,56 @@ public class EdgeExportTests : IDisposable
         }
     }
 
+    [Theory]
+    [InlineData("../../etc/passwd", false)]
+    [InlineData("job;rm -rf /", false)]
+    [InlineData("../job-1", false)]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    [InlineData("job-valid-123_abc", true)]
+    [InlineData("2b743de541b04cff857d3c2f238b4cd6", true)]
+    public void JobIdValidation_InvokesProductionValidator_RejectsPathTraversalAndSpecialChars(string jobId, bool expectedValid)
+    {
+        // Tests the real production validator on JobEndpoints directly
+        bool isValid = JobEndpoints.IsValidJobId(jobId);
+        Assert.Equal(expectedValid, isValid);
+    }
+
     [Fact]
-    public async Task EdgeExportManifest_ContainsRequiredFields_AndZeroEgressFlag()
+    public async Task GetEdgeExportStatus_ReturnsNotExported_WhenManifestDoesNotExist()
     {
         await _repository.InitializeAsync();
 
         var job = new FinetuneJob
         {
-            Id = "job-edge-1",
+            Id = "job-edge-not-exported",
+            JobName = "test-job",
+            Status = JobStatus.Succeeded,
+            BaseModel = "HuggingFaceTB/SmolLM2-135M",
+            DatasetPath = "datasets/test.jsonl",
+            DatasetHash = "hash123",
+            HyperparametersJson = "{}",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        await _repository.CreateAsync(job);
+
+        var result = await JobEndpoints.GetEdgeExportStatusAsync(job.Id, _repository, _configuration, CancellationToken.None);
+        Assert.NotNull(result);
+
+        // Expect NotFound result with status NotExported
+        var notFoundResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        Assert.Equal(StatusCodes.Status404NotFound, notFoundResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetEdgeExportStatus_ReturnsExportedWithManifest_WhenExportExistsOnDisk()
+    {
+        await _repository.InitializeAsync();
+
+        var job = new FinetuneJob
+        {
+            Id = "job-edge-exported-ok",
             JobName = "lease-semantic-v1",
             Status = JobStatus.Succeeded,
             BaseModel = "HuggingFaceTB/SmolLM2-135M",
@@ -52,16 +100,15 @@ public class EdgeExportTests : IDisposable
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
-
         await _repository.CreateAsync(job);
 
         // Prepare simulated edge_onnx artifacts
-        var edgeDir = Path.Combine(_testDir, "artifacts", "job-edge-1", "edge_onnx");
+        var edgeDir = Path.Combine(_testDir, "artifacts", job.Id, "edge_onnx");
         Directory.CreateDirectory(edgeDir);
 
         var manifestObj = new
         {
-            jobId = "job-edge-1",
+            jobId = job.Id,
             modelName = "ftaas-edge-job-edge",
             baseModel = "HuggingFaceTB/SmolLM2-135M",
             architecture = "CausalLM",
@@ -81,50 +128,96 @@ public class EdgeExportTests : IDisposable
         var manifestPath = Path.Combine(edgeDir, "edge_model_manifest.json");
         await File.WriteAllTextAsync(manifestPath, manifestJson);
 
-        Assert.True(File.Exists(manifestPath));
-        var readContent = await File.ReadAllTextAsync(manifestPath);
-        using var doc = JsonDocument.Parse(readContent);
-        var root = doc.RootElement;
-
-        Assert.Equal("job-edge-1", root.GetProperty("jobId").GetString());
-        Assert.Equal("HuggingFaceTB/SmolLM2-135M", root.GetProperty("baseModel").GetString());
-        Assert.Equal("q4", root.GetProperty("quantization").GetString());
-        Assert.True(root.GetProperty("zeroEgressInvariant").GetBoolean());
-        
-        var providers = root.GetProperty("supportedExecutionProviders");
-        Assert.Equal(2, providers.GetArrayLength());
-        Assert.Equal("webgpu", providers[0].GetString());
-        Assert.Equal("wasm", providers[1].GetString());
-    }
-
-    [Theory]
-    [InlineData("../../etc/passwd", false)]
-    [InlineData("job;rm -rf /", false)]
-    [InlineData("../job-1", false)]
-    [InlineData("", false)]
-    [InlineData("   ", false)]
-    [InlineData("job-valid-123_abc", true)]
-    [InlineData("2b743de541b04cff857d3c2f238b4cd6", true)]
-    public void JobIdValidation_RejectsPathTraversalAndSpecialChars(string jobId, bool expectedValid)
-    {
-        bool isValid = !string.IsNullOrWhiteSpace(jobId) && 
-                       System.Text.RegularExpressions.Regex.IsMatch(jobId, "^[a-zA-Z0-9_-]+$");
-        Assert.Equal(expectedValid, isValid);
+        // Invoke production endpoint handler
+        var result = await JobEndpoints.GetEdgeExportStatusAsync(job.Id, _repository, _configuration, CancellationToken.None);
+        var okResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        Assert.Equal(StatusCodes.Status200OK, okResult.StatusCode);
     }
 
     [Fact]
-    public void EdgeExportManifest_SupportsFp32AccurateQuantization()
+    public async Task TriggerEdgeExport_RejectsNonSucceededJob_WithBadRequest()
     {
-        var manifestObj = new
+        await _repository.InitializeAsync();
+
+        var queuedJob = new FinetuneJob
         {
-            jobId = "job-fp32-1",
+            Id = "job-edge-still-training",
+            JobName = "training-job",
+            Status = JobStatus.Training,
+            BaseModel = "HuggingFaceTB/SmolLM2-135M",
+            DatasetPath = "datasets/job.jsonl",
+            DatasetHash = "hash123",
+            HyperparametersJson = "{}",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        await _repository.CreateAsync(queuedJob);
+
+        var result = await JobEndpoints.TriggerEdgeExportAsync(
+            queuedJob.Id,
+            _repository,
+            _configuration,
+            _telemetry,
+            CancellationToken.None);
+
+        var badRequestResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task TriggerEdgeExport_RejectsInvalidJobIdFormat_WithBadRequest()
+    {
+        var result = await JobEndpoints.TriggerEdgeExportAsync(
+            "../../etc/passwd",
+            _repository,
+            _configuration,
+            _telemetry,
+            CancellationToken.None);
+
+        var badRequestResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task TriggerEdgeExport_ReturnsExported_WhenExistingOnnxModelPresent()
+    {
+        await _repository.InitializeAsync();
+
+        var job = new FinetuneJob
+        {
+            Id = "job-edge-cached-onnx",
+            JobName = "cached-job",
+            Status = JobStatus.Succeeded,
+            BaseModel = "HuggingFaceTB/SmolLM2-135M",
+            DatasetPath = "datasets/cached.jsonl",
+            DatasetHash = "hash123",
+            HyperparametersJson = "{}",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        await _repository.CreateAsync(job);
+
+        var edgeDir = Path.Combine(_testDir, "artifacts", job.Id, "edge_onnx");
+        Directory.CreateDirectory(edgeDir);
+
+        var manifestJson = JsonSerializer.Serialize(new
+        {
+            jobId = job.Id,
             quantization = "fp32",
             zeroEgressInvariant = true
-        };
+        });
+        await File.WriteAllTextAsync(Path.Combine(edgeDir, "edge_model_manifest.json"), manifestJson);
+        // Write mock model.onnx > 1024 bytes
+        await File.WriteAllBytesAsync(Path.Combine(edgeDir, "model.onnx"), new byte[2048]);
 
-        var json = JsonSerializer.Serialize(manifestObj);
-        using var doc = JsonDocument.Parse(json);
-        Assert.Equal("fp32", doc.RootElement.GetProperty("quantization").GetString());
-        Assert.True(doc.RootElement.GetProperty("zeroEgressInvariant").GetBoolean());
+        var result = await JobEndpoints.TriggerEdgeExportAsync(
+            job.Id,
+            _repository,
+            _configuration,
+            _telemetry,
+            CancellationToken.None);
+
+        var okResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        Assert.Equal(StatusCodes.Status200OK, okResult.StatusCode);
     }
 }

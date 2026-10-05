@@ -59,6 +59,13 @@ def get_torch_device() -> torch.device:
 
 DEVICE = get_torch_device()
 
+# Air-Gap / Zero-Egress Offline Mode
+OFFLINE_MODE = os.getenv("OFFLINE_MODE", "false").lower() in ("true", "1", "yes")
+if OFFLINE_MODE:
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    os.environ["HF_DATASETS_OFFLINE"] = "1"
+
 # Configure Logging
 logging.basicConfig(
     level=logging.INFO,

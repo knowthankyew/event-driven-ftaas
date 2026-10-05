@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using FtaaSService.Api.Domain;
@@ -90,11 +91,34 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
         var payload = JsonSerializer.Serialize(@event);
         var body = Encoding.UTF8.GetBytes(payload);
 
+        var currentActivity = Activity.Current;
+        string traceparent;
+        if (currentActivity != null && !string.IsNullOrEmpty(currentActivity.Id))
+        {
+            traceparent = currentActivity.Id;
+        }
+        else
+        {
+            var traceId = ActivityTraceId.CreateRandom().ToHexString();
+            var spanId = ActivitySpanId.CreateRandom().ToHexString();
+            traceparent = $"00-{traceId}-{spanId}-01";
+        }
+
+        var headers = new Dictionary<string, object?>
+        {
+            ["traceparent"] = Encoding.UTF8.GetBytes(traceparent)
+        };
+        if (!string.IsNullOrEmpty(currentActivity?.TraceStateString))
+        {
+            headers["tracestate"] = Encoding.UTF8.GetBytes(currentActivity.TraceStateString);
+        }
+
         var props = new BasicProperties
         {
             CorrelationId = @event.JobId,
             ContentType = "application/json",
-            DeliveryMode = DeliveryModes.Persistent
+            DeliveryMode = DeliveryModes.Persistent,
+            Headers = headers
         };
 
         await _channel!.BasicPublishAsync(
@@ -108,6 +132,13 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
 
         _logger.LogInformation("Published JobRequestedEvent for Job {JobId} to routing key {Key}",
             @event.JobId, _config.JobRequestedRoutingKey);
+    }
+
+    public async Task<uint> GetDlqMessageCountAsync(CancellationToken cancellationToken = default)
+    {
+        await EnsureChannelAsync(cancellationToken);
+        var ok = await _channel!.QueueDeclarePassiveAsync(_config.DlxQueue, cancellationToken);
+        return ok.MessageCount;
     }
 
     public async ValueTask DisposeAsync()
