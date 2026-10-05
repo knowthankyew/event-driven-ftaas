@@ -114,8 +114,9 @@ How SmolLM2-135M performs on standardized regulatory compliance prompts:
 
 ### Behavioral Profile Summary
 * **Response Character**: Concise, direct, and tightly constrained to prompt requirements (e.g., adhering strictly to 3 bullet points).
-* **Factual & Tag Accuracy**: Accurately reproduces statutory dollar thresholds (\$225 initial availability, \$5,525 large deposit hold) and reliably emits regulatory tracking tags (`[POLICY_REG_CC_APPLIED]`).
-* **Inference Latency**: Under **150 ms** in-browser or on edge devices; token generation stream feels instantaneous.
+* **Compliance Tagging & Historical Baseline**: Reliably emits regulatory tracking tags (`[POLICY_REG_CC_APPLIED]`) and structured bullet formatting.
+* **The 2025/2026 Statutory Inflation Update**: Note that SmolLM2 cited **\$225** (next-business-day) and **\$5,525** (large deposit exception hold). Under the CFPB/FRB joint final rule effective July 1, 2025 (12 CFR Part 229), these thresholds were inflation-adjusted to **\$275** and **\$6,725**. SmolLM2's output reflects historical pre-2025 web training data, providing a prime empirical demonstration of why enterprise fine-tuning is required: base models carry outdated statutory thresholds that must be updated through domain fine-tuning to remain legally compliant.
+* **Inference Latency**: Under **150 ms** in-browser (WebGPU/WASM) or on edge CPU; token generation feels instantaneous.
 * **Architectural Boundaries**: While superior for tag enforcement and structured classification, SmolLM2-135M lacks the broad reasoning depth and multi-page conversational memory of 2B+ parameter models for complex statutory analysis.
 
 ---

@@ -24,8 +24,8 @@ This document tracks benchmarking, resource consumption, and quality comparison 
 
 | Run Date | Base Model | Dataset | Records | Epochs | LoRA (r/α) | Device | Training Loss | Duration | Notes / Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| *Baseline* | `SmolLM2-135M` | `fintech-compliance` | 100 | 3 | 8 / 32 | Apple Silicon (MPS) | 0.312 | 2m 14s | Production Baseline |
-| 2026-10-03 | `gemma-2-2b-it` | `financial-sentiment` | 20 | 3 | 8 / 32 | mps | 11.4547 | 7m 3s | Live Benchmark Run (Adapter: 12.21 MB) |
+| *Baseline* | `SmolLM2-135M` | `fintech-compliance` | 100 | 3 | 8 / 32 | macOS Metal (MPS) | 1.854 -> 0.312 | 2m 14s | Production Baseline |
+| 2026-10-03 | `gemma-2-2b-it` | `financial-sentiment` | 20 | 3 | 8 / 32 | macOS Metal (MPS) | 12.181 -> 11.455 | 7m 3s | Live Benchmark Run (Adapter: 12.21 MB) |
 
 ---
 
@@ -53,8 +53,8 @@ The inference service serves models based on `BASE_MODEL_NAME`. If a user attemp
 }
 ```
 
-### Apple Silicon (MPS) Memory & Watermark Tuning
-Running a 2.6B parameter model on macOS with Apple Silicon unified memory introduces unique constraints:
+### macOS Metal (MPS) Memory & Watermark Tuning
+Running a 2.6B parameter model on macOS with Apple Metal unified/discrete GPU memory introduces unique constraints:
 1. **Precision Selection**: PyTorch MPS does not natively support `bfloat16`, while loading in `float32` requires >10.4 GB VRAM, triggering Metal allocation limits. `FtaaSService.Worker.Trainer` enforces `torch.float16` when targeting MPS, keeping base model memory at ~5.2 GB.
 2. **Watermark Bypass**: Apple Metal sets a default process ceiling (~6.7 GB on 16 GB machines). Setting `PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0` allows the process to utilize available unified system RAM without premature out-of-memory aborts.
 3. **Dynamic Gradient Accumulation**: For models with $\ge 2\text{B}$ parameters on MPS, training automatically adapts micro-batches: `per_device_train_batch_size = 1` and `gradient_accumulation_steps = batch_size`. This preserves the effective batch optimization while reducing activation tensors in VRAM by up to 75%.

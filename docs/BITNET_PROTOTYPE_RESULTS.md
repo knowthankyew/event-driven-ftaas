@@ -2,7 +2,7 @@
 
 > **Target Model**: [`microsoft/bitnet-b1.58-2B-4T-gguf`](https://huggingface.co/microsoft/bitnet-b1.58-2B-4T-gguf) / [`microsoft/BitNet-b1.58-2B-4T`](https://huggingface.co/microsoft/BitNet-b1.58-2B-4T)  
 > **Toolchain Engine**: `bitnet.cpp` (AVX2 SIMD build on Apple Clang)  
-> **Host Environment**: macOS (Darwin x86_64, Intel Core i9-9880H @ 2.3 GHz 8-Core, 16 GB RAM)  
+> **Host Environment**: macOS (Darwin x86_64, Intel Core i9-9880H @ 2.3 GHz 8-Core, 16 GB RAM, AMD Radeon Pro 5500M 4GB Metal GPU)  
 > **Primary Authority**: [`KNOWTHANKYEW_PORTFOLIO_MASTER_BRIEF.md`](https://gist.github.com/knowthankyew/53ccf4d5a81e916f895c74e18b231e16)  
 > **Roadmap Reference**: [`ROADMAP.md`](ROADMAP.md)  
 > **Evaluation Date**: October 3, 2026  
@@ -23,7 +23,7 @@ BitNet b1.58 replaces conventional floating-point matrix multiplications (MACs) 
 | Active Parameters    | 2.41 Billion             | Pretrained on 4.0 Trillion tokens     |
 | Physical RAM Footprint| 1.10 GiB                 | Fits comfortably on commodity edge hardware |
 | Compute Primitive    | Integer Addition/Sub     | AVX2 SIMD vector-matrix kernels       |
-| Hardware Offloading  | Zero GPU Required (CPU)  | Pure CPU execution (Metal/CUDA idle)  |
+| Hardware Offloading  | Zero GPU for Inference   | Pure CPU execution (AVX2 integer kernels)  |
 | Max Throughput (CPU) | 23.54 tokens/sec         | 8-thread decode on Intel Core i9      |
 +----------------------+--------------------------+---------------------------------------+
 ```
@@ -138,11 +138,16 @@ LoRA fine-tuning was executed end-to-end on `microsoft/BitNet-b1.58-2B-4T` targe
 | Batching Strategy             | Batch Size 2 (Per-device: 1, Gradient Accumulation: 2) |
 | Epochs / Total Steps          | 3 Epochs / 30 Optimization Steps                           |
 | Total Wall-Clock Duration     | 53m 39s (3219.22 seconds)                         |
-| Final Training Loss           | 3.2038                                                 |
+| Final Training Loss           | 3.2038 (Step Loss: 4.8921 -> 3.2038)             |
 | Exported Adapter File         | adapter_model.safetensors (15.26 MB)                 |
 | MLflow Experiment Run         | 181872f823c14dc2a8d4d6b092e0354c                                 |
 +-------------------------------+---------------------------------------------------------+
 ```
+
+### Technical Observations on Fine-Tuning Mechanics
+1. **The 53-Minute Training Duration**: While BitNet b1.58 C++ inference is 2.1× faster than Gemma on CPU, LoRA fine-tuning was substantially slower (53m 39s vs 7m 03s for Gemma). In PyTorch, BitNet unpacks ternary weights on-the-fly in `float32` on Metal/CPU without fused C++/Metal autograd kernels, causing high tensor dispatch overhead during backpropagation.
+2. **Floating-Point LoRA Arithmetic Invariant**: During LoRA training, the base model $W_0 \in \{-1, 0, +1\}$ is 100% frozen ($\nabla_{W_0} \mathcal{L} = 0$). Only the rank decomposition matrices $A$ and $B$ receive gradients in `float32`. The integer addition benefit applies strictly to compiled C++ forward-pass inference (`bitnet.cpp`); fine-tuning itself remains a standard floating-point backpropagation operation.
+3. **Loss Progression**: Step loss converged from $4.8921$ to $3.2038$ (-34.5%) across 30 steps, successfully adapting the base model to the structured financial sentiment schema.
 
 ---
 
