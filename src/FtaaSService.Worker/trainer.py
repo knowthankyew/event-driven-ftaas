@@ -181,10 +181,16 @@ def train_job(
             else:
                 dtype = torch.float32
 
+            extra_model_kwargs = {}
+            if "gemma" in base_model_name.lower():
+                # Gemma 2 soft-capping requires eager attention to prevent loss instability and SDPA numerical degradation
+                extra_model_kwargs["attn_implementation"] = "eager"
+
             model = AutoModelForCausalLM.from_pretrained(
                 base_model_name,
                 torch_dtype=dtype,
-                trust_remote_code=trust_remote
+                trust_remote_code=trust_remote,
+                **extra_model_kwargs
             )
         except OSError as auth_err:
             err_str = str(auth_err)

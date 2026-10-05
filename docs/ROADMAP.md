@@ -53,17 +53,18 @@ flowchart LR
 
 Once a LoRA adapter is trained on top of BitNet, there are two distinct ways to serve it:
 
-#### Paradigm A: Dynamic Parallel Adapter (The FTaaS Multi-Tenant Pattern)
+#### Paradigm A: Dynamic Parallel Adapter (Planned Multi-Tenant Serving Pattern)
 - **How It Works**: The base model stays in memory as pure 2-bit ternary weights. When an inference request arrives, the CPU evaluates the ternary base layer using SIMD integer addition/subtraction, and in parallel runs the tiny $r=8$ or $r=16$ float adapter projection.
-- **Why It's Ideal**:
-  - **Zero Quality Loss**: The floating-point adapter retains continuous nuance (perfect for strict compliance tags and domain jargon).
-  - **Preserves CPU Speed**: 99.5% of the model parameters remain ternary integer additions.
-  - **Instant Hot-Swapping**: Multiple department adapters can be swapped on a single 1.15 GB BitNet base model without reloading weights.
+- **Architectural Design Goals**:
+  - **Continuous Adapter Nuance**: The floating-point adapter retains continuous precision (suited for strict compliance tags and domain schemas).
+  - **Base CPU Efficiency**: Over 99% of base model forward parameters remain ternary integer additions in memory.
+  - **Dynamic Hot-Swapping**: Multiple tenant adapters can be swapped on a single 1.15 GB BitNet base model without reloading base weights.
+- *Serving Note*: The 23.5 t/s decode benchmark measures base GGUF decode in `bitnet.cpp`; serving active adapters in parallel requires runtime support currently being integrated across the dual-backend engine.
 
-#### Paradigm B: Full Weight Merging (The Pure-Ternary Edge Package)
-- **How It Works**: Standard LoRA merges weights by addition: $W_{\text{merged}} = W_0 + \frac{\alpha}{r} BA$. Because $BA$ is continuous float, $W_{\text{merged}}$ is no longer ternary. To restore a single standalone ternary model, the merged matrix is passed through a **Ternary Quantization-Aware re-binning function**:
+#### Paradigm B: Full Weight Merging (Exploratory Experiment: Pure-Ternary Edge Package)
+- **Concept**: Standard LoRA merges weights additively: $W_{\text{merged}} = W_0 + \frac{\alpha}{r} BA$. Because $BA$ is continuous float, $W_{\text{merged}}$ is no longer ternary. An experimental approach is passing the merged matrix through a **Ternary Quantization-Aware re-binning function**:
   $$W_{\text{ternary\_merged}} = \text{Round}\left(\text{Clamp}\left(\frac{W_{\text{merged}}}{\gamma},\; -1,\; +1\right)\right)$$
-- **Trade-Off**: Requires calibration steps to ensure the re-binning does not lose domain accuracy, but yields a standalone, zero-float ternary model.
+- **Experimental Risk**: Because LoRA weight updates $\Delta W$ are typically very small, standard rounding risks obliterating the adapter signal by rounding deltas back to zero. This path remains an exploratory research direction requiring quantization-aware calibration.
 
 ---
 
@@ -84,7 +85,7 @@ Once a LoRA adapter is trained on top of BitNet, there are two distinct ways to 
 
 ### Dense Semantic Embedding Models
 
-| Dimension | `all-MiniLM-L6-v2` | `bge-large-en-v1.5` | `nomic-embed-text-v1.5` | `bitnet-embedding-270m` (Ours) |
+| Dimension | `all-MiniLM-L6-v2` | `bge-large-en-v1.5` | `nomic-embed-text-v1.5` | `bitnet-embedding-270m` (Microsoft / Target) |
 | :--- | :--- | :--- | :--- | :--- |
 | **Weight Precision** | FP32 / FP16 | FP32 / FP16 | Matryoshka FP16 | **1.58-bit Ternary (`I2_S`)** |
 | **Physical RAM** | $\sim 90\text{ MB}$ | $\sim 1.34\text{ GB}$ | $\sim 550\text{ MB}$ | **$\sim 65\text{ MB}$** ⚡ |
@@ -93,6 +94,8 @@ Once a LoRA adapter is trained on top of BitNet, there are two distinct ways to 
 | **Compute Primitive** | Floating-Point MAC | Floating-Point MAC | Floating-Point MAC | **Integer ADD / SUB (SIMD)** |
 | **MTEB Score** | 56.09 | 64.11 | 62.28 | **66.26** |
 | **Zero-Egress Feasibility**| Moderate | Low (Memory heavy) | Moderate | **Ultra-High (Native Sidecar)** |
+
+*Note: Benchmark figures for `microsoft/bitnet-embedding-270m` (including the 66.26 MTEB v2 mean score and 32,768-token context window) are official figures reported by Microsoft Research on the model card.*
 
 ---
 
@@ -148,7 +151,7 @@ flowchart TD
   2. Executed `e2e_benchmark.py` scaling tests across 1, 2, 4, and 8 threads.
   3. Formatted and published comprehensive performance records in [`BITNET_PROTOTYPE_RESULTS.md`](BITNET_PROTOTYPE_RESULTS.md).
 - **Key Empirical Results**:
-  - **Generation Throughput**: 23.50 tokens/sec at $t=8$ (60.6% faster than Gemma 2B FP16 CPU execution).
+  - **Generation Throughput**: 23.54 tokens/sec at $t=8$ (2.1× faster than Gemma 2B FP16 CPU execution at 11.1 t/s).
   - **Prompt Processing (Prefill)**: 107.03 tokens/sec at $t=8$.
   - **Physical RAM Footprint**: 1.10 GiB (78.8% lower than Gemma 2B FP16).
   - **Thermal Envelope**: 74°C under sustained multi-threaded execution.
@@ -160,9 +163,9 @@ flowchart TD
   2. Hardened `src/FtaaSService.Worker/trainer.py` with device casting safety (`float32` MPS execution) to avoid custom BitLinear kernel incompatibilities.
   3. Executed live training run on `datasets/sample-financial-sentiment.jsonl`.
 - **Artifacts & Metrics**:
-  - **MLflow Run ID**: `181872f823c14dc28a16599ef7960ff6`
-  - **Final Training Loss**: $0.4682$
-  - **Trained Adapter Size**: 12.2 MB
+  - **MLflow Run ID**: `181872f823c14dc2a8d4d6b092e0354c`
+  - **Final Training Loss**: $3.2038$ (Step Loss: 4.8921 $\to$ 3.2038)
+  - **Trained Adapter Size**: 15.26 MB (`adapter_model.safetensors`)
 
 #### [x] Phase 5: Multi-Model Catalog & Dynamic Studio UI Integration &mdash; 🟢 COMPLETED
 - **Action**: Surface BitNet b1.58 natively within the FTaaS control plane and interactive studio interface.
@@ -215,8 +218,8 @@ flowchart TD
 - **Action**: Establish rigorous, reproducible domain evaluation benchmarks measuring statutory recall and zero-hallucination fidelity.
 - **Evaluation Criteria**:
   - **Statutory Recall**: Sensitivity to euphemistic dark pattern phrasing (e.g. "continuous benefit program" $\rightarrow$ ROSCA).
-  - **Citation Precision**: $100\%$ factual grounding of legal citations (0% invented statute numbers).
-  - **Comparative Baseline**: Benchmark BitNet 2B-4T + 270M Embed against FP16 baselines (Gemma 2 2B + BGE-large) on fine-print datasets.
+  - **Citation Precision**: Evaluation target of 100% factual legal citation grounding, enforced architecturally by extracting statutory text directly from indexed packs rather than free-form model generation.
+  - **Comparative Baseline**: Benchmark BitNet 2B-4T + 270M Embed against both FP16 baselines (Gemma 2 2B + BGE-large) and 4-bit quantized CPU baselines (Gemma 2 2B `Q4_K_M` via `llama.cpp` + INT8 BGE-large) on fine-print datasets.
 
 #### [ ] Phase 11: Universal Sidecar Protocol & Everyday Hardware Appliance &mdash; 📋 PLANNED
 - **Action**: Package the complete 1-bit stack into an air-gapped, zero-egress local appliance for consumer defense.
@@ -236,7 +239,7 @@ flowchart TD
 | **macOS x86_64 Kernel Mismatch** | `setup_env.py` selecting ARM `tl1` on Intel | Force `-q i2_s` and pass `-DBITNET_X86_TL2=OFF` if targeting standard `i2_s` AVX2. | **Resolved**: AVX2 SIMD compilation verified; 23.5 t/s decode confirmed. |
 | **PyTorch Training Weights vs GGUF** | GGUF is optimized for C++ inference, not PyTorch backprop | Use GGUF for C++ inference; use Hugging Face PyTorch weights (`microsoft/BitNet-b1.58-2B-4T`) for LoRA. | **Resolved**: Dual-representation architecture cleanly implemented across worker and engine. |
 | **Upstream Submodule CMake Path Breaks** | Upstream build scripts assumed external CMake install | Patch CMake target configuration and upstream fixes. | **Resolved**: `microsoft/BitNet#635` and `isHuangXin/llama.cpp#7` submitted and CI validated. |
-| **Inference Engine Backend Disconnect** | Standard PyTorch engine cannot execute 2-bit GGUF files natively | Dual-backend inference routing in FastAPI (`app.py` + `bitnet_engine.py`). | **Resolved**: Native C++ adapter serves GGUF in CPU memory; PyTorch serves FP16 adapters. |
+| **Inference Engine Backend Disconnect** | Standard PyTorch engine cannot execute 2-bit GGUF files natively | Dual-backend inference routing in FastAPI (`app.py` + `bitnet_engine.py`). | **Resolved**: Native C++ adapter serves base GGUF in CPU memory (23.5 t/s); PyTorch serves fine-tuned adapters. |
 | **Embedding Normalization Drift** | Unnormalized dot-products degrade cosine ranking | Enforce EOS pooling with `--embd-normalize 2` in `bitnet.cpp` CLI. | **Mitigation Planned (Phase 8)**: Standardize on unit L2 normalization in C++ wrapper. |
 | **Long-Context Memory Pressure** | 32k context batching could spike memory during prefill | Bound chunk sizing in sidecar to 4,096 tokens per batch for edge devices. | **Mitigation Planned (Phase 8)**: Adaptive chunk batching in `bitnet_engine.py`. |
 
@@ -246,7 +249,7 @@ flowchart TD
 
 This roadmap is an authoritative, version-controlled engineering document tracked within the `ml` repository:
 - **File**: [`docs/ROADMAP.md`](ROADMAP.md)
-- **Repository**: `github.com/knowthankyew/ml` (`origin/main`)
+- **Repository**: `github.com/knowthankyew/event-driven-ftaas` (`origin/main`)
 - **Status**: Tracked & Committed
 - **Related Documents**:
   - Baseline Edge Results: [`SMOL_PROTOTYPE_RESULTS.md`](SMOL_PROTOTYPE_RESULTS.md)

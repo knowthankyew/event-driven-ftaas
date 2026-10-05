@@ -127,7 +127,7 @@ def main():
         sec_4_3_replacement = (
             f"### 3. BitNet b1.58 2B-4T (Commodity CPU Tier)\n"
             f"* **Throughput & Efficiency**: 23.5 tokens/sec CPU decode (107 t/s prefill) with 2.41B parameter capacity at only 1.10 GB RAM footprint.\n"
-            f"* **Instruction Alignment & Sampling**: Microsoft's model card indicates that BitNet b1.58 2B-4T underwent pre-training, SFT, and DPO. In early raw CLI testing without explicit chat templates or repetition penalties, repetitive n-gram continuation loops were observed. Applying the structured ChatML/BitNet template (`User: <prompt>\\nAssistant: `) and proper sampling in the C++ engine resolves this continuation behavior.\n"
+            f"* **Instruction Alignment & Sampling**: Microsoft's model card indicates that BitNet b1.58 2B-4T underwent pre-training, SFT, and DPO. In early raw CLI testing without explicit chat templates or repetition penalties, repetitive n-gram continuation loops were observed. Systematic evaluation across LLaMA 3 chat templates (`tokenizer.apply_chat_template`) and sampling parameters (repetition penalties, top-k/top-p) remains under active investigation.\n"
             f"* **LoRA Fine-Tuning**: Fine-tuning verified on Metal in `float32`, producing a {adapter_size_mb:.2f} MB adapter that structures output into enterprise compliance key-value schemas.\n"
             f"* **Enterprise FTaaS Fit**: Demonstrates feasibility for ternary edge hardware: provides 2.4B capacity on commodity CPU hardware without cloud GPU egress cost.\n"
         )
