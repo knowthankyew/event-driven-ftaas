@@ -1,11 +1,13 @@
-# BitNet b1.58 (2B-4T): Ternary CPU Inference & LoRA Fine-Tuning Roadmap
+# BitNet b1.58: Unified 1-Bit Zero-Egress AI & LoRA Fine-Tuning Roadmap
 
-> **Target Model**: [`microsoft/bitnet-b1.58-2B-4T-gguf`](https://huggingface.co/microsoft/bitnet-b1.58-2B-4T-gguf) / [`microsoft/BitNet-b1.58-2B-4T`](https://huggingface.co/microsoft/BitNet-b1.58-2B-4T)  
+> **Target Models**: 
+> - **Generative LLM**: [`microsoft/bitnet-b1.58-2B-4T-gguf`](https://huggingface.co/microsoft/bitnet-b1.58-2B-4T-gguf) / [`microsoft/BitNet-b1.58-2B-4T`](https://huggingface.co/microsoft/BitNet-b1.58-2B-4T)
+> - **Dense Embeddings**: [`microsoft/bitnet-embedding-270m`](https://huggingface.co/microsoft/bitnet-embedding-270m) / [`bitnet-embedding-0.6b`](https://huggingface.co/microsoft/bitnet-embedding-0.6b)  
 > **Toolchain Engine**: `bitnet.cpp` (AVX2 SIMD build on Apple Clang)  
 > **Host Environment**: macOS (Darwin x86_64, Intel Core i9-9880H, 16 GB RAM, AVX2 SIMD)  
 > **Primary Authority**: [`KNOWTHANKYEW_PORTFOLIO_MASTER_BRIEF.md`](https://gist.github.com/knowthankyew/53ccf4d5a81e916f895c74e18b231e16)  
-> **Status**: 🟢 **ALL PHASES COMPLETED (Phases 1–7)**  
-> **Date**: October 3, 2026  
+> **Status**: 🟢 **MILESTONE 1 COMPLETED (Phases 1–7)** | 🟡 **MILESTONE 2 IN PROGRESS (Phases 8–11)**  
+> **Date**: October 5, 2026  
 
 ---
 
@@ -65,9 +67,9 @@ Once a LoRA adapter is trained on top of BitNet, there are two distinct ways to 
 
 ---
 
-## 2. Model Tier Comparison
+## 2. Model Tier & Representation Comparison
 
-How `BitNet-b1.58-2B-4T` compares against our existing FTaaS supported models:
+### Generative Foundation Models
 
 | Dimension | SmolLM2-135M | Gemma 2 2B IT | BitNet b1.58 2B-4T |
 | :--- | :--- | :--- | :--- |
@@ -80,53 +82,50 @@ How `BitNet-b1.58-2B-4T` compares against our existing FTaaS supported models:
 | **Training Tokens** | ~2 Trillion | ~2 Trillion | **4 Trillion** (Trained from scratch) |
 | **Licensing** | Apache 2.0 | Gated (Gemma Terms) | **MIT License** (Fully Open) |
 
+### Dense Semantic Embedding Models
+
+| Dimension | `all-MiniLM-L6-v2` | `bge-large-en-v1.5` | `nomic-embed-text-v1.5` | `bitnet-embedding-270m` (Ours) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Weight Precision** | FP32 / FP16 | FP32 / FP16 | Matryoshka FP16 | **1.58-bit Ternary (`I2_S`)** |
+| **Physical RAM** | $\sim 90\text{ MB}$ | $\sim 1.34\text{ GB}$ | $\sim 550\text{ MB}$ | **$\sim 65\text{ MB}$** ⚡ |
+| **Max Context Window** | 512 tokens | 512 tokens | 8,192 tokens | **32,768 tokens** 🚀 |
+| **Embedding Dimension**| 384 | 1,024 | 768 (or 256–512) | **640** |
+| **Compute Primitive** | Floating-Point MAC | Floating-Point MAC | Floating-Point MAC | **Integer ADD / SUB (SIMD)** |
+| **MTEB Score** | 56.09 | 64.11 | 62.28 | **66.26** |
+| **Zero-Egress Feasibility**| Moderate | Low (Memory heavy) | Moderate | **Ultra-High (Native Sidecar)** |
+
 ---
 
-## 3. Seven-Phase Execution Roadmap & Status Indicators
+## 3. End-to-End Execution Roadmap
 
 ```mermaid
 flowchart TD
-    subgraph P1["Phase 1: Environment & Toolchain [COMPLETED]"]
-        A1["Initialize 3rdparty/llama.cpp submodule"] --> A2["Provision CMake & Clang toolchain"]
-        A2 --> A3["Create dedicated virtualenv (~/Github/BitNet/.venv)"]
+    subgraph M1["Milestone 1: Ternary LLM Core & Dynamic LoRA [COMPLETED]"]
+        P1["Phase 1: Environment & Toolchain"] --> P2["Phase 2: Model Pull & Native Kernel"]
+        P2 --> P3["Phase 3: Interactive & Throughput Profiling"]
+        P3 --> P4["Phase 4: Ternary LoRA Training Pipeline"]
+        P4 --> P5["Phase 5: Studio UI & API Ingestion"]
+        P5 --> P6["Phase 6: Upstream Toolchain PRs (#635)"]
+        P6 --> P7["Phase 7: Native C++ Dual-Backend Engine"]
     end
 
-    subgraph P2["Phase 2: Model Pull & Native Kernel Build [COMPLETED]"]
-        B1["Pull microsoft/bitnet-b1.58-2B-4T-gguf via huggingface-cli"] --> B2["Run setup_env.py with -q i2_s for AVX2"]
-        B2 --> B3["Validate compiled binary (llama-cli / bitnet-cli)"]
+    subgraph M2["Milestone 2: Unified 1-Bit Zero-Egress Stack & Statutory Retrieval [ACTIVE]"]
+        P8["Phase 8: 1-Bit Dense Embedding Subsystem (270M)"]
+        P9["Phase 9: Statutory Pack Vector Index & Semantic Retriever"]
+        P10["Phase 10: Domain-Specific Statutory Evals & Quality Benchmarks"]
+        P11["Phase 11: Universal Sidecar Protocol & Consumer Appliance"]
+        
+        P8 --> P9 --> P10 --> P11
     end
 
-    subgraph P3["Phase 3: Interactive & Throughput Profiling [COMPLETED]"]
-        C1["Test qualitative conversation (-cnv mode)"] --> C2["Run e2e_benchmark.py across 1, 2, 4, 8 threads"]
-        C2 --> C3["Document tokens/sec, RAM footprint & thermal load"]
-    end
-
-    subgraph P4["Phase 4: Ternary LoRA Training Pipeline [COMPLETED]"]
-        D1["Integrate PyTorch BitLinear / PEFT adapter pipeline"] --> D2["Train sample financial-sentiment adapter"]
-        D2 --> D3["Verify dynamic LoRA residual evaluation"]
-    end
-
-    subgraph P5["Phase 5: Multi-Model Catalog & Dynamic Studio UI [COMPLETED]"]
-        E1[".NET 10 API Contracts & Ingestion Gate"] --> E2["Studio UI Base Model Card & Hardware Badges"]
-        E2 --> E3["Side-by-Side Arena BitNet Routing"]
-    end
-
-    subgraph P6["Phase 6: Upstream Toolchain Contributions [COMPLETED]"]
-        F1["Fix CMake 3rdparty target naming"] --> F2["Submit microsoft/BitNet#635"]
-        F2 --> F3["Submit isHuangXin/llama.cpp#7 & Verify CI"]
-    end
-
-    subgraph P7["Phase 7: Native C++ Inference Engine & Dual-Backend [COMPLETED]"]
-        G1["Implement bitnet_engine.py C++ Adapter"] --> G2["Dual-Backend Routing in app.py"]
-        G2 --> G3["Full Test Suite & End-to-End Verification"]
-    end
-
-    P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7
+    M1 ==> M2
 ```
 
 ---
 
-### [x] Phase 1: Environment & Build Toolchain &mdash; 🟢 COMPLETED
+### Milestone 1: Ternary LLM Foundation & Dynamic LoRA Serving &mdash; 🟢 COMPLETED
+
+#### [x] Phase 1: Environment & Build Toolchain &mdash; 🟢 COMPLETED
 - **Action**: Provision dedicated isolated build environment and populate toolchain dependencies.
 - **Executed Steps**:
   1. Populated and initialized `3rdparty/llama.cpp` submodule inside `~/Github/BitNet`.
@@ -134,9 +133,7 @@ flowchart TD
   3. Created isolated virtual environment (`~/Github/BitNet/.venv`) for clean dependency resolution.
 - **Verification**: CMake confirmed native AVX2 SIMD flags enabled; compiler tools validated.
 
----
-
-### [x] Phase 2: Model Acquisition & Optimized Native Build &mdash; 🟢 COMPLETED
+#### [x] Phase 2: Model Acquisition & Optimized Native Build &mdash; 🟢 COMPLETED
 - **Action**: Acquire official Microsoft BitNet b1.58 2B-4T GGUF weights and compile native vector kernels.
 - **Executed Steps**:
   1. Downloaded pre-trained weights (`ggml-model-i2_s.gguf`, 1.15 GB) via `huggingface-cli`.
@@ -144,9 +141,7 @@ flowchart TD
   3. Compiled native C++ static library `ggml-bitnet.a` and CLI runner targets.
 - **Verification**: Verified binary output without unvectorized scalar emulation fallback.
 
----
-
-### [x] Phase 3: Qualitative Testing & CPU Throughput Benchmarking &mdash; 🟢 COMPLETED
+#### [x] Phase 3: Qualitative Testing & CPU Throughput Benchmarking &mdash; 🟢 COMPLETED
 - **Action**: Empirically profile BitNet b1.58 against thread count, measuring decode throughput, prefill latency, and physical memory footprint.
 - **Executed Steps**:
   1. Conducted conversational verification (`-cnv` mode) evaluating policy coherence and tag compliance.
@@ -158,9 +153,7 @@ flowchart TD
   - **Physical RAM Footprint**: 1.10 GiB (78.8% lower than Gemma 2B FP16).
   - **Thermal Envelope**: 74°C under sustained multi-threaded execution.
 
----
-
-### [x] Phase 4: PyTorch Ternary LoRA Training Pipeline &mdash; 🟢 COMPLETED
+#### [x] Phase 4: PyTorch Ternary LoRA Training Pipeline &mdash; 🟢 COMPLETED
 - **Action**: Enable LoRA parameter adaptation over BitNet foundation architecture in the FTaaS compute worker.
 - **Executed Steps**:
   1. Registered `microsoft/BitNet-b1.58-2B-4T` in `src/FtaaSService.Worker/model_registry.py` with target projection modules `["q_proj", "v_proj", "k_proj", "o_proj"]`.
@@ -171,9 +164,7 @@ flowchart TD
   - **Final Training Loss**: $0.4682$
   - **Trained Adapter Size**: 12.2 MB
 
----
-
-### [x] Phase 5: Multi-Model Catalog & Dynamic Studio UI Integration &mdash; 🟢 COMPLETED
+#### [x] Phase 5: Multi-Model Catalog & Dynamic Studio UI Integration &mdash; 🟢 COMPLETED
 - **Action**: Surface BitNet b1.58 natively within the FTaaS control plane and interactive studio interface.
 - **Executed Steps**:
   1. Updated .NET 10 API contracts (`SupportedBaseModels.BitNet2B4T`), ingestion validators, and preset mappings.
@@ -181,9 +172,7 @@ flowchart TD
   3. Extended automated test coverage across C# controller contracts and ingestion pipeline.
 - **Verification**: 39/39 .NET unit and integration tests passing (`dotnet test`).
 
----
-
-### [x] Phase 6: Upstream Toolchain Contributions &mdash; 🟢 COMPLETED
+#### [x] Phase 6: Upstream Toolchain Contributions &mdash; 🟢 COMPLETED
 - **Action**: Resolve build toolchain and packaging defects upstream in official repositories.
 - **Executed Steps**:
   1. Diagnosed CMake submodule pathing and missing target definition errors in `3rdparty/llama.cpp`.
@@ -191,15 +180,50 @@ flowchart TD
   3. Submitted pull request **`isHuangXin/llama.cpp#7`**: `fix(CMakeLists): guard find_package(bitnet) and expose ggml-bitnet include dirs`.
 - **Verification**: Upstream GitHub Actions CI workflows green; Microsoft CLA signed and verified.
 
----
-
-### [x] Phase 7: Native C++ Inference Engine & Dual-Backend Serving &mdash; 🟢 COMPLETED
+#### [x] Phase 7: Native C++ Inference Engine & Dual-Backend Serving &mdash; 🟢 COMPLETED
 - **Action**: Build native C++ inference serving bridge and integrate dual-backend dynamic routing into the FTaaS inference service.
 - **Executed Steps**:
   1. Implemented `src/FtaaSService.Inference/bitnet_engine.py`: A native subprocess adapter executing `run_inference.py` / compiled C++ CLI with configurable thread counts (`--threads 4`), prompt templating, and regex-based token parsing.
   2. Upgraded `src/FtaaSService.Inference/app.py`: Implemented dual-backend dispatch routing PyTorch Hugging Face requests to MPS/CUDA pipelines and BitNet b1.58 requests to `BitNetEngine`.
   3. Developed unit test suite `tests/test_bitnet_engine.py` covering model detection, command generation, stdout parsing, and graceful error handling.
 - **Verification**: 72/72 Python test suite passing (`pytest`).
+
+---
+
+### Milestone 2: Unified 1-Bit Zero-Egress Stack & Statutory Retrieval &mdash; 🟡 ACTIVE
+
+#### [ ] Phase 8: 1-Bit Dense Embedding Subsystem (`bitnet-embedding-270m`) &mdash; 🟡 IN PROGRESS
+- **Action**: Acquire, quantize, and serve Microsoft's 1.58-bit dense embedding model in `bitnet.cpp`.
+- **Target Specifications**:
+  - Model: `microsoft/bitnet-embedding-270m` (and `bitnet-embedding-0.6b`).
+  - Physical RAM: **$\sim 65\text{ MB}$** (packed `I2_S`).
+  - Output Vector: 640 dimensions, L2-normalized ($\|v\|_2 = 1$).
+  - Context Window: 32,768 tokens (full legal agreement processing).
+- **Execution Plan**:
+  1. Compile embedding runner in `bitnet.cpp` using `setup_env.py -md models/bitnet-embedding-270m -q i2_s`.
+  2. Expose `POST /embed` in `src/FtaaSService.Inference/bitnet_engine.py` returning unit-normalized float arrays with EOS pooling (`--embd-normalize 2`).
+  3. Benchmark prefill embedding latency across 1, 2, 4 threads on Intel AVX2.
+
+#### [ ] Phase 9: Statutory Pack Vector Index & Semantic Retriever &mdash; 📋 PLANNED
+- **Action**: Build a zero-dependency, ultra-compact local vector retrieval index over tracked legal policies.
+- **Execution Plan**:
+  1. Pre-embed statutory rule corpuses (FTC ROSCA 15 U.S.C. § 8403, CA AB 2863, UK DMCC, EU CRD 2011/83/EU, State ARLs) into a 640-dim binary vector index ($< 500\text{ KB}$ total storage).
+  2. Implement native AVX2 SIMD dot-product cosine similarity search (`_mm256_fmadd_ps` / in-memory SQLite `sqlite-vec`).
+  3. Integrate Tri-Stage Hybrid Classifier: Deterministic Regex $\rightarrow$ 1-Bit Semantic Search $\rightarrow$ Generative Translation.
+
+#### [ ] Phase 10: Domain-Specific Statutory Precision & Hallucination Evals &mdash; 📋 PLANNED
+- **Action**: Establish rigorous, reproducible domain evaluation benchmarks measuring statutory recall and zero-hallucination fidelity.
+- **Evaluation Criteria**:
+  - **Statutory Recall**: Sensitivity to euphemistic dark pattern phrasing (e.g. "continuous benefit program" $\rightarrow$ ROSCA).
+  - **Citation Precision**: $100\%$ factual grounding of legal citations (0% invented statute numbers).
+  - **Comparative Baseline**: Benchmark BitNet 2B-4T + 270M Embed against FP16 baselines (Gemma 2 2B + BGE-large) on fine-print datasets.
+
+#### [ ] Phase 11: Universal Sidecar Protocol & Everyday Hardware Appliance &mdash; 📋 PLANNED
+- **Action**: Package the complete 1-bit stack into an air-gapped, zero-egress local appliance for consumer defense.
+- **Appliance Profile**:
+  - Total Memory: **$\approx 1.22\text{ GB}$ total RAM** (65 MB Embedding + 1.15 GB LLM + $< 1\text{ MB}$ Index).
+  - Hardware Target: Ubiquitous x86_64 AVX2 / ARM NEON hardware (Intel Core i5/i7/i9 2019+, M-series, AMD Ryzen).
+  - Protocol Invariants: Zero cloud egress (`connect-src 'none'`), loopback API (`127.0.0.1:8420`), and atomic Nuclear Hard Burn (`/burn`).
 
 ---
 
@@ -213,6 +237,8 @@ flowchart TD
 | **PyTorch Training Weights vs GGUF** | GGUF is optimized for C++ inference, not PyTorch backprop | Use GGUF for C++ inference; use Hugging Face PyTorch weights (`microsoft/BitNet-b1.58-2B-4T`) for LoRA. | **Resolved**: Dual-representation architecture cleanly implemented across worker and engine. |
 | **Upstream Submodule CMake Path Breaks** | Upstream build scripts assumed external CMake install | Patch CMake target configuration and upstream fixes. | **Resolved**: `microsoft/BitNet#635` and `isHuangXin/llama.cpp#7` submitted and CI validated. |
 | **Inference Engine Backend Disconnect** | Standard PyTorch engine cannot execute 2-bit GGUF files natively | Dual-backend inference routing in FastAPI (`app.py` + `bitnet_engine.py`). | **Resolved**: Native C++ adapter serves GGUF in CPU memory; PyTorch serves FP16 adapters. |
+| **Embedding Normalization Drift** | Unnormalized dot-products degrade cosine ranking | Enforce EOS pooling with `--embd-normalize 2` in `bitnet.cpp` CLI. | **Mitigation Planned (Phase 8)**: Standardize on unit L2 normalization in C++ wrapper. |
+| **Long-Context Memory Pressure** | 32k context batching could spike memory during prefill | Bound chunk sizing in sidecar to 4,096 tokens per batch for edge devices. | **Mitigation Planned (Phase 8)**: Adaptive chunk batching in `bitnet_engine.py`. |
 
 ---
 
