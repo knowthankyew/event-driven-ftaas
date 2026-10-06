@@ -9,6 +9,7 @@ import asyncio
 import logging
 import os
 import re
+import sys
 import time
 from pathlib import Path
 from typing import Optional, Tuple
@@ -32,8 +33,18 @@ BITNET_THREADS = int(os.getenv("BITNET_THREADS", "4"))
 BITNET_TIMEOUT_SECONDS = float(os.getenv("BITNET_TIMEOUT_SECONDS", "60.0"))
 DEV_STDIN = Path("/dev/stdin")
 
-# Maximum safe token context length for bitnet-embedding on AVX2 (kernel batch decode ceiling is 256)
-MAX_SAFE_EMBED_TOKENS = int(os.getenv("MAX_SAFE_EMBED_TOKENS", "240"))
+# Maximum safe token context length for bitnet-embedding on AVX2 (kernel batch decode ceiling is 256; clamped at 255)
+MAX_SAFE_EMBED_TOKENS = min(int(os.getenv("MAX_SAFE_EMBED_TOKENS", "240")), 255)
+
+SANDBOX_EXEC_PATH = Path("/usr/bin/sandbox-exec")
+BITNET_SANDBOX_NETWORK_DENY = os.getenv("BITNET_SANDBOX_NETWORK_DENY", "false").lower() in ("true", "1")
+
+
+def wrap_sandboxed_cmd(cmd: list[str]) -> list[str]:
+    """Wrap command with macOS sandbox-exec to kernel-enforce zero network egress if enabled."""
+    if BITNET_SANDBOX_NETWORK_DENY and sys.platform == "darwin" and SANDBOX_EXEC_PATH.is_file():
+        return [str(SANDBOX_EXEC_PATH), "-p", "(version 1)(allow default)(deny network*)"] + cmd
+    return cmd
 
 
 class ContextOverflowError(Exception):
@@ -55,13 +66,13 @@ def count_embed_tokens(prompt: str) -> Optional[int]:
     if not (BITNET_TOKENIZE_CLI_PATH.is_file() and os.access(str(BITNET_TOKENIZE_CLI_PATH), os.X_OK) and BITNET_EMBED_MODEL_PATH.is_file()):
         return None
 
-    cmd = [
+    cmd = wrap_sandboxed_cmd([
         str(BITNET_TOKENIZE_CLI_PATH),
         "-m", str(BITNET_EMBED_MODEL_PATH),
         "--show-count",
         "--stdin",
         "--log-disable"
-    ]
+    ])
     try:
         res = subprocess.run(cmd, input=prompt, capture_output=True, text=True, encoding="utf-8", timeout=5.0)
         if res.returncode == 0:
@@ -78,13 +89,13 @@ async def count_embed_tokens_async(prompt: str) -> Optional[int]:
     if not (BITNET_TOKENIZE_CLI_PATH.is_file() and os.access(str(BITNET_TOKENIZE_CLI_PATH), os.X_OK) and BITNET_EMBED_MODEL_PATH.is_file()):
         return None
 
-    cmd = [
+    cmd = wrap_sandboxed_cmd([
         str(BITNET_TOKENIZE_CLI_PATH),
         "-m", str(BITNET_EMBED_MODEL_PATH),
         "--show-count",
         "--stdin",
         "--log-disable"
-    ]
+    ])
     try:
         proc = await asyncio.wait_for(
             asyncio.create_subprocess_exec(
@@ -137,7 +148,7 @@ def build_bitnet_generate_cmd(
             cmd.extend(["--lora", str(p / "adapter.gguf")])
         else:
             logger.warning(f"Requested adapter at '{adapter_path}' does not contain a GGUF file; running base BitNet")
-    return cmd
+    return wrap_sandboxed_cmd(cmd)
 
 
 def build_bitnet_embed_cmd(
@@ -145,11 +156,11 @@ def build_bitnet_embed_cmd(
     embd_separator: str = "<#sep#>"
 ) -> list[str]:
     """Construct argument list for native llama-embedding inference."""
-    return [
+    cmd = [
         str(BITNET_EMBED_CLI_PATH),
         "-m", str(BITNET_EMBED_MODEL_PATH),
         "-t", str(max(1, BITNET_THREADS)),
-        "-c", "4096",
+        "-c", "512",
         "--pooling", "last",
         "--embd-normalize", "2",
         "--embd-separator", embd_separator,
@@ -157,6 +168,7 @@ def build_bitnet_embed_cmd(
         "-ngl", "0",
         "-f", input_file
     ]
+    return wrap_sandboxed_cmd(cmd)
 
 
 def is_bitnet_model(model_name: Optional[str]) -> bool:
@@ -436,11 +448,18 @@ async def embed_bitnet(prompt: str) -> Tuple[list[float], float]:
 
     # Prevent separator collision from splitting text into multiple vectors
     clean_prompt = prompt.replace("<#sep#>", " ")
+    clean_prompt_bytes = clean_prompt.encode("utf-8")
 
-    # Pre-check token count to prevent kernel SIGSEGV crash on batch decode overflow (>240 tokens)
-    if len(clean_prompt) > 80:
+    # Tokens cannot exceed UTF-8 bytes (each token is at least 1 byte).
+    # Skip tokenization only when byte length <= (MAX_SAFE_EMBED_TOKENS - 2), guaranteeing token count <= 238 <= MAX_SAFE_EMBED_TOKENS.
+    if len(clean_prompt_bytes) > (MAX_SAFE_EMBED_TOKENS - 2):
         token_count = await count_embed_tokens_async(clean_prompt)
-        if token_count is not None and token_count > MAX_SAFE_EMBED_TOKENS:
+        if token_count is None:
+            raise ContextOverflowError(
+                f"Unable to verify token count for prompt exceeding safe byte bound ({len(clean_prompt_bytes)} bytes). "
+                f"Request rejected to mitigate potential kernel memory fault."
+            )
+        if token_count > MAX_SAFE_EMBED_TOKENS:
             raise ContextOverflowError(
                 f"Input prompt ({token_count} tokens) exceeds the maximum supported context limit "
                 f"({MAX_SAFE_EMBED_TOKENS} tokens) for the 1-bit embedding engine."
@@ -526,11 +545,18 @@ def embed_bitnet_sync(prompt: str) -> Tuple[list[float], float]:
 
     # Prevent separator collision from splitting text into multiple vectors
     clean_prompt = prompt.replace("<#sep#>", " ")
+    clean_prompt_bytes = clean_prompt.encode("utf-8")
 
-    # Pre-check token count to prevent kernel SIGSEGV crash on batch decode overflow (>240 tokens)
-    if len(clean_prompt) > 80:
+    # Tokens cannot exceed UTF-8 bytes (each token is at least 1 byte).
+    # Skip tokenization only when byte length <= (MAX_SAFE_EMBED_TOKENS - 2), guaranteeing token count <= 238 <= MAX_SAFE_EMBED_TOKENS.
+    if len(clean_prompt_bytes) > (MAX_SAFE_EMBED_TOKENS - 2):
         token_count = count_embed_tokens(clean_prompt)
-        if token_count is not None and token_count > MAX_SAFE_EMBED_TOKENS:
+        if token_count is None:
+            raise ContextOverflowError(
+                f"Unable to verify token count for prompt exceeding safe byte bound ({len(clean_prompt_bytes)} bytes). "
+                f"Request rejected to mitigate potential kernel memory fault."
+            )
+        if token_count > MAX_SAFE_EMBED_TOKENS:
             raise ContextOverflowError(
                 f"Input prompt ({token_count} tokens) exceeds the maximum supported context limit "
                 f"({MAX_SAFE_EMBED_TOKENS} tokens) for the 1-bit embedding engine."

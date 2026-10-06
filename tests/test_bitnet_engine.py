@@ -9,7 +9,7 @@ import asyncio
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # Ensure worker and inference directories are on sys.path
 worker_dir = Path(__file__).resolve().parent.parent / "src" / "FtaaSService.Worker"
@@ -164,7 +164,28 @@ Assistant: Async generation completed successfully.
         self.assertIn("/dev/stdin", embed_cmd)
         self.assertIn("--embd-separator", embed_cmd)
         self.assertIn("<#sep#>", embed_cmd)
+        self.assertIn("-c", embed_cmd)
+        self.assertIn("512", embed_cmd)
         self.assertNotIn("-p", embed_cmd)
+
+    def test_sandboxed_command_wrapping(self):
+        """Verify wrap_sandboxed_cmd conditionally applies macOS sandbox-exec."""
+        base_cmd = ["llama-cli", "-m", "model.gguf"]
+        # Disabled
+        with patch.object(bitnet_engine, "BITNET_SANDBOX_NETWORK_DENY", False):
+            cmd = bitnet_engine.wrap_sandboxed_cmd(base_cmd)
+            self.assertEqual(cmd, base_cmd)
+
+        # Enabled on darwin
+        mock_sandbox = MagicMock()
+        mock_sandbox.is_file.return_value = True
+        mock_sandbox.__str__.return_value = "/usr/bin/sandbox-exec"
+        with patch.object(bitnet_engine, "BITNET_SANDBOX_NETWORK_DENY", True), \
+             patch("sys.platform", "darwin"), \
+             patch.object(bitnet_engine, "SANDBOX_EXEC_PATH", mock_sandbox):
+            sandboxed = bitnet_engine.wrap_sandboxed_cmd(base_cmd)
+            self.assertEqual(sandboxed[:3], ["/usr/bin/sandbox-exec", "-p", "(version 1)(allow default)(deny network*)"])
+            self.assertEqual(sandboxed[3:], base_cmd)
 
 
 class TestAppRoutingWithBitNet(unittest.TestCase):
@@ -333,6 +354,33 @@ class TestBitNetEmbedding(unittest.TestCase):
         self.assertIn("300 tokens", str(ctx.exception))
         self.assertIn("exceeds the maximum supported context limit", str(ctx.exception))
         mock_run.assert_not_called()
+
+    @patch("bitnet_engine.is_bitnet_embed_available", return_value=True)
+    @patch("bitnet_engine.count_embed_tokens", return_value=None)
+    @patch("subprocess.run")
+    def test_embed_bitnet_precheck_tokenizer_unavailable_fails_closed(self, mock_run, mock_count, _mock_avail):
+        """When byte length exceeds safe bound and tokenizer is unavailable, service must fail closed."""
+        long_prompt = "Federal reserve regulation " * 10
+        with self.assertRaises(bitnet_engine.ContextOverflowError) as ctx:
+            bitnet_engine.embed_bitnet_sync(long_prompt)
+        self.assertIn("Unable to verify token count", str(ctx.exception))
+        mock_run.assert_not_called()
+
+    @patch("bitnet_engine.is_bitnet_embed_available", return_value=True)
+    @patch("bitnet_engine.count_embed_tokens")
+    @patch("subprocess.run")
+    def test_embed_bitnet_short_prompt_skips_tokenizer(self, mock_run, mock_count, _mock_avail):
+        """Prompts with <= 238 UTF-8 bytes mathematically cannot exceed 238 tokens; skip tokenizer."""
+        dummy_vec = [0.1] * 640
+        mock_res = MagicMock()
+        mock_res.returncode = 0
+        mock_res.stdout = f"[[{','.join(map(str, dummy_vec))}]]"
+        mock_run.return_value = mock_res
+
+        short_prompt = "Short query under 238 bytes."
+        vec, _ = bitnet_engine.embed_bitnet_sync(short_prompt)
+        self.assertEqual(len(vec), 640)
+        mock_count.assert_not_called()
 
     @patch("bitnet_engine.is_bitnet_embed_available", return_value=True)
     @patch("asyncio.create_subprocess_exec")
@@ -515,6 +563,25 @@ class TestAppRoutingEmbedding(unittest.TestCase):
                 res_key = client.post("/api/v1/inference/embed", json={"prompt": "hi"}, headers={"Host": "127.0.0.1", "X-API-Key": "secret-test-key"})
                 self.assertEqual(res_key.status_code, 200)
 
+            # 6. Non-ASCII Authorization token returns 401 cleanly without raising TypeError
+            mock_req = MagicMock()
+            mock_req.method = "POST"
+            mock_req.url.path = "/api/v1/inference/embed"
+            mock_req.headers = {"Authorization": "Bearer key-with-accent-é"}
+            mock_next = AsyncMock()
+            res_unicode = asyncio.run(app.verify_api_key_if_configured(mock_req, mock_next))
+            self.assertEqual(res_unicode.status_code, 401)
+
+            # 7. CORS preflight (OPTIONS) without Authorization header succeeds
+            res_opt = client.options("/api/v1/inference/embed", headers={
+                "Host": "127.0.0.1",
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "Authorization,Content-Type"
+            })
+            self.assertEqual(res_opt.status_code, 200)
+            self.assertEqual(res_opt.headers.get("access-control-allow-origin"), "http://localhost:3000")
+
     def test_healthz_telemetry_sanitized(self):
         res = app.healthz()
         bitnet_info = res["bitnet"]
@@ -525,6 +592,11 @@ class TestAppRoutingEmbedding(unittest.TestCase):
         self.assertIn("available", bitnet_info)
         self.assertIn("embedAvailable", bitnet_info)
         self.assertIn("threads", bitnet_info)
+        self.assertIn("cachedAdapterCount", res)
+        self.assertIsInstance(res["cachedAdapters"], list)
+        for adapter in res["cachedAdapters"]:
+            self.assertNotIn("/", adapter)
+            self.assertNotIn("\\", adapter)
 
     def test_cors_origin_restriction(self):
         from fastapi.testclient import TestClient
@@ -571,18 +643,53 @@ class TestBitNetIntegrationLive(unittest.TestCase):
         self.assertGreater(lat_async, 0.0)
 
     def test_live_over_256_token_input_returns_413_or_overflow_error(self):
-        """Verify that prompts exceeding the 256-token AVX2 ceiling are safely rejected without crashing the host process."""
+        """Verify that prompts exceeding the 256-token AVX2 ceiling are safely rejected by pre-check with token count."""
         long_prompt = ("12 CFR § 229.10(c) Next-day availability requirements for deposit accounts. " * 35)[:2000]
-        # Direct sync call raises ContextOverflowError
-        with self.assertRaises(bitnet_engine.ContextOverflowError):
+        # Direct sync call raises ContextOverflowError with token count
+        with self.assertRaises(bitnet_engine.ContextOverflowError) as ctx:
             bitnet_engine.embed_bitnet_sync(long_prompt)
+        self.assertIn("642 tokens", str(ctx.exception))
 
-        # HTTP endpoint raises 413
+        # HTTP endpoint raises 413 with token count in detail
         from fastapi import HTTPException
         req = app.EmbedRequest(prompt=long_prompt)
         with self.assertRaises(HTTPException) as ctx:
             app.embed_text(req)
         self.assertEqual(ctx.exception.status_code, 413)
+        self.assertIn("642 tokens", ctx.exception.detail)
+
+    def test_live_token_boundary_239_240_241(self):
+        """Boundary verification at 239, 240, and 241 tokens confirming the 16-token safe margin."""
+        text_239 = ("word " * 237).strip()
+        text_240 = ("word " * 238).strip()
+        text_241 = ("word " * 239).strip()
+
+        self.assertEqual(bitnet_engine.count_embed_tokens(text_239), 239)
+        self.assertEqual(bitnet_engine.count_embed_tokens(text_240), 240)
+        self.assertEqual(bitnet_engine.count_embed_tokens(text_241), 241)
+
+        # 239 and 240 tokens succeed
+        vec239, _ = bitnet_engine.embed_bitnet_sync(text_239)
+        self.assertEqual(len(vec239), 640)
+
+        vec240, _ = bitnet_engine.embed_bitnet_sync(text_240)
+        self.assertEqual(len(vec240), 640)
+
+        # 241 tokens is rejected by pre-check
+        with self.assertRaises(bitnet_engine.ContextOverflowError) as ctx:
+            bitnet_engine.embed_bitnet_sync(text_241)
+        self.assertIn("241 tokens", str(ctx.exception))
+
+    @unittest.skipUnless(
+        bitnet_engine.is_bitnet_available(),
+        "BitNet 2B generation binary and weights not present on host"
+    )
+    def test_live_generation_long_context_does_not_hit_ceiling(self):
+        """Verify that BitNet 2B generation path does not hit the 256-token AVX2 ceiling."""
+        long_prompt = "Federal Trade Commission Act Section 5 compliance requirement. " * 20
+        ans, lat = bitnet_engine.generate_bitnet_sync(long_prompt, max_tokens=10)
+        self.assertGreater(len(ans), 0)
+        self.assertGreater(lat, 0.0)
 
 
 if __name__ == "__main__":

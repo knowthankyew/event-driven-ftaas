@@ -171,10 +171,14 @@ FTAAS_API_KEY = os.getenv("FTAAS_API_KEY")
 @app.middleware("http")
 async def verify_api_key_if_configured(request: Request, call_next):
     if FTAAS_API_KEY:
+        if request.method == "OPTIONS" or request.url.path in ("/healthz", "/metrics"):
+            return await call_next(request)
         auth_header = request.headers.get("Authorization", "")
         api_key_header = request.headers.get("X-API-Key", "")
         token = auth_header.replace("Bearer ", "").strip() if auth_header.startswith("Bearer ") else api_key_header
-        if not hmac.compare_digest(token, FTAAS_API_KEY) and request.url.path not in ("/healthz", "/metrics"):
+        token_bytes = token.encode("utf-8")
+        key_bytes = FTAAS_API_KEY.encode("utf-8")
+        if not hmac.compare_digest(token_bytes, key_bytes):
             return Response(content='{"detail":"Unauthorized"}', status_code=401, media_type="application/json")
     return await call_next(request)
 
@@ -337,7 +341,8 @@ def healthz():
         "baseModelLoaded": base_model_loaded,
         "backend": model_store.backend,
         "bitnet": sanitized_bitnet,
-        "cachedAdapters": list(model_store.adapter_cache.keys()),
+        "cachedAdapterCount": len(model_store.adapter_cache),
+        "cachedAdapters": [Path(k).name for k in model_store.adapter_cache.keys()],
         "chatTemplate": _chat_template,
     }
 
