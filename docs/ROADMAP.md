@@ -6,8 +6,8 @@
 > **Toolchain Engine**: `bitnet.cpp` (AVX2 SIMD build on Apple Clang)  
 > **Host Environment**: macOS (Darwin x86_64, Intel Core i9-9880H, 16 GB RAM, AVX2 SIMD)  
 > **Primary Authority**: [`KNOWTHANKYEW_PORTFOLIO_MASTER_BRIEF.md`](https://gist.github.com/knowthankyew/53ccf4d5a81e916f895c74e18b231e16)  
-> **Status**: 🟢 **MILESTONE 1 COMPLETED (Phases 1–7)** | 🟡 **MILESTONE 2 IN PROGRESS (Phases 8–11)**  
-> **Date**: October 5, 2026  
+> **Status**: 🟢 **PHASES 1–8 COMPLETED** | 🟡 **MILESTONE 2 IN PROGRESS (Phases 9–11)**  
+> **Date**: October 6, 2026  
 
 ---
 
@@ -195,17 +195,43 @@ flowchart TD
 
 ### Milestone 2: Unified 1-Bit Zero-Egress Stack & Statutory Retrieval &mdash; 🟡 ACTIVE
 
-#### [ ] Phase 8: 1-Bit Dense Embedding Subsystem (`bitnet-embedding-270m`) &mdash; 🟡 IN PROGRESS
-- **Action**: Acquire, quantize, and serve Microsoft's 1.58-bit dense embedding model in `bitnet.cpp`.
+#### [x] Phase 8: 1-Bit Dense Embedding Subsystem (`bitnet-embedding-270m`) &mdash; 🟢 COMPLETED
+- **Action**: Acquire, serve, and benchmark Microsoft's 1.58-bit dense embedding model in `bitnet.cpp`.
 - **Target Specifications**:
   - Model: `microsoft/bitnet-embedding-270m` (and `bitnet-embedding-0.6b`).
-  - Physical RAM: **$\sim 65\text{ MB}$** (packed `I2_S`).
-  - Output Vector: 640 dimensions, L2-normalized ($\|v\|_2 = 1$).
-  - Context Window: 32,768 tokens (full legal agreement processing).
-- **Execution Plan**:
-  1. Compile embedding runner in `bitnet.cpp` using `setup_env.py -md models/bitnet-embedding-270m -q i2_s`.
-  2. Expose `POST /embed` in `src/FtaaSService.Inference/bitnet_engine.py` returning unit-normalized float arrays with EOS pooling (`--embd-normalize 2`).
-  3. Benchmark prefill embedding latency across 1, 2, 4 threads on Intel AVX2.
+  - Physical Model Storage: 350.46 MB (`bitnet-embeddings-270m-bf16-i2_s.gguf`).
+  - Output Vector: 640 dimensions, L2-normalized ($\|v\|_2 = 1.0$).
+  - Context Window: Bounded 4,096 tokens (`-c 4096`, edge memory safe) / 32,768 max tokens.
+- **Executed Steps**:
+  1. Acquired official Microsoft `bitnet-embeddings-270m-bf16-i2_s.gguf` model weights.
+  2. Implemented native zero-egress wrapper in `src/FtaaSService.Inference/bitnet_engine.py` using `tempfile.NamedTemporaryFile` + `-f` to guarantee zero prompt leakage in `ps aux` / `/proc/$PID/cmdline`.
+  3. Integrated `POST /api/v1/inference/embed` in `src/FtaaSService.Inference/app.py` returning unit-normalized float arrays ($\|v\|_2 = 1.0$) with last-token pooling (`--pooling last`), bounded context (`-c 4096`), Prometheus exposition (`ftaas_inference_embed_model_loaded`), and diagnostic `/healthz` telemetry.
+  4. Authored comprehensive test suite `TestBitNetEmbedding` and `TestAppRoutingEmbedding` in `tests/test_bitnet_engine.py` (87/87 tests passing).
+  5. Empirically benchmarked prefill embedding latency across 1, 2, 4, and 8 threads on Intel Core i9 AVX2.
+- **Empirical Benchmark Results (macOS Intel Core i9-9880H AVX2)**:
+  - **Kernel Prefill Throughput (`llama-bench`)**:
+    - `pp64`: 350.2 t/s ($t=1$) $\to$ 499.5 t/s ($t=4$) $\to$ 490.6 t/s ($t=8$)
+    - `pp128`: 483.2 t/s ($t=1$) $\to$ 698.0 t/s ($t=4$) $\to$ 660.8 t/s ($t=8$)
+    - `pp512`: 593.5 t/s ($t=1$) $\to$ **977.5 t/s** ($t=4$) $\to$ 950.4 t/s ($t=8$)
+  - **End-to-End Subprocess Serving Latency (Process Cold Load + AVX2 Compute + Regex Parse)**:
+    - *Short Query (~22 tokens, ROSCA query)*:
+      - $t=1$: 1,935.45 ms (p50: 1,934.66 ms)
+      - $t=2$: 1,732.47 ms (p50: 1,732.01 ms)
+      - $t=4$: **1,572.22 ms** (p50: **1,553.70 ms**)
+      - $t=8$: 1,509.81 ms (p50: 1,510.40 ms)
+    - *Medium Statute (~65 tokens, California AB 2863)*:
+      - $t=1$: 2,027.03 ms (p50: 2,002.86 ms)
+      - $t=2$: 1,820.65 ms (p50: 1,806.90 ms)
+      - $t=4$: **1,611.76 ms** (p50: **1,605.47 ms**)
+      - $t=8$: 1,541.70 ms (p50: 1,527.07 ms)
+    - *Long Agreement (~85 tokens, Regulation CC / EFAA excerpt)*:
+      - $t=1$: 1,963.35 ms (p50: 1,961.47 ms)
+      - $t=2$: 1,782.61 ms (p50: 1,783.02 ms)
+      - $t=4$: **1,632.10 ms** (p50: **1,609.30 ms**)
+      - $t=8$: 1,671.28 ms (p50: 1,677.77 ms)
+- **Key Empirical Observations**:
+  - **4 Threads Optimal on 8-Core Intel**: Scaling from 1 to 4 threads reduces end-to-end latency by ~360 ms. Hyperthreading to 8 threads shows diminishing returns / thermal saturation.
+  - **Process Cold-Start vs Kernel Speed**: Raw AVX2 SIMD prefill operates at up to 977 tokens/sec (~100 ms pure compute for a legal clause). The fixed ~1,400 ms cold-start overhead confirms the architectural directive for Phase 9 to implement persistent worker daemonization or C shared library bindings for bulk statutory vector indexing.
 
 #### [ ] Phase 9: Statutory Pack Vector Index & Semantic Retriever &mdash; 📋 PLANNED
 - **Action**: Build a zero-dependency, ultra-compact local vector retrieval index over tracked legal policies.

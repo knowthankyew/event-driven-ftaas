@@ -196,5 +196,69 @@ class TestAppRoutingWithBitNet(unittest.TestCase):
         self.assertIn("backend", res)
 
 
+
+
+class TestBitNetEmbedding(unittest.TestCase):
+    """Unit tests for Phase 8 dense embedding capabilities."""
+
+    @patch("bitnet_engine.is_bitnet_embed_available", return_value=False)
+    def test_embed_bitnet_sync_raises_when_unavailable(self, _mock_avail):
+        with self.assertRaises(RuntimeError) as ctx:
+            bitnet_engine.embed_bitnet_sync("test prompt")
+        self.assertIn("BitNet C++ embedding runtime is not available", str(ctx.exception))
+
+    @patch("bitnet_engine.is_bitnet_embed_available", return_value=True)
+    @patch("subprocess.run")
+    def test_embed_bitnet_sync_success(self, mock_run, _mock_avail):
+        mock_res = MagicMock()
+        mock_res.returncode = 0
+        dummy_vec = [0.1] * 640
+        mock_res.stdout = f"some log text\n[[{','.join(map(str, dummy_vec))}]]\nmore logs"
+        mock_res.stderr = ""
+        mock_run.return_value = mock_res
+
+        vec, lat = bitnet_engine.embed_bitnet_sync("Statutory clause")
+        self.assertEqual(len(vec), 640)
+        self.assertGreater(lat, 0.0)
+
+        args, kwargs = mock_run.call_args
+        cmd = args[0]
+        self.assertIn("-ngl", cmd)
+        self.assertIn("--pooling", cmd)
+        self.assertIn("-f", cmd)
+        
+    def test_parse_embed_output_valid(self):
+        dummy_vec = [0.1] * 640
+        raw_out = f"[[{','.join(map(str, dummy_vec))}]]"
+        vec, ms = bitnet_engine._parse_embed_output(raw_out, 120.0)
+        self.assertEqual(len(vec), 640)
+        
+    def test_parse_embed_output_invalid_length(self):
+        dummy_vec = [0.1] * 128
+        raw_out = f"[[{','.join(map(str, dummy_vec))}]]"
+        with self.assertRaises(ValueError) as ctx:
+            bitnet_engine._parse_embed_output(raw_out, 120.0)
+        self.assertIn("Expected embedding dimension 640, got 128", str(ctx.exception))
+
+    def test_parse_embed_output_no_json(self):
+        raw_out = "[system: booting up]"
+        with self.assertRaises(ValueError) as ctx:
+            bitnet_engine._parse_embed_output(raw_out, 120.0)
+        self.assertIn("No JSON array found in output", str(ctx.exception))
+
+class TestAppRoutingEmbedding(unittest.TestCase):
+    @patch("app.is_bitnet_available", return_value=True)
+    @patch("app.get_bitnet_status")
+    @patch("app.embed_bitnet_sync")
+    def test_embed_text_success(self, mock_embed, mock_status, _mock_avail):
+        mock_status.return_value = {"embedAvailable": True}
+        mock_embed.return_value = ([0.5] * 640, 450.0)
+
+        req = app.EmbedRequest(prompt="This is a test.")
+        res = app.embed_text(req)
+        self.assertEqual(res["prompt"], "This is a test.")
+        self.assertEqual(len(res["embedding"]), 640)
+        self.assertEqual(res["latencyMs"], 450.0)
+
 if __name__ == "__main__":
     unittest.main()

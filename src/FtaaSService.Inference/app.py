@@ -51,6 +51,8 @@ from bitnet_engine import (
     get_bitnet_status,
     generate_bitnet_sync,
     generate_bitnet,
+    embed_bitnet_sync,
+    embed_bitnet,
 )
 
 def get_device() -> torch.device:
@@ -81,10 +83,11 @@ class InferenceMetrics:
         self.start_time = time.time()
         self.requests_total = {
             "compare": {"success": 0, "error": 0},
-            "generate": {"success": 0, "error": 0}
+            "generate": {"success": 0, "error": 0},
+            "embed": {"success": 0, "error": 0}
         }
-        self.latency_sum_ms = {"compare": 0.0, "generate": 0.0}
-        self.latency_count = {"compare": 0, "generate": 0}
+        self.latency_sum_ms = {"compare": 0.0, "generate": 0.0, "embed": 0.0}
+        self.latency_count = {"compare": 0, "generate": 0, "embed": 0}
 
     def record_request(self, endpoint: str, status: str, latency_ms: float = 0.0):
         if endpoint in self.requests_total:
@@ -155,6 +158,11 @@ class CompareRequest(BaseModel):
     prompt: str = Field(..., min_length=3)
     maxTokens: int = Field(default=64, ge=1, le=256)
     temperature: float = Field(default=0.2, ge=0.0, le=1.0)
+
+
+class EmbedRequest(BaseModel):
+    prompt: str = Field(..., min_length=1)
+
 
 class GenerateRequest(BaseModel):
     baseModel: Optional[str] = DEFAULT_BASE_MODEL
@@ -315,6 +323,10 @@ def get_metrics():
         "# HELP ftaas_inference_base_model_loaded Whether base model is pre-warmed and ready in memory (1=loaded, 0=unloaded).",
         "# TYPE ftaas_inference_base_model_loaded gauge",
         f'ftaas_inference_base_model_loaded{{model="{DEFAULT_BASE_MODEL}"}} {base_loaded}',
+        "",
+        "# HELP ftaas_inference_embed_model_loaded Whether 1-bit embedding model is loaded and ready.",
+        "# TYPE ftaas_inference_embed_model_loaded gauge",
+        f'ftaas_inference_embed_model_loaded 1' if get_bitnet_status().get('embedAvailable') else f'ftaas_inference_embed_model_loaded 0',
         "",
         "# HELP ftaas_inference_requests_total Total inference requests processed by endpoint and status.",
         "# TYPE ftaas_inference_requests_total counter",
@@ -513,6 +525,32 @@ def generate(req: GenerateRequest):
     except Exception:
         metrics.record_request("generate", "error")
         raise
+
+
+@app.post("/api/v1/inference/embed")
+def embed_text(req: EmbedRequest):
+    try:
+        status = get_bitnet_status()
+        if not status.get("embedAvailable"):
+            raise HTTPException(
+                status_code=503,
+                detail="BitNet C++ native embedding runtime or weights are not available."
+            )
+
+        completion, latency = embed_bitnet_sync(req.prompt)
+        metrics.record_request("embed", "success", latency)
+        return {
+            "prompt": req.prompt,
+            "embedding": completion,
+            "latencyMs": latency
+        }
+    except HTTPException:
+        metrics.record_request("embed", "error")
+        raise
+    except Exception as e:
+        metrics.record_request("embed", "error")
+        logger.error(f"Failed to generate embedding: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

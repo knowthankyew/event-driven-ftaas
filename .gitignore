@@ -68,3 +68,6 @@ data/artifacts/
 data/datasets/*.jsonl
 !data/datasets/sample-*.jsonl
 *.log
+
+# Web & Node Tools
+node_modules/

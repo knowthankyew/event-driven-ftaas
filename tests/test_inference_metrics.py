@@ -35,6 +35,8 @@ class TestInferenceMetrics(unittest.TestCase):
         self.assertIn("# TYPE ftaas_inference_requests_total counter", body)
         self.assertIn('ftaas_inference_requests_total{endpoint="compare",status="success"}', body)
         self.assertIn('ftaas_inference_requests_total{endpoint="generate",status="success"}', body)
+        self.assertIn('ftaas_inference_requests_total{endpoint="embed",status="success"}', body)
+        self.assertIn("# HELP ftaas_inference_embed_model_loaded", body)
 
     def test_record_request_increments_counters(self):
         """Verifies that recording requests properly increments metrics."""
