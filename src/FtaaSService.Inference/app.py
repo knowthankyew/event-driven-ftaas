@@ -150,6 +150,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+ALLOWED_HOSTS = [h.strip() for h in os.getenv("FTAAS_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1],testserver").split(",") if h.strip()]
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
+
+FTAAS_API_KEY = os.getenv("FTAAS_API_KEY")
+
+@app.middleware("http")
+async def verify_api_key_if_configured(request: Request, call_next):
+    if FTAAS_API_KEY:
+        auth_header = request.headers.get("Authorization", "")
+        api_key_header = request.headers.get("X-API-Key", "")
+        token = auth_header.replace("Bearer ", "").strip() if auth_header.startswith("Bearer ") else api_key_header
+        if token != FTAAS_API_KEY and request.url.path not in ("/healthz", "/metrics"):
+            return Response(content='{"detail":"Unauthorized"}', status_code=401, media_type="application/json")
+    return await call_next(request)
+
 # Request / Response Schemas
 class CompareRequest(BaseModel):
     jobId: Optional[str] = None
@@ -161,7 +177,7 @@ class CompareRequest(BaseModel):
 
 
 class EmbedRequest(BaseModel):
-    prompt: str = Field(..., min_length=1, max_length=16384)
+    prompt: str = Field(..., min_length=1, max_length=2048)
 
 
 class GenerateRequest(BaseModel):
@@ -278,7 +294,7 @@ def load_or_get_adapter(adapter_rel_path: str) -> PeftModel:
         return peft_model
     except Exception as ex:
         logger.error(f"Failed mounting adapter from {full_adapter_path}: {ex}")
-        raise HTTPException(status_code=500, detail=f"Failed loading LoRA adapter: {str(ex)}")
+        raise HTTPException(status_code=500, detail="Failed loading LoRA adapter.")
 
 @app.get("/healthz")
 def healthz():
@@ -465,9 +481,16 @@ def compare_completions(req: CompareRequest):
                 "fineTuned": fine_tuned_latency
             }
         }
-    except Exception:
+    except HTTPException:
         metrics.record_request("compare", "error")
         raise
+    except TimeoutError:
+        metrics.record_request("compare", "error")
+        raise HTTPException(status_code=504, detail="Inference request timed out.")
+    except Exception as ex:
+        metrics.record_request("compare", "error")
+        logger.error(f"Failed to generate comparison: {ex}")
+        raise HTTPException(status_code=500, detail="Failed to generate model completion.")
 
 @app.post("/api/v1/inference/generate")
 def generate(req: GenerateRequest):
@@ -522,9 +545,16 @@ def generate(req: GenerateRequest):
             "completion": completion,
             "latencyMs": latency
         }
-    except Exception:
+    except HTTPException:
         metrics.record_request("generate", "error")
         raise
+    except TimeoutError:
+        metrics.record_request("generate", "error")
+        raise HTTPException(status_code=504, detail="Inference request timed out.")
+    except Exception as ex:
+        metrics.record_request("generate", "error")
+        logger.error(f"Failed to generate completion: {ex}")
+        raise HTTPException(status_code=500, detail="Failed to generate model completion.")
 
 
 @app.post("/api/v1/inference/embed")
@@ -540,7 +570,6 @@ def embed_text(req: EmbedRequest):
         completion, latency = embed_bitnet_sync(req.prompt)
         metrics.record_request("embed", "success", latency)
         return {
-            "prompt": req.prompt,
             "embedding": completion,
             "latencyMs": latency
         }
@@ -550,6 +579,12 @@ def embed_text(req: EmbedRequest):
     except TimeoutError:
         metrics.record_request("embed", "error")
         raise HTTPException(status_code=504, detail="BitNet embedding request timed out.")
+    except ValueError as ve:
+        metrics.record_request("embed", "error")
+        err_msg = str(ve)
+        if "exceeds" in err_msg.lower() or "context" in err_msg.lower():
+            raise HTTPException(status_code=413, detail=err_msg)
+        raise HTTPException(status_code=422, detail=err_msg)
     except Exception as e:
         metrics.record_request("embed", "error")
         logger.error(f"Failed to generate embedding: {e}")
@@ -557,6 +592,11 @@ def embed_text(req: EmbedRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    host = os.getenv("HOST", "127.0.0.1")
+    host = os.getenv("FTAAS_INFERENCE_HOST", os.getenv("HOST", "127.0.0.1"))
     port = int(os.getenv("PORT", "8000"))
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        logger.warning(
+            f"Inference service bound to non-loopback address '{host}'. "
+            f"Zero-egress privacy invariants require loopback binding (127.0.0.1)."
+        )
     uvicorn.run("app:app", host=host, port=port, reload=False)

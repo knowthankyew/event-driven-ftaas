@@ -204,34 +204,27 @@ flowchart TD
   - Context Window: Bounded 4,096 tokens (`-c 4096`, edge memory safe) / 32,768 max tokens.
 - **Executed Steps**:
   1. Acquired official Microsoft `bitnet-embeddings-270m-bf16-i2_s.gguf` model weights.
-  2. Implemented native zero-egress streaming wrapper in `src/FtaaSService.Inference/bitnet_engine.py` using `-f /dev/stdin` (with tempfile fallback) and `--embd-separator "<#sep#>"` to prevent process argument snooping (`ps aux` / `/proc/$PID/cmdline`), avoid disk persistence, and preserve multi-paragraph legal statutes.
-  3. Integrated `POST /api/v1/inference/embed` in `src/FtaaSService.Inference/app.py` returning unit-normalized float arrays ($\|v\|_2 = 1.0$) with last-token pooling (`--pooling last`), bounded context (`-c 4096`), Prometheus exposition (`ftaas_inference_embed_model_loaded`), and diagnostic `/healthz` telemetry. Bound service to loopback (`127.0.0.1`).
-  4. Authored comprehensive test suite `TestBitNetEmbedding` and `TestAppRoutingEmbedding` in `tests/test_bitnet_engine.py` verifying vector dimension, multi-line separation, zero argument leakage, and timeout sanitization.
+  2. Implemented native zero-egress streaming wrapper in `src/FtaaSService.Inference/bitnet_engine.py` using `-f /dev/stdin` (with tempfile disk fallback for non-POSIX platforms) and `--embd-separator "<#sep#>"` to prevent process argument snooping (`ps aux` / `/proc/$PID/cmdline`) and ensure multi-paragraph legal statutes contribute across line boundaries without newline splitting.
+  3. Integrated `POST /api/v1/inference/embed` in `src/FtaaSService.Inference/app.py` returning unit-normalized float arrays ($\|v\|_2 = 1.0$) with last-token pooling (`--pooling last`), bounded context (`-c 4096`), Prometheus exposition (`ftaas_inference_embed_model_loaded`), and diagnostic `/healthz` telemetry. Bound service to loopback (`127.0.0.1`) with `TrustedHostMiddleware` DNS rebinding protection.
+  4. Authored comprehensive test suite `TestBitNetEmbedding`, `TestAppRoutingEmbedding`, and live integration suite `TestBitNetIntegrationLive` in `tests/test_bitnet_engine.py` (101/101 tests passing).
   5. Empirically benchmarked prefill embedding latency across 1, 2, 4, and 8 threads on Intel Core i9 AVX2 (5 warm iterations after 1 warmup run).
 - **Empirical Benchmark Results (macOS Intel Core i9-9880H AVX2: 8 Physical Cores, 16 Threads)**:
   - **Kernel Prefill Throughput (`llama-bench`)**:
     - `pp64`: 350.2 t/s ($t=1$) $\to$ 499.5 t/s ($t=4$) $\to$ 490.6 t/s ($t=8$)
     - `pp128`: 483.2 t/s ($t=1$) $\to$ 698.0 t/s ($t=4$) $\to$ 660.8 t/s ($t=8$)
     - `pp512`: 593.5 t/s ($t=1$) $\to$ **977.5 t/s** ($t=4$) $\to$ 950.4 t/s ($t=8$)
-  - **End-to-End Subprocess Serving Latency (Process Cold Load + AVX2 Compute + Regex Parse)**:
+  - **End-to-End Subprocess Serving Latency via `/dev/stdin` Stream (Cold Process Exec + AVX2 Compute + Regex Parse)**:
     - *Short Query (~22 tokens, ROSCA query)*:
-      - $t=1$: 1,935.45 ms (p50: 1,934.66 ms)
-      - $t=2$: 1,732.47 ms (p50: 1,732.01 ms)
-      - $t=4$: **1,572.22 ms** (p50: **1,553.70 ms**)
-      - $t=8$: 1,509.81 ms (p50: 1,510.40 ms)
+      - $t=4$: **1,343.38 ms** (p50: **1,339.18 ms**)
     - *Medium Statute (~65 tokens, California AB 2863)*:
-      - $t=1$: 2,027.03 ms (p50: 2,002.86 ms)
-      - $t=2$: 1,820.65 ms (p50: 1,806.90 ms)
-      - $t=4$: **1,611.76 ms** (p50: **1,605.47 ms**)
-      - $t=8$: 1,541.70 ms (p50: 1,527.07 ms)
+      - $t=4$: **1,367.57 ms** (p50: **1,354.77 ms**)
     - *Long Agreement (~85 tokens, Regulation CC / EFAA excerpt)*:
-      - $t=1$: 1,963.35 ms (p50: 1,961.47 ms)
-      - $t=2$: 1,782.61 ms (p50: 1,783.02 ms)
-      - $t=4$: **1,632.10 ms** (p50: **1,609.30 ms**)
-      - $t=8$: 1,671.28 ms (p50: 1,677.77 ms)
+      - $t=4$: **1,330.97 ms** (p50: **1,333.62 ms**)
+    - *Base Generation Decode via `/dev/stdin`*: 19.7 t/s decode, 108.8 t/s prompt prefill.
 - **Key Empirical Observations**:
-  - **4 Threads Optimal on 8 Physical Cores**: Scaling from 1 to 4 threads reduces end-to-end latency by ~360 ms. For short prompts (22–85 tokens), parallel work is bounded such that synchronization overhead causes latency to plateau beyond $t=4$, with $t=8$ approaching hyperthreading/thermal saturation.
-  - **Process Cold-Start vs Kernel Speed**: Raw AVX2 SIMD prefill operates at up to 977 tokens/sec (~100 ms pure compute for a legal clause). The fixed ~1,400 ms cold-start overhead confirms the architectural directive for Phase 9 to implement persistent worker daemonization or C shared library bindings for bulk statutory vector indexing.
+  - **4 Threads Optimal on 8 Physical Cores**: Scaling from 1 to 4 threads reduces end-to-end latency by ~360 ms. For short legal clauses (22–85 tokens), parallel work is bounded such that synchronization overhead and core contention cause latency to plateau beyond $t=4$ on the 8 physical cores.
+  - **Streaming via `/dev/stdin` Latency Gain**: Streaming directly through standard input reduces end-to-end latency by ~230–300 ms compared to temporary file disk I/O, while completely eliminating prompt text from process argument tables and host filesystem caches.
+  - **Process Cold-Start vs Kernel Speed**: Raw AVX2 SIMD prefill operates at up to 977 tokens/sec (~100 ms pure compute for a legal clause). The fixed ~1,200 ms cold-start overhead confirms the architectural directive for Phase 9 to implement persistent worker daemonization or C shared library bindings for bulk statutory vector indexing.
 
 #### [ ] Phase 9: Statutory Pack Vector Index & Semantic Retriever &mdash; 📋 PLANNED
 - **Action**: Build a zero-dependency, ultra-compact local vector retrieval index over tracked legal policies.
@@ -262,12 +255,13 @@ flowchart TD
 | :--- | :--- | :--- | :--- |
 | **Empty Submodule Directory** | `gh repo clone` omits submodules by default | Explicit `git submodule update --init --recursive`. | **Resolved**: Automated in setup workflow; documented in toolchain docs. |
 | **Missing Native CMake** | Host system lacks global CMake in `$PATH` | Install CMake into dedicated `.venv` via `pip install cmake`. | **Resolved**: Build isolated in virtual environment; zero global pollution. |
-| **macOS x86_64 Kernel Mismatch** | `setup_env.py` selecting ARM `tl1` on Intel | Force `-q i2_s` and pass `-DBITNET_X86_TL2=OFF` if targeting standard `i2_s` AVX2. | **Resolved**: AVX2 SIMD compilation verified; 23.5 t/s decode confirmed. |
+| **macOS x86_64 Kernel Mismatch** | `setup_env.py` selecting ARM `tl1` on Intel | Force `-q i2_s` and pass `-DBITNET_X86_TL2=OFF` if targeting standard `i2_s` AVX2. | **Resolved**: AVX2 SIMD compilation verified; 19.7 t/s decode confirmed. |
 | **PyTorch Training Weights vs GGUF** | GGUF is optimized for C++ inference, not PyTorch backprop | Use GGUF for C++ inference; use Hugging Face PyTorch weights (`microsoft/BitNet-b1.58-2B-4T`) for LoRA. | **Resolved**: Dual-representation architecture cleanly implemented across worker and engine. |
 | **Upstream Submodule CMake Path Breaks** | Upstream build scripts assumed external CMake install | Patch CMake target configuration and upstream fixes. | **Resolved**: `microsoft/BitNet#635` and `isHuangXin/llama.cpp#7` submitted and CI validated. |
-| **Inference Engine Backend Disconnect** | Standard PyTorch engine cannot execute 2-bit GGUF files natively | Dual-backend inference routing in FastAPI (`app.py` + `bitnet_engine.py`). | **Resolved**: Native C++ adapter serves base GGUF in CPU memory (23.5 t/s); PyTorch serves fine-tuned adapters. |
+| **Inference Engine Backend Disconnect** | Standard PyTorch engine cannot execute 2-bit GGUF files natively | Dual-backend inference routing in FastAPI (`app.py` + `bitnet_engine.py`). | **Resolved**: Native C++ adapter serves base GGUF in CPU memory (19.7 t/s); PyTorch serves fine-tuned adapters. |
 | **Embedding Normalization Drift** | Unnormalized dot-products degrade cosine ranking | Enforce EOS pooling with `--embd-normalize 2` in `bitnet.cpp` CLI. | **Resolved**: Enforced `--embd-normalize 2` with unit L2 normalization in C++ wrapper. |
-| **Long-Context Memory Pressure** | 32k context batching could spike memory during prefill | Bound chunk sizing in sidecar to 4,096 tokens per batch for edge devices. | **Resolved**: Bound `-c 4096` context window in `bitnet_engine.py` and validated input length in API. |
+| **Long-Context Memory Pressure** | AVX2 `dequantize_row_i2_s` batch decode threshold is 256 tokens | Bound prompt length to clause units in API (2,048 chars) and map overflow signals to HTTP 413. | **Resolved**: Enforced input length validation, mapped context signals to 413, and established clause chunking directive for Phase 9 index. |
+| **Process Argument & Disk Exposure** | Passing `-p` leaks to `ps aux`; temp files risk disk persistence | Stream prompts via `-f /dev/stdin` on POSIX systems. | **Resolved**: Enforced standard input streaming; zero prompt leakage in argv; tempfile disk fallback reserved strictly for non-POSIX platforms. |
 
 ---
 

@@ -251,7 +251,77 @@ class TestBitNetEmbedding(unittest.TestCase):
         self.assertIn("--embd-separator", cmd)
         self.assertIn("<#sep#>", cmd)
         self.assertNotIn("-p", cmd)
+        self.assertEqual(kwargs.get("encoding"), "utf-8")
         self.assertTrue(all("Statutory clause" not in str(arg) for arg in cmd))
+
+    @patch("bitnet_engine.is_bitnet_embed_available", return_value=True)
+    @patch("subprocess.run")
+    def test_embed_bitnet_sync_unicode_statute(self, mock_run, _mock_avail):
+        statute_text = "§ 229.10(c)(1)(vi) — “Next-day availability” exception for $5,525."
+        mock_res = MagicMock()
+        mock_res.returncode = 0
+        dummy_vec = [0.1] * 640
+        mock_res.stdout = f"[[{','.join(map(str, dummy_vec))}]]"
+        mock_res.stderr = ""
+        mock_run.return_value = mock_res
+
+        vec, lat = bitnet_engine.embed_bitnet_sync(statute_text)
+        self.assertEqual(len(vec), 640)
+        args, kwargs = mock_run.call_args
+        self.assertEqual(kwargs.get("input"), statute_text)
+        self.assertEqual(kwargs.get("encoding"), "utf-8")
+
+    @patch("bitnet_engine.is_bitnet_embed_available", return_value=True)
+    @patch("subprocess.run")
+    def test_embed_bitnet_separator_sanitization(self, mock_run, _mock_avail):
+        prompt_with_separator = "Clause one<#sep#>Clause two"
+        mock_res = MagicMock()
+        mock_res.returncode = 0
+        dummy_vec = [0.1] * 640
+        mock_res.stdout = f"[[{','.join(map(str, dummy_vec))}]]"
+        mock_res.stderr = ""
+        mock_run.return_value = mock_res
+
+        vec, lat = bitnet_engine.embed_bitnet_sync(prompt_with_separator)
+        self.assertEqual(len(vec), 640)
+        args, kwargs = mock_run.call_args
+        self.assertNotIn("<#sep#>", kwargs.get("input", ""))
+        self.assertEqual(kwargs.get("input"), "Clause one Clause two")
+
+    @patch("bitnet_engine.is_bitnet_embed_available", return_value=True)
+    @patch("bitnet_engine.DEV_STDIN")
+    @patch("subprocess.run")
+    def test_embed_bitnet_tempfile_fallback(self, mock_run, mock_stdin, _mock_avail):
+        mock_stdin.exists.return_value = False
+        mock_res = MagicMock()
+        mock_res.returncode = 0
+        dummy_vec = [0.1] * 640
+        mock_res.stdout = f"[[{','.join(map(str, dummy_vec))}]]"
+        mock_res.stderr = ""
+        mock_run.return_value = mock_res
+
+        vec, lat = bitnet_engine.embed_bitnet_sync("Fallback prompt")
+        self.assertEqual(len(vec), 640)
+        args, kwargs = mock_run.call_args
+        cmd = args[0]
+        # On tempfile fallback, -f points to a temporary file path, not /dev/stdin
+        self.assertIn("-f", cmd)
+        f_idx = cmd.index("-f")
+        self.assertNotEqual(cmd[f_idx + 1], "/dev/stdin")
+        self.assertEqual(kwargs.get("encoding"), "utf-8")
+
+    @patch("bitnet_engine.is_bitnet_embed_available", return_value=True)
+    @patch("subprocess.run")
+    def test_embed_bitnet_context_overflow_detection(self, mock_run, _mock_avail):
+        mock_res = MagicMock()
+        mock_res.returncode = -11
+        mock_res.stdout = ""
+        mock_res.stderr = "batch_decode: n_tokens = 368, n_seq = 1"
+        mock_run.return_value = mock_res
+
+        with self.assertRaises(ValueError) as ctx:
+            bitnet_engine.embed_bitnet_sync("Excessively long statute clause")
+        self.assertIn("exceeds the maximum context capacity", str(ctx.exception))
 
     @patch("bitnet_engine.is_bitnet_embed_available", return_value=True)
     @patch("asyncio.create_subprocess_exec")
@@ -317,21 +387,35 @@ class TestAppRoutingEmbedding(unittest.TestCase):
 
         req = app.EmbedRequest(prompt="This is a test.")
         res = app.embed_text(req)
-        self.assertEqual(res["prompt"], "This is a test.")
+        self.assertNotIn("prompt", res)
         self.assertEqual(len(res["embedding"]), 640)
         self.assertEqual(res["latencyMs"], 450.0)
 
     def test_embed_text_prompt_length_validation(self):
         from pydantic import ValidationError
-        # Prompt exceeding 16384 characters should fail validation (HTTP 422 in FastAPI)
+        # Prompt exceeding 2048 characters should fail validation (HTTP 422 in FastAPI)
         with self.assertRaises(ValidationError):
-            app.EmbedRequest(prompt="x" * 16385)
+            app.EmbedRequest(prompt="x" * 2049)
         # Empty prompt should fail validation
         with self.assertRaises(ValidationError):
             app.EmbedRequest(prompt="")
         # Prompt within bounds succeeds
-        req = app.EmbedRequest(prompt="x" * 1000)
-        self.assertEqual(len(req.prompt), 1000)
+        req = app.EmbedRequest(prompt="x" * 500)
+        self.assertEqual(len(req.prompt), 500)
+
+    @patch("app.is_bitnet_available", return_value=True)
+    @patch("app.get_bitnet_status")
+    @patch("app.embed_bitnet_sync")
+    def test_embed_text_context_overflow_maps_to_413(self, mock_embed, mock_status, _mock_avail):
+        from fastapi import HTTPException
+        mock_status.return_value = {"embedAvailable": True}
+        mock_embed.side_effect = ValueError("Input prompt token length exceeds the maximum context capacity for the 1-bit embedding engine.")
+
+        req = app.EmbedRequest(prompt="Statute text causing context overflow")
+        with self.assertRaises(HTTPException) as ctx:
+            app.embed_text(req)
+        self.assertEqual(ctx.exception.status_code, 413)
+        self.assertIn("exceeds the maximum context capacity", ctx.exception.detail)
 
     @patch("app.is_bitnet_available", return_value=True)
     @patch("app.get_bitnet_status")
@@ -362,6 +446,45 @@ class TestAppRoutingEmbedding(unittest.TestCase):
         self.assertEqual(ctx.exception.detail, "Failed to generate embedding vector.")
         self.assertNotIn("segmentation violation", ctx.exception.detail)
         self.assertNotIn("/internal/host/path", ctx.exception.detail)
+
+    def test_trusted_host_middleware(self):
+        from fastapi.testclient import TestClient
+        client = TestClient(app.app)
+        # Allowed host should not be rejected with 400
+        res = client.get("/healthz", headers={"Host": "127.0.0.1"})
+        self.assertEqual(res.status_code, 200)
+
+        # Untrusted host should be rejected with 400 Bad Request
+        res_bad = client.get("/healthz", headers={"Host": "malicious-site.com"})
+        self.assertEqual(res_bad.status_code, 400)
+
+
+@unittest.skipUnless(
+    bitnet_engine.is_bitnet_embed_available(),
+    "BitNet embedding binary and weights not present on host"
+)
+class TestBitNetIntegrationLive(unittest.TestCase):
+    """Opt-in live integration tests running directly against the native BitNet binary."""
+
+    def test_live_multiline_cosine_similarity(self):
+        vec_a, _ = bitnet_engine.embed_bitnet_sync("alpha")
+        vec_b, _ = bitnet_engine.embed_bitnet_sync("alpha\nbeta")
+        self.assertEqual(len(vec_a), 640)
+        self.assertEqual(len(vec_b), 640)
+        cosine = sum(x * y for x, y in zip(vec_a, vec_b))
+        # Ensure line 2 contributes to vector (cosine must be strictly < 0.95)
+        self.assertLess(cosine, 0.95)
+
+    def test_live_unicode_statutory_text(self):
+        statute = "§ 229.10(c)(1)(vi) — “Next-day availability” exception for $5,525."
+        vec_sync, lat_sync = bitnet_engine.embed_bitnet_sync(statute)
+        self.assertEqual(len(vec_sync), 640)
+        self.assertGreater(lat_sync, 0.0)
+
+        vec_async, lat_async = asyncio.run(bitnet_engine.embed_bitnet(statute))
+        self.assertEqual(len(vec_async), 640)
+        self.assertGreater(lat_async, 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

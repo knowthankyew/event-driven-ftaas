@@ -299,6 +299,7 @@ def generate_bitnet_sync(
                 input=formatted_prompt,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 timeout=BITNET_TIMEOUT_SECONDS
             )
         except subprocess.TimeoutExpired:
@@ -320,6 +321,7 @@ def generate_bitnet_sync(
                     cmd,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
                     timeout=BITNET_TIMEOUT_SECONDS
                 )
             except subprocess.TimeoutExpired:
@@ -354,6 +356,9 @@ async def embed_bitnet(prompt: str) -> Tuple[list[float], float]:
             f"model_present={status['embedModelPresent']} ({status['embedModelPath']})."
         )
 
+    # Prevent separator collision from splitting text into multiple vectors
+    clean_prompt = prompt.replace("<#sep#>", " ")
+
     start_t = time.perf_counter()
     if DEV_STDIN.exists():
         cmd = build_bitnet_embed_cmd("/dev/stdin")
@@ -368,7 +373,7 @@ async def embed_bitnet(prompt: str) -> Tuple[list[float], float]:
                 timeout=BITNET_TIMEOUT_SECONDS
             )
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(input=prompt.encode("utf-8")),
+                proc.communicate(input=clean_prompt.encode("utf-8")),
                 timeout=BITNET_TIMEOUT_SECONDS
             )
         except asyncio.TimeoutError:
@@ -381,8 +386,8 @@ async def embed_bitnet(prompt: str) -> Tuple[list[float], float]:
             raise TimeoutError(f"BitNet embedding process timed out after {BITNET_TIMEOUT_SECONDS} seconds")
     else:
         import tempfile
-        with tempfile.NamedTemporaryFile("w+", delete=True) as tf:
-            tf.write(prompt)
+        with tempfile.NamedTemporaryFile("w+", delete=True, encoding="utf-8") as tf:
+            tf.write(clean_prompt)
             tf.flush()
             cmd = build_bitnet_embed_cmd(tf.name)
             try:
@@ -413,6 +418,8 @@ async def embed_bitnet(prompt: str) -> Tuple[list[float], float]:
     if proc.returncode != 0:
         err_msg = stderr_bytes.decode("utf-8", errors="replace").strip()
         logger.error(f"BitNet embedding process failed (exit {proc.returncode}): {err_msg}")
+        if "exceeds batch size" in err_msg or proc.returncode == -11:
+            raise ValueError("Input prompt token length exceeds the maximum context capacity for the 1-bit embedding engine.")
         raise RuntimeError(f"BitNet embedding exited with code {proc.returncode}: {err_msg}")
 
     return _parse_embed_output(stdout_str, elapsed_ms)
@@ -430,15 +437,19 @@ def embed_bitnet_sync(prompt: str) -> Tuple[list[float], float]:
             f"model_present={status['embedModelPresent']} ({status['embedModelPath']})."
         )
 
+    # Prevent separator collision from splitting text into multiple vectors
+    clean_prompt = prompt.replace("<#sep#>", " ")
+
     start_t = time.perf_counter()
     if DEV_STDIN.exists():
         cmd = build_bitnet_embed_cmd("/dev/stdin")
         try:
             res = subprocess.run(
                 cmd,
-                input=prompt,
+                input=clean_prompt,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 timeout=BITNET_TIMEOUT_SECONDS
             )
         except subprocess.TimeoutExpired:
@@ -446,8 +457,8 @@ def embed_bitnet_sync(prompt: str) -> Tuple[list[float], float]:
             raise TimeoutError(f"BitNet embedding process timed out after {BITNET_TIMEOUT_SECONDS} seconds")
     else:
         import tempfile
-        with tempfile.NamedTemporaryFile("w+", delete=True) as tf:
-            tf.write(prompt)
+        with tempfile.NamedTemporaryFile("w+", delete=True, encoding="utf-8") as tf:
+            tf.write(clean_prompt)
             tf.flush()
             cmd = build_bitnet_embed_cmd(tf.name)
             try:
@@ -455,6 +466,7 @@ def embed_bitnet_sync(prompt: str) -> Tuple[list[float], float]:
                     cmd,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
                     timeout=BITNET_TIMEOUT_SECONDS
                 )
             except subprocess.TimeoutExpired:
@@ -465,6 +477,8 @@ def embed_bitnet_sync(prompt: str) -> Tuple[list[float], float]:
 
     if res.returncode != 0:
         logger.error(f"BitNet embedding process failed (exit {res.returncode}): {res.stderr}")
+        if "exceeds batch size" in res.stderr or res.returncode == -11:
+            raise ValueError("Input prompt token length exceeds the maximum context capacity for the 1-bit embedding engine.")
         raise RuntimeError(f"BitNet embedding exited with code {res.returncode}: {res.stderr}")
 
     return _parse_embed_output(res.stdout, elapsed_ms)
