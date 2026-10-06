@@ -201,12 +201,12 @@ flowchart TD
   - Model: `microsoft/bitnet-embedding-270m` (and `bitnet-embedding-0.6b`).
   - Physical Model Storage: 350.46 MB (`bitnet-embeddings-270m-bf16-i2_s.gguf`).
   - Output Vector: 640 dimensions, L2-normalized ($\|v\|_2 = 1.0$).
-  - Context Window: Bounded 4,096 tokens (`-c 4096`, edge memory safe) / 32,768 max tokens.
+  - Context Window: Bounded 4,096 tokens (`-c 4096`, edge memory safe) / 32,768 max architectural tokens; empirical runtime context ceiling is 256 tokens due to upstream AVX2 `dequantize_row_i2_s` kernel crash (guarded in service at `MAX_SAFE_EMBED_TOKENS = 240`).
 - **Executed Steps**:
   1. Acquired official Microsoft `bitnet-embeddings-270m-bf16-i2_s.gguf` model weights.
-  2. Implemented native zero-egress streaming wrapper in `src/FtaaSService.Inference/bitnet_engine.py` using `-f /dev/stdin` (with tempfile disk fallback for non-POSIX platforms) and `--embd-separator "<#sep#>"` to prevent process argument snooping (`ps aux` / `/proc/$PID/cmdline`) and ensure multi-paragraph legal statutes contribute across line boundaries without newline splitting.
-  3. Integrated `POST /api/v1/inference/embed` in `src/FtaaSService.Inference/app.py` returning unit-normalized float arrays ($\|v\|_2 = 1.0$) with last-token pooling (`--pooling last`), bounded context (`-c 4096`), Prometheus exposition (`ftaas_inference_embed_model_loaded`), and diagnostic `/healthz` telemetry. Bound service to loopback (`127.0.0.1`) with `TrustedHostMiddleware` DNS rebinding protection.
-  4. Authored comprehensive test suite `TestBitNetEmbedding`, `TestAppRoutingEmbedding`, and live integration suite `TestBitNetIntegrationLive` in `tests/test_bitnet_engine.py` (101/101 tests passing).
+  2. Implemented native zero-egress streaming wrapper in `src/FtaaSService.Inference/bitnet_engine.py` using `-f /dev/stdin` (with tempfile fallback for non-POSIX platforms), `--embd-separator "<#sep#>"` to ensure multi-paragraph legal statutes contribute across line boundaries without newline splitting, and token pre-counting via `llama-tokenize` to reject prompts > 240 tokens with `ContextOverflowError` before native execution.
+  3. Integrated `POST /api/v1/inference/embed` in `src/FtaaSService.Inference/app.py` returning unit-normalized float arrays ($\|v\|_2 = 1.0$) with last-token pooling (`--pooling last`), bounded context (`-c 4096`), Prometheus exposition (`ftaas_inference_embed_model_loaded`), sanitized diagnostic `/healthz` telemetry, and constant-time HMAC API key authentication. Bound service to loopback (`127.0.0.1`) with `TrustedHostMiddleware` DNS rebinding protection and restricted CORS origins.
+  4. Authored comprehensive test suite `TestBitNetEmbedding`, `TestAppRoutingEmbedding`, and live integration suite `TestBitNetIntegrationLive` in `tests/test_bitnet_engine.py` (107/107 tests passing across project test suite).
   5. Empirically benchmarked prefill embedding latency across 1, 2, 4, and 8 threads on Intel Core i9 AVX2 (5 warm iterations after 1 warmup run).
 - **Empirical Benchmark Results (macOS Intel Core i9-9880H AVX2: 8 Physical Cores, 16 Threads)**:
   - **Kernel Prefill Throughput (`llama-bench`)**:
@@ -214,17 +214,20 @@ flowchart TD
     - `pp128`: 483.2 t/s ($t=1$) $\to$ 698.0 t/s ($t=4$) $\to$ 660.8 t/s ($t=8$)
     - `pp512`: 593.5 t/s ($t=1$) $\to$ **977.5 t/s** ($t=4$) $\to$ 950.4 t/s ($t=8$)
   - **End-to-End Subprocess Serving Latency via `/dev/stdin` Stream (Cold Process Exec + AVX2 Compute + Regex Parse)**:
-    - *Short Query (~22 tokens, ROSCA query)*:
-      - $t=4$: **1,343.38 ms** (p50: **1,339.18 ms**)
-    - *Medium Statute (~65 tokens, California AB 2863)*:
-      - $t=4$: **1,367.57 ms** (p50: **1,354.77 ms**)
-    - *Long Agreement (~85 tokens, Regulation CC / EFAA excerpt)*:
-      - $t=4$: **1,330.97 ms** (p50: **1,333.62 ms**)
-    - *Base Generation Decode via `/dev/stdin`*: 19.7 t/s decode, 108.8 t/s prompt prefill.
+    - *Full Thread Scaling Benchmark (5 warm iterations after 1 warmup)*:
+
+| Input Text | Metric | $t=1$ | $t=2$ | $t=4$ (Default) | $t=8$ |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Short Query (~22 tokens)**<br>*FTC ROSCA dark pattern query* | Mean<br>p50 | 1,401.23 ms<br>1,398.54 ms | 1,356.55 ms<br>1,352.10 ms | 1,317.36 ms<br>1,315.42 ms | 1,304.63 ms<br>1,301.88 ms |
+| **Medium Statute (~65 tokens)**<br>*California AB 2863 statutory clause* | Mean<br>p50 | 1,470.97 ms<br>1,465.30 ms | 1,410.24 ms<br>1,408.12 ms | 1,329.62 ms<br>1,326.50 ms | 1,293.65 ms<br>1,290.41 ms |
+| **Long Agreement (~85 tokens)**<br>*Regulation CC / EFAA excerpt* | Mean<br>p50 | 1,510.02 ms<br>1,505.77 ms | 1,406.56 ms<br>1,402.19 ms | 1,344.02 ms<br>1,340.85 ms | 1,306.71 ms<br>1,303.22 ms |
+
+    - *Base Generation Decode via `/dev/stdin`*: 23.5 t/s decode at 8 threads, 19.7 t/s decode at 4 threads (service default); prompt prefill 108.8 t/s.
 - **Key Empirical Observations**:
-  - **4 Threads Optimal on 8 Physical Cores**: Scaling from 1 to 4 threads reduces end-to-end latency by ~360 ms. For short legal clauses (22–85 tokens), parallel work is bounded such that synchronization overhead and core contention cause latency to plateau beyond $t=4$ on the 8 physical cores.
-  - **Streaming via `/dev/stdin` Latency Gain**: Streaming directly through standard input reduces end-to-end latency by ~230–300 ms compared to temporary file disk I/O, while completely eliminating prompt text from process argument tables and host filesystem caches.
-  - **Process Cold-Start vs Kernel Speed**: Raw AVX2 SIMD prefill operates at up to 977 tokens/sec (~100 ms pure compute for a legal clause). The fixed ~1,200 ms cold-start overhead confirms the architectural directive for Phase 9 to implement persistent worker daemonization or C shared library bindings for bulk statutory vector indexing.
+  - **Thread Scaling Characteristics**: On macOS Intel Core i9-9880H (8 physical cores, 16 logical threads), scaling from $t=1$ to $t=4$ yields the primary latency reduction (~84–166 ms mean improvement). Scaling further to $t=8$ yields marginal gains (~13–38 ms) as parallel compute is bounded by the fixed ~1,200 ms subprocess cold-start and core contention. $t=4$ remains the recommended balanced default.
+  - **`/dev/stdin` Security vs Throughput Invariant**: Interleaved A/B benchmarking across 20 alternating iterations confirms no statistically significant throughput delta between `/dev/stdin` (mean: 1,335.19 ms, p50: 1,333.80 ms) and tempfile disk I/O (mean: 1,326.32 ms, p50: 1,322.16 ms, $\Delta = -8.87\text{ ms}$). Standard input streaming is retained strictly as an essential privacy and zero-leakage invariant, completely eliminating prompt exposure from host process listings (`ps aux` / `/proc/$PID/cmdline`) and unencrypted disk swap pages.
+  - **Process Cold-Start vs Kernel Speed**: Raw AVX2 SIMD prefill operates at up to 977 tokens/sec (~87 ms pure compute for 85 tokens). The fixed ~1,200 ms cold-start overhead confirms the architectural directive for Phase 9 to implement persistent worker daemonization or C shared library bindings for bulk statutory vector indexing.
+  - **Upstream AVX2 Kernel Ceiling & Pre-Check Defense**: Prompts exceeding 256 tokens trigger a native crash (`EXC_BAD_ACCESS`, exit code -11) in `libggml-base.0.dylib` (`dequantize_row_i2_s + 153: movzbl (%rdi,%rbx), %r14d`). The service protects against this via pre-tokenization in `llama-tokenize` with a ceiling of `MAX_SAFE_EMBED_TOKENS = 240`, returning HTTP 413 `ContextOverflowError` without crashing the host process. Phase 9 retrieval indexes will chunk statutory corpuses to ~200 tokens.
 
 #### [ ] Phase 9: Statutory Pack Vector Index & Semantic Retriever &mdash; 📋 PLANNED
 - **Action**: Build a zero-dependency, ultra-compact local vector retrieval index over tracked legal policies.
@@ -260,8 +263,20 @@ flowchart TD
 | **Upstream Submodule CMake Path Breaks** | Upstream build scripts assumed external CMake install | Patch CMake target configuration and upstream fixes. | **Resolved**: `microsoft/BitNet#635` and `isHuangXin/llama.cpp#7` submitted and CI validated. |
 | **Inference Engine Backend Disconnect** | Standard PyTorch engine cannot execute 2-bit GGUF files natively | Dual-backend inference routing in FastAPI (`app.py` + `bitnet_engine.py`). | **Resolved**: Native C++ adapter serves base GGUF in CPU memory (19.7 t/s); PyTorch serves fine-tuned adapters. |
 | **Embedding Normalization Drift** | Unnormalized dot-products degrade cosine ranking | Enforce EOS pooling with `--embd-normalize 2` in `bitnet.cpp` CLI. | **Resolved**: Enforced `--embd-normalize 2` with unit L2 normalization in C++ wrapper. |
-| **Long-Context Memory Pressure** | AVX2 `dequantize_row_i2_s` batch decode threshold is 256 tokens | Bound prompt length to clause units in API (2,048 chars) and map overflow signals to HTTP 413. | **Resolved**: Enforced input length validation, mapped context signals to 413, and established clause chunking directive for Phase 9 index. |
-| **Process Argument & Disk Exposure** | Passing `-p` leaks to `ps aux`; temp files risk disk persistence | Stream prompts via `-f /dev/stdin` on POSIX systems. | **Resolved**: Enforced standard input streaming; zero prompt leakage in argv; tempfile disk fallback reserved strictly for non-POSIX platforms. |
+| **Long-Context AVX2 Kernel Crash** | Prompt > 256 tokens triggers upstream `EXC_BAD_ACCESS` in `dequantize_row_i2_s + 153` | Pre-check token count via `llama-tokenize` before execution; reject > 240 tokens with `ContextOverflowError` (HTTP 413); chunk Phase 9 index to ~200 tokens. | **Resolved**: Subprocess crashes eliminated; verified in live integration tests; upstream issue documented with LLDB backtrace. |
+| **Process Argument & Disk Exposure** | Passing `-p` leaks to `ps aux`; temp files risk disk persistence | Stream prompts via `-f /dev/stdin` on POSIX systems; verify zero leakage in argv tests. | **Resolved**: Enforced standard input streaming; zero prompt leakage in argv; verified via interleaved A/B benchmark that security invariant incurs no throughput penalty. |
+
+### Upstream Memory Safety Diagnostics: AVX2 `dequantize_row_i2_s` Batch Overflow
+During stress testing with statutory texts exceeding 256 tokens, `bitnet.cpp` crashes with `SIGSEGV` / `EXC_BAD_ACCESS` (exit -11). LLDB diagnostic backtrace on macOS Intel Core i9-9880H:
+```text
+* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BAD_ACCESS (code=1, address=0x10d8a9000)
+    frame #0: 0x0000000109be35f9 libggml-base.0.dylib`dequantize_row_i2_s + 153
+libggml-base.0.dylib`dequantize_row_i2_s:
+->  0x109be35f9 <+153>: movzbl (%rdi,%rbx), %r14d
+    0x109be35fd <+157>: movl   %r14d, %r15d
+    0x109be3600 <+160>: andl   $0x3, %r15d
+```
+Tuning flags (`-ub 256` to `-ub 4096`) does not prevent the out-of-bounds read during batch decode. Guarding prompt token lengths prior to execution (`MAX_SAFE_EMBED_TOKENS = 240`) eliminates this crash vector in production.
 
 ---
 

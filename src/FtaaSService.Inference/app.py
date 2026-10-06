@@ -44,6 +44,7 @@ _worker_src = str(PROJECT_ROOT / "src" / "FtaaSService.Worker")
 if _worker_src not in _sys.path:
     _sys.path.insert(0, _worker_src)
 
+import hmac
 from model_registry import get_model_spec, format_inference_prompt
 from bitnet_engine import (
     is_bitnet_model,
@@ -53,6 +54,8 @@ from bitnet_engine import (
     generate_bitnet,
     embed_bitnet_sync,
     embed_bitnet,
+    ContextOverflowError,
+    BitNetExecutionError,
 )
 
 def get_device() -> torch.device:
@@ -142,16 +145,25 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+DEFAULT_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+]
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("FTAAS_ALLOWED_ORIGINS", "").split(",") if o.strip()] or DEFAULT_ALLOWED_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-ALLOWED_HOSTS = [h.strip() for h in os.getenv("FTAAS_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1],testserver").split(",") if h.strip()]
+DEFAULT_ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]"]
+ALLOWED_HOSTS = [h.strip() for h in os.getenv("FTAAS_ALLOWED_HOSTS", "").split(",") if h.strip()] or DEFAULT_ALLOWED_HOSTS
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
 
 FTAAS_API_KEY = os.getenv("FTAAS_API_KEY")
@@ -162,7 +174,7 @@ async def verify_api_key_if_configured(request: Request, call_next):
         auth_header = request.headers.get("Authorization", "")
         api_key_header = request.headers.get("X-API-Key", "")
         token = auth_header.replace("Bearer ", "").strip() if auth_header.startswith("Bearer ") else api_key_header
-        if token != FTAAS_API_KEY and request.url.path not in ("/healthz", "/metrics"):
+        if not hmac.compare_digest(token, FTAAS_API_KEY) and request.url.path not in ("/healthz", "/metrics"):
             return Response(content='{"detail":"Unauthorized"}', status_code=401, media_type="application/json")
     return await call_next(request)
 
@@ -305,6 +317,18 @@ def healthz():
         _chat_template = "unknown"
 
     base_model_loaded = (model_store.is_bitnet and is_bitnet_available()) or (model_store.base_model is not None)
+    raw_bitnet = get_bitnet_status()
+    sanitized_bitnet = {
+        "available": raw_bitnet.get("available", False),
+        "cliExecutable": raw_bitnet.get("cliExecutable", False),
+        "modelPresent": raw_bitnet.get("modelPresent", False),
+        "modelSizeMb": raw_bitnet.get("modelSizeMb", 0.0),
+        "embedAvailable": raw_bitnet.get("embedAvailable", False),
+        "embedCliExecutable": raw_bitnet.get("embedCliExecutable", False),
+        "embedModelPresent": raw_bitnet.get("embedModelPresent", False),
+        "embedModelSizeMb": raw_bitnet.get("embedModelSizeMb", 0.0),
+        "threads": raw_bitnet.get("threads", 4),
+    }
 
     return {
         "status": "Healthy",
@@ -312,7 +336,7 @@ def healthz():
         "baseModel": DEFAULT_BASE_MODEL,
         "baseModelLoaded": base_model_loaded,
         "backend": model_store.backend,
-        "bitnet": get_bitnet_status(),
+        "bitnet": sanitized_bitnet,
         "cachedAdapters": list(model_store.adapter_cache.keys()),
         "chatTemplate": _chat_template,
     }
@@ -573,18 +597,19 @@ def embed_text(req: EmbedRequest):
             "embedding": completion,
             "latencyMs": latency
         }
+    except ContextOverflowError as coe:
+        metrics.record_request("embed", "error")
+        raise HTTPException(status_code=413, detail=str(coe))
+    except BitNetExecutionError as bee:
+        metrics.record_request("embed", "error")
+        logger.error(f"BitNet execution failed: {bee}")
+        raise HTTPException(status_code=500, detail="Failed to generate embedding vector.")
     except HTTPException:
         metrics.record_request("embed", "error")
         raise
     except TimeoutError:
         metrics.record_request("embed", "error")
         raise HTTPException(status_code=504, detail="BitNet embedding request timed out.")
-    except ValueError as ve:
-        metrics.record_request("embed", "error")
-        err_msg = str(ve)
-        if "exceeds" in err_msg.lower() or "context" in err_msg.lower():
-            raise HTTPException(status_code=413, detail=err_msg)
-        raise HTTPException(status_code=422, detail=err_msg)
     except Exception as e:
         metrics.record_request("embed", "error")
         logger.error(f"Failed to generate embedding: {e}")

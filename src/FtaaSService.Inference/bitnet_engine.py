@@ -21,14 +21,92 @@ DEFAULT_MODEL_PATH = Path.home() / "Github" / "BitNet" / "models" / "BitNet-b1.5
 
 DEFAULT_EMBED_CLI_PATH = Path.home() / "Github" / "BitNet" / "build" / "bin" / "llama-embedding"
 DEFAULT_EMBED_MODEL_PATH = Path.home() / "Github" / "BitNet" / "models" / "bitnet-embedding-270m" / "bitnet-embeddings-270m-bf16-i2_s.gguf"
+DEFAULT_TOKENIZE_CLI_PATH = Path.home() / "Github" / "BitNet" / "build" / "bin" / "llama-tokenize"
 
 BITNET_CLI_PATH = Path(os.getenv("BITNET_CLI_PATH", str(DEFAULT_CLI_PATH))).resolve()
 BITNET_MODEL_PATH = Path(os.getenv("BITNET_MODEL_PATH", str(DEFAULT_MODEL_PATH))).resolve()
 BITNET_EMBED_CLI_PATH = Path(os.getenv("BITNET_EMBED_CLI_PATH", str(DEFAULT_EMBED_CLI_PATH))).resolve()
 BITNET_EMBED_MODEL_PATH = Path(os.getenv("BITNET_EMBED_MODEL_PATH", str(DEFAULT_EMBED_MODEL_PATH))).resolve()
+BITNET_TOKENIZE_CLI_PATH = Path(os.getenv("BITNET_TOKENIZE_CLI_PATH", str(DEFAULT_TOKENIZE_CLI_PATH))).resolve()
 BITNET_THREADS = int(os.getenv("BITNET_THREADS", "4"))
 BITNET_TIMEOUT_SECONDS = float(os.getenv("BITNET_TIMEOUT_SECONDS", "60.0"))
 DEV_STDIN = Path("/dev/stdin")
+
+# Maximum safe token context length for bitnet-embedding on AVX2 (kernel batch decode ceiling is 256)
+MAX_SAFE_EMBED_TOKENS = int(os.getenv("MAX_SAFE_EMBED_TOKENS", "240"))
+
+
+class ContextOverflowError(Exception):
+    """Raised when input prompt exceeds the BitNet model's context or batch memory capacity."""
+    pass
+
+
+class BitNetExecutionError(Exception):
+    """Raised when the native BitNet binary fails, crashes, or produces malformed output."""
+    pass
+
+
+def count_embed_tokens(prompt: str) -> Optional[int]:
+    """
+    Count prompt tokens using native llama-tokenize against bitnet-embedding weights.
+    Returns integer token count if CLI is available, otherwise None.
+    """
+    import subprocess
+    if not (BITNET_TOKENIZE_CLI_PATH.is_file() and os.access(str(BITNET_TOKENIZE_CLI_PATH), os.X_OK) and BITNET_EMBED_MODEL_PATH.is_file()):
+        return None
+
+    cmd = [
+        str(BITNET_TOKENIZE_CLI_PATH),
+        "-m", str(BITNET_EMBED_MODEL_PATH),
+        "--show-count",
+        "--stdin",
+        "--log-disable"
+    ]
+    try:
+        res = subprocess.run(cmd, input=prompt, capture_output=True, text=True, encoding="utf-8", timeout=5.0)
+        if res.returncode == 0:
+            for line in res.stdout.splitlines():
+                if "Total number of tokens:" in line:
+                    return int(line.split(":")[-1].strip())
+    except Exception as e:
+        logger.warning(f"llama-tokenize pre-check error: {e}")
+    return None
+
+
+async def count_embed_tokens_async(prompt: str) -> Optional[int]:
+    """Asynchronously count prompt tokens using llama-tokenize against bitnet-embedding weights."""
+    if not (BITNET_TOKENIZE_CLI_PATH.is_file() and os.access(str(BITNET_TOKENIZE_CLI_PATH), os.X_OK) and BITNET_EMBED_MODEL_PATH.is_file()):
+        return None
+
+    cmd = [
+        str(BITNET_TOKENIZE_CLI_PATH),
+        "-m", str(BITNET_EMBED_MODEL_PATH),
+        "--show-count",
+        "--stdin",
+        "--log-disable"
+    ]
+    try:
+        proc = await asyncio.wait_for(
+            asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            ),
+            timeout=5.0
+        )
+        stdout_bytes, _ = await asyncio.wait_for(
+            proc.communicate(input=prompt.encode("utf-8")),
+            timeout=5.0
+        )
+        if proc.returncode == 0:
+            stdout_str = stdout_bytes.decode("utf-8", errors="replace")
+            for line in stdout_str.splitlines():
+                if "Total number of tokens:" in line:
+                    return int(line.split(":")[-1].strip())
+    except Exception as e:
+        logger.warning(f"async llama-tokenize pre-check error: {e}")
+    return None
 
 
 def build_bitnet_generate_cmd(
@@ -359,6 +437,15 @@ async def embed_bitnet(prompt: str) -> Tuple[list[float], float]:
     # Prevent separator collision from splitting text into multiple vectors
     clean_prompt = prompt.replace("<#sep#>", " ")
 
+    # Pre-check token count to prevent kernel SIGSEGV crash on batch decode overflow (>240 tokens)
+    if len(clean_prompt) > 80:
+        token_count = await count_embed_tokens_async(clean_prompt)
+        if token_count is not None and token_count > MAX_SAFE_EMBED_TOKENS:
+            raise ContextOverflowError(
+                f"Input prompt ({token_count} tokens) exceeds the maximum supported context limit "
+                f"({MAX_SAFE_EMBED_TOKENS} tokens) for the 1-bit embedding engine."
+            )
+
     start_t = time.perf_counter()
     if DEV_STDIN.exists():
         cmd = build_bitnet_embed_cmd("/dev/stdin")
@@ -419,8 +506,8 @@ async def embed_bitnet(prompt: str) -> Tuple[list[float], float]:
         err_msg = stderr_bytes.decode("utf-8", errors="replace").strip()
         logger.error(f"BitNet embedding process failed (exit {proc.returncode}): {err_msg}")
         if "exceeds batch size" in err_msg or proc.returncode == -11:
-            raise ValueError("Input prompt token length exceeds the maximum context capacity for the 1-bit embedding engine.")
-        raise RuntimeError(f"BitNet embedding exited with code {proc.returncode}: {err_msg}")
+            raise ContextOverflowError("Input prompt token length exceeds the maximum context capacity for the 1-bit embedding engine.")
+        raise BitNetExecutionError(f"BitNet embedding exited with code {proc.returncode}: {err_msg}")
 
     return _parse_embed_output(stdout_str, elapsed_ms)
 
@@ -439,6 +526,15 @@ def embed_bitnet_sync(prompt: str) -> Tuple[list[float], float]:
 
     # Prevent separator collision from splitting text into multiple vectors
     clean_prompt = prompt.replace("<#sep#>", " ")
+
+    # Pre-check token count to prevent kernel SIGSEGV crash on batch decode overflow (>240 tokens)
+    if len(clean_prompt) > 80:
+        token_count = count_embed_tokens(clean_prompt)
+        if token_count is not None and token_count > MAX_SAFE_EMBED_TOKENS:
+            raise ContextOverflowError(
+                f"Input prompt ({token_count} tokens) exceeds the maximum supported context limit "
+                f"({MAX_SAFE_EMBED_TOKENS} tokens) for the 1-bit embedding engine."
+            )
 
     start_t = time.perf_counter()
     if DEV_STDIN.exists():
@@ -478,8 +574,8 @@ def embed_bitnet_sync(prompt: str) -> Tuple[list[float], float]:
     if res.returncode != 0:
         logger.error(f"BitNet embedding process failed (exit {res.returncode}): {res.stderr}")
         if "exceeds batch size" in res.stderr or res.returncode == -11:
-            raise ValueError("Input prompt token length exceeds the maximum context capacity for the 1-bit embedding engine.")
-        raise RuntimeError(f"BitNet embedding exited with code {res.returncode}: {res.stderr}")
+            raise ContextOverflowError("Input prompt token length exceeds the maximum context capacity for the 1-bit embedding engine.")
+        raise BitNetExecutionError(f"BitNet embedding exited with code {res.returncode}: {res.stderr}")
 
     return _parse_embed_output(res.stdout, elapsed_ms)
 
@@ -488,27 +584,27 @@ def _parse_embed_output(stdout_str: str, elapsed_ms: float) -> Tuple[list[float]
     import json
     match = re.search(r'\[\s*\[\s*-?\d+\.?\d*', stdout_str)
     if not match:
-        raise ValueError("No JSON array found in output.")
+        raise BitNetExecutionError("No JSON array found in output.")
 
     start_idx = match.start()
     end_idx = stdout_str.rfind(']]')
     if end_idx == -1 or end_idx < start_idx:
-        raise ValueError("Malformed JSON array in output.")
+        raise BitNetExecutionError("Malformed JSON array in output.")
 
     array_str = stdout_str[start_idx:end_idx+2]
 
     try:
         embeddings = json.loads(array_str)
     except json.JSONDecodeError as e:
-        raise ValueError(f"Failed to decode JSON array: {e}")
+        raise BitNetExecutionError(f"Failed to decode JSON array: {e}")
 
     if isinstance(embeddings, list) and len(embeddings) > 0 and isinstance(embeddings[0], list):
         if len(embeddings) != 1:
-            raise ValueError(f"Expected single embedding vector, got {len(embeddings)} vectors (check prompt formatting)")
+            raise BitNetExecutionError(f"Expected single embedding vector, got {len(embeddings)} vectors (check prompt formatting)")
         embeddings = embeddings[0]
 
     if len(embeddings) != 640:
-        raise ValueError(f"Expected embedding dimension 640, got {len(embeddings)}")
+        raise BitNetExecutionError(f"Expected embedding dimension 640, got {len(embeddings)}")
 
     return embeddings, elapsed_ms
 

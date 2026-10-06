@@ -319,9 +319,20 @@ class TestBitNetEmbedding(unittest.TestCase):
         mock_res.stderr = "batch_decode: n_tokens = 368, n_seq = 1"
         mock_run.return_value = mock_res
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(bitnet_engine.ContextOverflowError) as ctx:
             bitnet_engine.embed_bitnet_sync("Excessively long statute clause")
         self.assertIn("exceeds the maximum context capacity", str(ctx.exception))
+
+    @patch("bitnet_engine.is_bitnet_embed_available", return_value=True)
+    @patch("bitnet_engine.count_embed_tokens", return_value=300)
+    @patch("subprocess.run")
+    def test_embed_bitnet_precheck_token_overflow(self, mock_run, mock_count, _mock_avail):
+        long_prompt = "Federal reserve regulation " * 10
+        with self.assertRaises(bitnet_engine.ContextOverflowError) as ctx:
+            bitnet_engine.embed_bitnet_sync(long_prompt)
+        self.assertIn("300 tokens", str(ctx.exception))
+        self.assertIn("exceeds the maximum supported context limit", str(ctx.exception))
+        mock_run.assert_not_called()
 
     @patch("bitnet_engine.is_bitnet_embed_available", return_value=True)
     @patch("asyncio.create_subprocess_exec")
@@ -359,20 +370,20 @@ class TestBitNetEmbedding(unittest.TestCase):
         dummy_vec1 = [0.1] * 640
         dummy_vec2 = [0.2] * 640
         raw_out = f"[[{','.join(map(str, dummy_vec1))}], [{','.join(map(str, dummy_vec2))}]]"
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(bitnet_engine.BitNetExecutionError) as ctx:
             bitnet_engine._parse_embed_output(raw_out, 120.0)
         self.assertIn("Expected single embedding vector, got 2 vectors", str(ctx.exception))
 
     def test_parse_embed_output_invalid_length(self):
         dummy_vec = [0.1] * 128
         raw_out = f"[[{','.join(map(str, dummy_vec))}]]"
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(bitnet_engine.BitNetExecutionError) as ctx:
             bitnet_engine._parse_embed_output(raw_out, 120.0)
         self.assertIn("Expected embedding dimension 640, got 128", str(ctx.exception))
 
     def test_parse_embed_output_no_json(self):
         raw_out = "[system: booting up]"
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(bitnet_engine.BitNetExecutionError) as ctx:
             bitnet_engine._parse_embed_output(raw_out, 120.0)
         self.assertIn("No JSON array found in output", str(ctx.exception))
 
@@ -409,13 +420,27 @@ class TestAppRoutingEmbedding(unittest.TestCase):
     def test_embed_text_context_overflow_maps_to_413(self, mock_embed, mock_status, _mock_avail):
         from fastapi import HTTPException
         mock_status.return_value = {"embedAvailable": True}
-        mock_embed.side_effect = ValueError("Input prompt token length exceeds the maximum context capacity for the 1-bit embedding engine.")
+        mock_embed.side_effect = bitnet_engine.ContextOverflowError("Input prompt token length exceeds the maximum context capacity for the 1-bit embedding engine.")
 
         req = app.EmbedRequest(prompt="Statute text causing context overflow")
         with self.assertRaises(HTTPException) as ctx:
             app.embed_text(req)
         self.assertEqual(ctx.exception.status_code, 413)
         self.assertIn("exceeds the maximum context capacity", ctx.exception.detail)
+
+    @patch("app.is_bitnet_available", return_value=True)
+    @patch("app.get_bitnet_status")
+    @patch("app.embed_bitnet_sync")
+    def test_embed_text_execution_error_sanitized_500(self, mock_embed, mock_status, _mock_avail):
+        from fastapi import HTTPException
+        mock_status.return_value = {"embedAvailable": True}
+        mock_embed.side_effect = bitnet_engine.BitNetExecutionError("Subprocess failed with code 1")
+
+        req = app.EmbedRequest(prompt="Failure prompt")
+        with self.assertRaises(HTTPException) as ctx:
+            app.embed_text(req)
+        self.assertEqual(ctx.exception.status_code, 500)
+        self.assertEqual(ctx.exception.detail, "Failed to generate embedding vector.")
 
     @patch("app.is_bitnet_available", return_value=True)
     @patch("app.get_bitnet_status")
@@ -458,6 +483,66 @@ class TestAppRoutingEmbedding(unittest.TestCase):
         res_bad = client.get("/healthz", headers={"Host": "malicious-site.com"})
         self.assertEqual(res_bad.status_code, 400)
 
+    def test_api_key_auth_middleware(self):
+        from fastapi.testclient import TestClient
+        client = TestClient(app.app)
+
+        with patch.object(app, "FTAAS_API_KEY", "secret-test-key"):
+            # 1. Healthz is exempt even without token
+            res_health = client.get("/healthz", headers={"Host": "127.0.0.1"})
+            self.assertEqual(res_health.status_code, 200)
+
+            # 2. Protected endpoint without token returns 401
+            res_no_token = client.post("/api/v1/inference/embed", json={"prompt": "hi"}, headers={"Host": "127.0.0.1"})
+            self.assertEqual(res_no_token.status_code, 401)
+            self.assertEqual(res_no_token.json(), {"detail": "Unauthorized"})
+
+            # 3. Protected endpoint with invalid token returns 401
+            res_wrong = client.post("/api/v1/inference/embed", json={"prompt": "hi"}, headers={"Host": "127.0.0.1", "Authorization": "Bearer wrong-key"})
+            self.assertEqual(res_wrong.status_code, 401)
+
+            # 4. Protected endpoint with valid Bearer token passes auth
+            with patch("app.embed_bitnet_sync", return_value=([0.1] * 640, 100.0)), \
+                 patch("app.is_bitnet_available", return_value=True), \
+                 patch("app.get_bitnet_status", return_value={"embedAvailable": True}):
+                res_auth = client.post("/api/v1/inference/embed", json={"prompt": "hi"}, headers={"Host": "127.0.0.1", "Authorization": "Bearer secret-test-key"})
+                self.assertEqual(res_auth.status_code, 200)
+
+            # 5. Protected endpoint with valid X-API-Key passes auth
+            with patch("app.embed_bitnet_sync", return_value=([0.1] * 640, 100.0)), \
+                 patch("app.is_bitnet_available", return_value=True), \
+                 patch("app.get_bitnet_status", return_value={"embedAvailable": True}):
+                res_key = client.post("/api/v1/inference/embed", json={"prompt": "hi"}, headers={"Host": "127.0.0.1", "X-API-Key": "secret-test-key"})
+                self.assertEqual(res_key.status_code, 200)
+
+    def test_healthz_telemetry_sanitized(self):
+        res = app.healthz()
+        bitnet_info = res["bitnet"]
+        self.assertNotIn("cliPath", bitnet_info)
+        self.assertNotIn("modelPath", bitnet_info)
+        self.assertNotIn("embedCliPath", bitnet_info)
+        self.assertNotIn("embedModelPath", bitnet_info)
+        self.assertIn("available", bitnet_info)
+        self.assertIn("embedAvailable", bitnet_info)
+        self.assertIn("threads", bitnet_info)
+
+    def test_cors_origin_restriction(self):
+        from fastapi.testclient import TestClient
+        client = TestClient(app.app)
+        # Allowed origin
+        res_allowed = client.options(
+            "/healthz",
+            headers={"Origin": "http://localhost:3000", "Access-Control-Request-Method": "GET", "Host": "127.0.0.1"}
+        )
+        self.assertEqual(res_allowed.headers.get("access-control-allow-origin"), "http://localhost:3000")
+
+        # Disallowed origin
+        res_blocked = client.options(
+            "/healthz",
+            headers={"Origin": "http://malicious-site.com", "Access-Control-Request-Method": "GET", "Host": "127.0.0.1"}
+        )
+        self.assertNotEqual(res_blocked.headers.get("access-control-allow-origin"), "http://malicious-site.com")
+
 
 @unittest.skipUnless(
     bitnet_engine.is_bitnet_embed_available(),
@@ -484,6 +569,20 @@ class TestBitNetIntegrationLive(unittest.TestCase):
         vec_async, lat_async = asyncio.run(bitnet_engine.embed_bitnet(statute))
         self.assertEqual(len(vec_async), 640)
         self.assertGreater(lat_async, 0.0)
+
+    def test_live_over_256_token_input_returns_413_or_overflow_error(self):
+        """Verify that prompts exceeding the 256-token AVX2 ceiling are safely rejected without crashing the host process."""
+        long_prompt = ("12 CFR § 229.10(c) Next-day availability requirements for deposit accounts. " * 35)[:2000]
+        # Direct sync call raises ContextOverflowError
+        with self.assertRaises(bitnet_engine.ContextOverflowError):
+            bitnet_engine.embed_bitnet_sync(long_prompt)
+
+        # HTTP endpoint raises 413
+        from fastapi import HTTPException
+        req = app.EmbedRequest(prompt=long_prompt)
+        with self.assertRaises(HTTPException) as ctx:
+            app.embed_text(req)
+        self.assertEqual(ctx.exception.status_code, 413)
 
 
 if __name__ == "__main__":
