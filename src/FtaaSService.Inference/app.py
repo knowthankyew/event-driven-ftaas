@@ -161,7 +161,7 @@ class CompareRequest(BaseModel):
 
 
 class EmbedRequest(BaseModel):
-    prompt: str = Field(..., min_length=1)
+    prompt: str = Field(..., min_length=1, max_length=16384)
 
 
 class GenerateRequest(BaseModel):
@@ -547,11 +547,16 @@ def embed_text(req: EmbedRequest):
     except HTTPException:
         metrics.record_request("embed", "error")
         raise
+    except TimeoutError:
+        metrics.record_request("embed", "error")
+        raise HTTPException(status_code=504, detail="BitNet embedding request timed out.")
     except Exception as e:
         metrics.record_request("embed", "error")
         logger.error(f"Failed to generate embedding: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to generate embedding vector.")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run("app:app", host=host, port=port, reload=False)

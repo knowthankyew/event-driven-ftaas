@@ -113,12 +113,15 @@ Exiting...
         self.assertIn("Mandatory next-day availability", completion)
         self.assertGreater(latency, 0.0)
 
-        # Verify command flags passed to subprocess
+        # Verify command flags passed to subprocess and zero prompt leakage
         args, kwargs = mock_run.call_args
         cmd = args[0]
         self.assertIn("-ngl", cmd)
         self.assertIn("-st", cmd)
         self.assertIn("--simple-io", cmd)
+        self.assertIn("-f", cmd)
+        self.assertNotIn("-p", cmd)
+        self.assertTrue(all("Explain Regulation CC" not in str(arg) for arg in cmd))
 
     @patch("bitnet_engine.is_bitnet_available", return_value=True)
     @patch("asyncio.create_subprocess_exec")
@@ -131,7 +134,7 @@ Assistant: Async generation completed successfully.
         mock_proc = MagicMock()
         mock_proc.returncode = 0
 
-        async def _mock_communicate():
+        async def _mock_communicate(*args, **kwargs):
             return sample_output.encode("utf-8"), b""
 
         mock_proc.communicate = _mock_communicate
@@ -143,6 +146,25 @@ Assistant: Async generation completed successfully.
         completion, latency = asyncio.run(run_async())
         self.assertEqual(completion, "Async generation completed successfully.")
         self.assertGreater(latency, 0.0)
+
+        # Assert zero prompt leakage in process arguments
+        exec_args = mock_exec.call_args[0]
+        self.assertNotIn("-p", exec_args)
+        self.assertTrue(all("Async test" not in str(arg) for arg in exec_args))
+
+    def test_command_builders_zero_prompt_exposure(self):
+        """Ensure command builders route through files/pipes rather than CLI args (-p)."""
+        gen_cmd = bitnet_engine.build_bitnet_generate_cmd("/dev/stdin", max_tokens=100)
+        self.assertIn("-f", gen_cmd)
+        self.assertIn("/dev/stdin", gen_cmd)
+        self.assertNotIn("-p", gen_cmd)
+
+        embed_cmd = bitnet_engine.build_bitnet_embed_cmd("/dev/stdin")
+        self.assertIn("-f", embed_cmd)
+        self.assertIn("/dev/stdin", embed_cmd)
+        self.assertIn("--embd-separator", embed_cmd)
+        self.assertIn("<#sep#>", embed_cmd)
+        self.assertNotIn("-p", embed_cmd)
 
 
 class TestAppRoutingWithBitNet(unittest.TestCase):
@@ -226,13 +248,51 @@ class TestBitNetEmbedding(unittest.TestCase):
         self.assertIn("-ngl", cmd)
         self.assertIn("--pooling", cmd)
         self.assertIn("-f", cmd)
-        
+        self.assertIn("--embd-separator", cmd)
+        self.assertIn("<#sep#>", cmd)
+        self.assertNotIn("-p", cmd)
+        self.assertTrue(all("Statutory clause" not in str(arg) for arg in cmd))
+
+    @patch("bitnet_engine.is_bitnet_embed_available", return_value=True)
+    @patch("asyncio.create_subprocess_exec")
+    def test_embed_bitnet_async_success(self, mock_exec, _mock_avail):
+        dummy_vec = [0.1] * 640
+        sample_output = f"some log text\n[[{','.join(map(str, dummy_vec))}]]\nmore logs"
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+
+        async def _mock_communicate(*args, **kwargs):
+            return sample_output.encode("utf-8"), b""
+
+        mock_proc.communicate = _mock_communicate
+        mock_exec.return_value = mock_proc
+
+        async def run_async():
+            return await bitnet_engine.embed_bitnet("Async statutory clause")
+
+        vec, lat = asyncio.run(run_async())
+        self.assertEqual(len(vec), 640)
+        self.assertGreater(lat, 0.0)
+
+        exec_args = mock_exec.call_args[0]
+        self.assertNotIn("-p", exec_args)
+        self.assertTrue(all("Async statutory clause" not in str(arg) for arg in exec_args))
+
     def test_parse_embed_output_valid(self):
         dummy_vec = [0.1] * 640
         raw_out = f"[[{','.join(map(str, dummy_vec))}]]"
         vec, ms = bitnet_engine._parse_embed_output(raw_out, 120.0)
         self.assertEqual(len(vec), 640)
-        
+
+    def test_parse_embed_output_multiple_vectors_rejected(self):
+        """Ensure multi-line input returning multiple vectors is rejected rather than quietly truncated."""
+        dummy_vec1 = [0.1] * 640
+        dummy_vec2 = [0.2] * 640
+        raw_out = f"[[{','.join(map(str, dummy_vec1))}], [{','.join(map(str, dummy_vec2))}]]"
+        with self.assertRaises(ValueError) as ctx:
+            bitnet_engine._parse_embed_output(raw_out, 120.0)
+        self.assertIn("Expected single embedding vector, got 2 vectors", str(ctx.exception))
+
     def test_parse_embed_output_invalid_length(self):
         dummy_vec = [0.1] * 128
         raw_out = f"[[{','.join(map(str, dummy_vec))}]]"
@@ -245,6 +305,7 @@ class TestBitNetEmbedding(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             bitnet_engine._parse_embed_output(raw_out, 120.0)
         self.assertIn("No JSON array found in output", str(ctx.exception))
+
 
 class TestAppRoutingEmbedding(unittest.TestCase):
     @patch("app.is_bitnet_available", return_value=True)
@@ -259,6 +320,48 @@ class TestAppRoutingEmbedding(unittest.TestCase):
         self.assertEqual(res["prompt"], "This is a test.")
         self.assertEqual(len(res["embedding"]), 640)
         self.assertEqual(res["latencyMs"], 450.0)
+
+    def test_embed_text_prompt_length_validation(self):
+        from pydantic import ValidationError
+        # Prompt exceeding 16384 characters should fail validation (HTTP 422 in FastAPI)
+        with self.assertRaises(ValidationError):
+            app.EmbedRequest(prompt="x" * 16385)
+        # Empty prompt should fail validation
+        with self.assertRaises(ValidationError):
+            app.EmbedRequest(prompt="")
+        # Prompt within bounds succeeds
+        req = app.EmbedRequest(prompt="x" * 1000)
+        self.assertEqual(len(req.prompt), 1000)
+
+    @patch("app.is_bitnet_available", return_value=True)
+    @patch("app.get_bitnet_status")
+    @patch("app.embed_bitnet_sync")
+    def test_embed_text_timeout_maps_to_504(self, mock_embed, mock_status, _mock_avail):
+        from fastapi import HTTPException
+        mock_status.return_value = {"embedAvailable": True}
+        mock_embed.side_effect = TimeoutError("Timed out after 60s")
+
+        req = app.EmbedRequest(prompt="Timeout prompt")
+        with self.assertRaises(HTTPException) as ctx:
+            app.embed_text(req)
+        self.assertEqual(ctx.exception.status_code, 504)
+        self.assertEqual(ctx.exception.detail, "BitNet embedding request timed out.")
+
+    @patch("app.is_bitnet_available", return_value=True)
+    @patch("app.get_bitnet_status")
+    @patch("app.embed_bitnet_sync")
+    def test_embed_text_generic_error_sanitized(self, mock_embed, mock_status, _mock_avail):
+        from fastapi import HTTPException
+        mock_status.return_value = {"embedAvailable": True}
+        mock_embed.side_effect = RuntimeError("/internal/host/path/failure.cpp:42 segmentation violation")
+
+        req = app.EmbedRequest(prompt="Failure prompt")
+        with self.assertRaises(HTTPException) as ctx:
+            app.embed_text(req)
+        self.assertEqual(ctx.exception.status_code, 500)
+        self.assertEqual(ctx.exception.detail, "Failed to generate embedding vector.")
+        self.assertNotIn("segmentation violation", ctx.exception.detail)
+        self.assertNotIn("/internal/host/path", ctx.exception.detail)
 
 if __name__ == "__main__":
     unittest.main()

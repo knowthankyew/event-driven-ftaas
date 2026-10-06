@@ -28,6 +28,57 @@ BITNET_EMBED_CLI_PATH = Path(os.getenv("BITNET_EMBED_CLI_PATH", str(DEFAULT_EMBE
 BITNET_EMBED_MODEL_PATH = Path(os.getenv("BITNET_EMBED_MODEL_PATH", str(DEFAULT_EMBED_MODEL_PATH))).resolve()
 BITNET_THREADS = int(os.getenv("BITNET_THREADS", "4"))
 BITNET_TIMEOUT_SECONDS = float(os.getenv("BITNET_TIMEOUT_SECONDS", "60.0"))
+DEV_STDIN = Path("/dev/stdin")
+
+
+def build_bitnet_generate_cmd(
+    input_file: str = "/dev/stdin",
+    max_tokens: int = 128,
+    temperature: float = 0.7,
+    adapter_path: Optional[str] = None
+) -> list[str]:
+    """Construct argument list for native llama-cli inference."""
+    cmd = [
+        str(BITNET_CLI_PATH),
+        "-m", str(BITNET_MODEL_PATH),
+        "-n", str(max(1, max_tokens)),
+        "-t", str(max(1, BITNET_THREADS)),
+        "--temp", str(max(0.0, temperature)),
+        "-ngl", "0",
+        "-st",
+        "--simple-io",
+        "--no-display-prompt",
+        "--log-disable",
+        "-f", input_file
+    ]
+    if adapter_path:
+        p = Path(adapter_path)
+        if p.is_file():
+            cmd.extend(["--lora", str(p)])
+        elif p.is_dir() and (p / "adapter.gguf").is_file():
+            cmd.extend(["--lora", str(p / "adapter.gguf")])
+        else:
+            logger.warning(f"Requested adapter at '{adapter_path}' does not contain a GGUF file; running base BitNet")
+    return cmd
+
+
+def build_bitnet_embed_cmd(
+    input_file: str = "/dev/stdin",
+    embd_separator: str = "<#sep#>"
+) -> list[str]:
+    """Construct argument list for native llama-embedding inference."""
+    return [
+        str(BITNET_EMBED_CLI_PATH),
+        "-m", str(BITNET_EMBED_MODEL_PATH),
+        "-t", str(max(1, BITNET_THREADS)),
+        "-c", "4096",
+        "--pooling", "last",
+        "--embd-normalize", "2",
+        "--embd-separator", embd_separator,
+        "--embd-output-format", "array",
+        "-ngl", "0",
+        "-f", input_file
+    ]
 
 
 def is_bitnet_model(model_name: Optional[str]) -> bool:
@@ -130,48 +181,65 @@ async def generate_bitnet(
     # Format using BitNet prompt template (User: ...<|eot_id|>\nAssistant: )
     formatted_prompt = f"User: {prompt}<|eot_id|>\nAssistant:"
 
-    cmd = [
-        str(BITNET_CLI_PATH),
-        "-m", str(BITNET_MODEL_PATH),
-        "-p", formatted_prompt,
-        "-n", str(max(1, max_tokens)),
-        "-t", str(max(1, BITNET_THREADS)),
-        "--temp", str(max(0.0, temperature)),
-        "-ngl", "0",
-        "-st",
-        "--simple-io",
-        "--no-display-prompt",
-        "--log-disable"
-    ]
-
-    # Attach GGUF LoRA adapter if provided and accessible
-    if adapter_path:
-        p = Path(adapter_path)
-        if p.is_file():
-            cmd.extend(["--lora", str(p)])
-        elif p.is_dir() and (p / "adapter.gguf").is_file():
-            cmd.extend(["--lora", str(p / "adapter.gguf")])
-        else:
-            logger.warning(f"Requested adapter at '{adapter_path}' does not contain a GGUF file; running base BitNet")
-
     start_t = time.perf_counter()
-    try:
-        proc = await asyncio.wait_for(
-            asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            ),
-            timeout=BITNET_TIMEOUT_SECONDS
+    if DEV_STDIN.exists():
+        cmd = build_bitnet_generate_cmd(
+            input_file="/dev/stdin",
+            max_tokens=max_tokens,
+            temperature=temperature,
+            adapter_path=adapter_path
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=BITNET_TIMEOUT_SECONDS)
-    except asyncio.TimeoutError:
-        logger.error(f"BitNet inference timed out after {BITNET_TIMEOUT_SECONDS}s")
         try:
-            proc.kill()
-        except Exception:
-            pass
-        raise TimeoutError(f"BitNet inference process timed out after {BITNET_TIMEOUT_SECONDS} seconds")
+            proc = await asyncio.wait_for(
+                asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                ),
+                timeout=BITNET_TIMEOUT_SECONDS
+            )
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(input=formatted_prompt.encode("utf-8")),
+                timeout=BITNET_TIMEOUT_SECONDS
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"BitNet inference timed out after {BITNET_TIMEOUT_SECONDS}s")
+            try:
+                proc.kill()
+                await proc.wait()
+            except Exception:
+                pass
+            raise TimeoutError(f"BitNet inference process timed out after {BITNET_TIMEOUT_SECONDS} seconds")
+    else:
+        import tempfile
+        with tempfile.NamedTemporaryFile("w+", delete=True) as tf:
+            tf.write(formatted_prompt)
+            tf.flush()
+            cmd = build_bitnet_generate_cmd(
+                input_file=tf.name,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                adapter_path=adapter_path
+            )
+            try:
+                proc = await asyncio.wait_for(
+                    asyncio.create_subprocess_exec(
+                        *cmd,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE
+                    ),
+                    timeout=BITNET_TIMEOUT_SECONDS
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=BITNET_TIMEOUT_SECONDS)
+            except asyncio.TimeoutError:
+                logger.error(f"BitNet inference timed out after {BITNET_TIMEOUT_SECONDS}s")
+                try:
+                    proc.kill()
+                    await proc.wait()
+                except Exception:
+                    pass
+                raise TimeoutError(f"BitNet inference process timed out after {BITNET_TIMEOUT_SECONDS} seconds")
 
     elapsed_ms = round((time.perf_counter() - start_t) * 1000, 2)
 
@@ -217,40 +285,46 @@ def generate_bitnet_sync(
 
     formatted_prompt = f"User: {prompt}<|eot_id|>\nAssistant:"
 
-    cmd = [
-        str(BITNET_CLI_PATH),
-        "-m", str(BITNET_MODEL_PATH),
-        "-p", formatted_prompt,
-        "-n", str(max(1, max_tokens)),
-        "-t", str(max(1, BITNET_THREADS)),
-        "--temp", str(max(0.0, temperature)),
-        "-ngl", "0",
-        "-st",
-        "--simple-io",
-        "--no-display-prompt",
-        "--log-disable"
-    ]
-
-    if adapter_path:
-        p = Path(adapter_path)
-        if p.is_file():
-            cmd.extend(["--lora", str(p)])
-        elif p.is_dir() and (p / "adapter.gguf").is_file():
-            cmd.extend(["--lora", str(p / "adapter.gguf")])
-        else:
-            logger.warning(f"Requested adapter at '{adapter_path}' does not contain a GGUF file; running base BitNet")
-
     start_t = time.perf_counter()
-    try:
-        res = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=BITNET_TIMEOUT_SECONDS
+    if DEV_STDIN.exists():
+        cmd = build_bitnet_generate_cmd(
+            input_file="/dev/stdin",
+            max_tokens=max_tokens,
+            temperature=temperature,
+            adapter_path=adapter_path
         )
-    except subprocess.TimeoutExpired:
-        logger.error(f"BitNet inference timed out after {BITNET_TIMEOUT_SECONDS}s")
-        raise TimeoutError(f"BitNet inference process timed out after {BITNET_TIMEOUT_SECONDS} seconds")
+        try:
+            res = subprocess.run(
+                cmd,
+                input=formatted_prompt,
+                capture_output=True,
+                text=True,
+                timeout=BITNET_TIMEOUT_SECONDS
+            )
+        except subprocess.TimeoutExpired:
+            logger.error(f"BitNet inference timed out after {BITNET_TIMEOUT_SECONDS}s")
+            raise TimeoutError(f"BitNet inference process timed out after {BITNET_TIMEOUT_SECONDS} seconds")
+    else:
+        import tempfile
+        with tempfile.NamedTemporaryFile("w+", delete=True) as tf:
+            tf.write(formatted_prompt)
+            tf.flush()
+            cmd = build_bitnet_generate_cmd(
+                input_file=tf.name,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                adapter_path=adapter_path
+            )
+            try:
+                res = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=BITNET_TIMEOUT_SECONDS
+                )
+            except subprocess.TimeoutExpired:
+                logger.error(f"BitNet inference timed out after {BITNET_TIMEOUT_SECONDS}s")
+                raise TimeoutError(f"BitNet inference process timed out after {BITNET_TIMEOUT_SECONDS} seconds")
 
     elapsed_ms = round((time.perf_counter() - start_t) * 1000, 2)
 
@@ -264,15 +338,14 @@ def generate_bitnet_sync(
 
 
 def is_bitnet_embed_available() -> bool:
-    '''Check whether the native llama-embedding binary and gguf weights are accessible on the host.'''
+    """Check whether the native llama-embedding binary and gguf weights are accessible on the host."""
     cli_ok = BITNET_EMBED_CLI_PATH.is_file() and os.access(str(BITNET_EMBED_CLI_PATH), os.X_OK)
     model_ok = BITNET_EMBED_MODEL_PATH.is_file()
     return cli_ok and model_ok
 
+
 async def embed_bitnet(prompt: str) -> Tuple[list[float], float]:
-    '''Asynchronous execution of native BitNet C++ embedding via llama-embedding.'''
-    import tempfile
-    
+    """Asynchronous execution of native BitNet C++ embedding via llama-embedding."""
     if not is_bitnet_embed_available():
         status = get_bitnet_status()
         raise RuntimeError(
@@ -281,55 +354,73 @@ async def embed_bitnet(prompt: str) -> Tuple[list[float], float]:
             f"model_present={status['embedModelPresent']} ({status['embedModelPath']})."
         )
 
-    with tempfile.NamedTemporaryFile("w+", delete=True) as tf:
-        tf.write(prompt)
-        tf.flush()
-        
-        cmd = [
-            str(BITNET_EMBED_CLI_PATH),
-            "-m", str(BITNET_EMBED_MODEL_PATH),
-            "-t", str(max(1, BITNET_THREADS)),
-            "-c", "4096",
-            "--pooling", "last",
-            "--embd-normalize", "2",
-            "--embd-output-format", "array",
-            "-ngl", "0",
-            "-f", tf.name
-        ]
-
-        start_t = time.perf_counter()
+    start_t = time.perf_counter()
+    if DEV_STDIN.exists():
+        cmd = build_bitnet_embed_cmd("/dev/stdin")
         try:
             proc = await asyncio.wait_for(
                 asyncio.create_subprocess_exec(
                     *cmd,
+                    stdin=asyncio.subprocess.PIPE,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 ),
                 timeout=BITNET_TIMEOUT_SECONDS
             )
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=BITNET_TIMEOUT_SECONDS)
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(input=prompt.encode("utf-8")),
+                timeout=BITNET_TIMEOUT_SECONDS
+            )
         except asyncio.TimeoutError:
             logger.error(f"BitNet embedding timed out after {BITNET_TIMEOUT_SECONDS}s")
             try:
                 proc.kill()
+                await proc.wait()
             except Exception:
                 pass
             raise TimeoutError(f"BitNet embedding process timed out after {BITNET_TIMEOUT_SECONDS} seconds")
+    else:
+        import tempfile
+        with tempfile.NamedTemporaryFile("w+", delete=True) as tf:
+            tf.write(prompt)
+            tf.flush()
+            cmd = build_bitnet_embed_cmd(tf.name)
+            try:
+                proc = await asyncio.wait_for(
+                    asyncio.create_subprocess_exec(
+                        *cmd,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE
+                    ),
+                    timeout=BITNET_TIMEOUT_SECONDS
+                )
+                stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                    proc.communicate(),
+                    timeout=BITNET_TIMEOUT_SECONDS
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"BitNet embedding timed out after {BITNET_TIMEOUT_SECONDS}s")
+                try:
+                    proc.kill()
+                    await proc.wait()
+                except Exception:
+                    pass
+                raise TimeoutError(f"BitNet embedding process timed out after {BITNET_TIMEOUT_SECONDS} seconds")
 
-        elapsed_ms = round((time.perf_counter() - start_t) * 1000, 2)
-        stdout_str = stdout_bytes.decode('utf-8', errors='replace')
+    elapsed_ms = round((time.perf_counter() - start_t) * 1000, 2)
+    stdout_str = stdout_bytes.decode("utf-8", errors="replace")
 
-        if proc.returncode != 0:
-            err_msg = stderr_bytes.decode('utf-8', errors='replace').strip()
-            logger.error(f"BitNet embedding process failed (exit {proc.returncode}): {err_msg}")
-            raise RuntimeError(f"BitNet embedding exited with code {proc.returncode}: {err_msg}")
+    if proc.returncode != 0:
+        err_msg = stderr_bytes.decode("utf-8", errors="replace").strip()
+        logger.error(f"BitNet embedding process failed (exit {proc.returncode}): {err_msg}")
+        raise RuntimeError(f"BitNet embedding exited with code {proc.returncode}: {err_msg}")
 
     return _parse_embed_output(stdout_str, elapsed_ms)
 
+
 def embed_bitnet_sync(prompt: str) -> Tuple[list[float], float]:
-    '''Synchronous execution of native BitNet C++ embedding via llama-embedding.'''
+    """Synchronous execution of native BitNet C++ embedding via llama-embedding."""
     import subprocess
-    import tempfile
 
     if not is_bitnet_embed_available():
         status = get_bitnet_status()
@@ -339,26 +430,13 @@ def embed_bitnet_sync(prompt: str) -> Tuple[list[float], float]:
             f"model_present={status['embedModelPresent']} ({status['embedModelPath']})."
         )
 
-    with tempfile.NamedTemporaryFile("w+", delete=True) as tf:
-        tf.write(prompt)
-        tf.flush()
-        
-        cmd = [
-            str(BITNET_EMBED_CLI_PATH),
-            "-m", str(BITNET_EMBED_MODEL_PATH),
-            "-t", str(max(1, BITNET_THREADS)),
-            "-c", "4096",
-            "--pooling", "last",
-            "--embd-normalize", "2",
-            "--embd-output-format", "array",
-            "-ngl", "0",
-            "-f", tf.name
-        ]
-
-        start_t = time.perf_counter()
+    start_t = time.perf_counter()
+    if DEV_STDIN.exists():
+        cmd = build_bitnet_embed_cmd("/dev/stdin")
         try:
             res = subprocess.run(
                 cmd,
+                input=prompt,
                 capture_output=True,
                 text=True,
                 timeout=BITNET_TIMEOUT_SECONDS
@@ -366,37 +444,57 @@ def embed_bitnet_sync(prompt: str) -> Tuple[list[float], float]:
         except subprocess.TimeoutExpired:
             logger.error(f"BitNet embedding timed out after {BITNET_TIMEOUT_SECONDS}s")
             raise TimeoutError(f"BitNet embedding process timed out after {BITNET_TIMEOUT_SECONDS} seconds")
+    else:
+        import tempfile
+        with tempfile.NamedTemporaryFile("w+", delete=True) as tf:
+            tf.write(prompt)
+            tf.flush()
+            cmd = build_bitnet_embed_cmd(tf.name)
+            try:
+                res = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=BITNET_TIMEOUT_SECONDS
+                )
+            except subprocess.TimeoutExpired:
+                logger.error(f"BitNet embedding timed out after {BITNET_TIMEOUT_SECONDS}s")
+                raise TimeoutError(f"BitNet embedding process timed out after {BITNET_TIMEOUT_SECONDS} seconds")
 
-        elapsed_ms = round((time.perf_counter() - start_t) * 1000, 2)
+    elapsed_ms = round((time.perf_counter() - start_t) * 1000, 2)
 
-        if res.returncode != 0:
-            logger.error(f"BitNet embedding process failed (exit {res.returncode}): {res.stderr}")
-            raise RuntimeError(f"BitNet embedding exited with code {res.returncode}: {res.stderr}")
+    if res.returncode != 0:
+        logger.error(f"BitNet embedding process failed (exit {res.returncode}): {res.stderr}")
+        raise RuntimeError(f"BitNet embedding exited with code {res.returncode}: {res.stderr}")
 
     return _parse_embed_output(res.stdout, elapsed_ms)
+
 
 def _parse_embed_output(stdout_str: str, elapsed_ms: float) -> Tuple[list[float], float]:
     import json
     match = re.search(r'\[\s*\[\s*-?\d+\.?\d*', stdout_str)
     if not match:
         raise ValueError("No JSON array found in output.")
-        
+
     start_idx = match.start()
     end_idx = stdout_str.rfind(']]')
     if end_idx == -1 or end_idx < start_idx:
         raise ValueError("Malformed JSON array in output.")
-        
+
     array_str = stdout_str[start_idx:end_idx+2]
-    
+
     try:
         embeddings = json.loads(array_str)
     except json.JSONDecodeError as e:
         raise ValueError(f"Failed to decode JSON array: {e}")
-        
+
     if isinstance(embeddings, list) and len(embeddings) > 0 and isinstance(embeddings[0], list):
+        if len(embeddings) != 1:
+            raise ValueError(f"Expected single embedding vector, got {len(embeddings)} vectors (check prompt formatting)")
         embeddings = embeddings[0]
-        
+
     if len(embeddings) != 640:
         raise ValueError(f"Expected embedding dimension 640, got {len(embeddings)}")
-        
+
     return embeddings, elapsed_ms
+

@@ -195,7 +195,7 @@ flowchart TD
 
 ### Milestone 2: Unified 1-Bit Zero-Egress Stack & Statutory Retrieval &mdash; 🟡 ACTIVE
 
-#### [x] Phase 8: 1-Bit Dense Embedding Subsystem (`bitnet-embedding-270m`) &mdash; 🟢 COMPLETED
+#### [x] Phase 8: 1-Bit Dense Embedding Subsystem (`bitnet-embedding-270m`) &mdash; 🟢 COMPLETED (Serving & Latency on AVX2; Domain Quality Evals Planned in Phase 10)
 - **Action**: Acquire, serve, and benchmark Microsoft's 1.58-bit dense embedding model in `bitnet.cpp`.
 - **Target Specifications**:
   - Model: `microsoft/bitnet-embedding-270m` (and `bitnet-embedding-0.6b`).
@@ -204,11 +204,11 @@ flowchart TD
   - Context Window: Bounded 4,096 tokens (`-c 4096`, edge memory safe) / 32,768 max tokens.
 - **Executed Steps**:
   1. Acquired official Microsoft `bitnet-embeddings-270m-bf16-i2_s.gguf` model weights.
-  2. Implemented native zero-egress wrapper in `src/FtaaSService.Inference/bitnet_engine.py` using `tempfile.NamedTemporaryFile` + `-f` to guarantee zero prompt leakage in `ps aux` / `/proc/$PID/cmdline`.
-  3. Integrated `POST /api/v1/inference/embed` in `src/FtaaSService.Inference/app.py` returning unit-normalized float arrays ($\|v\|_2 = 1.0$) with last-token pooling (`--pooling last`), bounded context (`-c 4096`), Prometheus exposition (`ftaas_inference_embed_model_loaded`), and diagnostic `/healthz` telemetry.
-  4. Authored comprehensive test suite `TestBitNetEmbedding` and `TestAppRoutingEmbedding` in `tests/test_bitnet_engine.py` (87/87 tests passing).
-  5. Empirically benchmarked prefill embedding latency across 1, 2, 4, and 8 threads on Intel Core i9 AVX2.
-- **Empirical Benchmark Results (macOS Intel Core i9-9880H AVX2)**:
+  2. Implemented native zero-egress streaming wrapper in `src/FtaaSService.Inference/bitnet_engine.py` using `-f /dev/stdin` (with tempfile fallback) and `--embd-separator "<#sep#>"` to prevent process argument snooping (`ps aux` / `/proc/$PID/cmdline`), avoid disk persistence, and preserve multi-paragraph legal statutes.
+  3. Integrated `POST /api/v1/inference/embed` in `src/FtaaSService.Inference/app.py` returning unit-normalized float arrays ($\|v\|_2 = 1.0$) with last-token pooling (`--pooling last`), bounded context (`-c 4096`), Prometheus exposition (`ftaas_inference_embed_model_loaded`), and diagnostic `/healthz` telemetry. Bound service to loopback (`127.0.0.1`).
+  4. Authored comprehensive test suite `TestBitNetEmbedding` and `TestAppRoutingEmbedding` in `tests/test_bitnet_engine.py` verifying vector dimension, multi-line separation, zero argument leakage, and timeout sanitization.
+  5. Empirically benchmarked prefill embedding latency across 1, 2, 4, and 8 threads on Intel Core i9 AVX2 (5 warm iterations after 1 warmup run).
+- **Empirical Benchmark Results (macOS Intel Core i9-9880H AVX2: 8 Physical Cores, 16 Threads)**:
   - **Kernel Prefill Throughput (`llama-bench`)**:
     - `pp64`: 350.2 t/s ($t=1$) $\to$ 499.5 t/s ($t=4$) $\to$ 490.6 t/s ($t=8$)
     - `pp128`: 483.2 t/s ($t=1$) $\to$ 698.0 t/s ($t=4$) $\to$ 660.8 t/s ($t=8$)
@@ -230,7 +230,7 @@ flowchart TD
       - $t=4$: **1,632.10 ms** (p50: **1,609.30 ms**)
       - $t=8$: 1,671.28 ms (p50: 1,677.77 ms)
 - **Key Empirical Observations**:
-  - **4 Threads Optimal on 8-Core Intel**: Scaling from 1 to 4 threads reduces end-to-end latency by ~360 ms. Hyperthreading to 8 threads shows diminishing returns / thermal saturation.
+  - **4 Threads Optimal on 8 Physical Cores**: Scaling from 1 to 4 threads reduces end-to-end latency by ~360 ms. For short prompts (22–85 tokens), parallel work is bounded such that synchronization overhead causes latency to plateau beyond $t=4$, with $t=8$ approaching hyperthreading/thermal saturation.
   - **Process Cold-Start vs Kernel Speed**: Raw AVX2 SIMD prefill operates at up to 977 tokens/sec (~100 ms pure compute for a legal clause). The fixed ~1,400 ms cold-start overhead confirms the architectural directive for Phase 9 to implement persistent worker daemonization or C shared library bindings for bulk statutory vector indexing.
 
 #### [ ] Phase 9: Statutory Pack Vector Index & Semantic Retriever &mdash; 📋 PLANNED
@@ -266,8 +266,8 @@ flowchart TD
 | **PyTorch Training Weights vs GGUF** | GGUF is optimized for C++ inference, not PyTorch backprop | Use GGUF for C++ inference; use Hugging Face PyTorch weights (`microsoft/BitNet-b1.58-2B-4T`) for LoRA. | **Resolved**: Dual-representation architecture cleanly implemented across worker and engine. |
 | **Upstream Submodule CMake Path Breaks** | Upstream build scripts assumed external CMake install | Patch CMake target configuration and upstream fixes. | **Resolved**: `microsoft/BitNet#635` and `isHuangXin/llama.cpp#7` submitted and CI validated. |
 | **Inference Engine Backend Disconnect** | Standard PyTorch engine cannot execute 2-bit GGUF files natively | Dual-backend inference routing in FastAPI (`app.py` + `bitnet_engine.py`). | **Resolved**: Native C++ adapter serves base GGUF in CPU memory (23.5 t/s); PyTorch serves fine-tuned adapters. |
-| **Embedding Normalization Drift** | Unnormalized dot-products degrade cosine ranking | Enforce EOS pooling with `--embd-normalize 2` in `bitnet.cpp` CLI. | **Mitigation Planned (Phase 8)**: Standardize on unit L2 normalization in C++ wrapper. |
-| **Long-Context Memory Pressure** | 32k context batching could spike memory during prefill | Bound chunk sizing in sidecar to 4,096 tokens per batch for edge devices. | **Mitigation Planned (Phase 8)**: Adaptive chunk batching in `bitnet_engine.py`. |
+| **Embedding Normalization Drift** | Unnormalized dot-products degrade cosine ranking | Enforce EOS pooling with `--embd-normalize 2` in `bitnet.cpp` CLI. | **Resolved**: Enforced `--embd-normalize 2` with unit L2 normalization in C++ wrapper. |
+| **Long-Context Memory Pressure** | 32k context batching could spike memory during prefill | Bound chunk sizing in sidecar to 4,096 tokens per batch for edge devices. | **Resolved**: Bound `-c 4096` context window in `bitnet_engine.py` and validated input length in API. |
 
 ---
 
