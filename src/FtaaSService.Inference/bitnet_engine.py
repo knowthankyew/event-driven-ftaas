@@ -57,6 +57,11 @@ class BitNetExecutionError(Exception):
     pass
 
 
+class TokenizerUnavailableError(BitNetExecutionError):
+    """Raised when the tokenizer pre-check cannot verify token count for long prompts."""
+    pass
+
+
 def count_embed_tokens(prompt: str) -> Optional[int]:
     """
     Count prompt tokens using native llama-tokenize against bitnet-embedding weights.
@@ -124,12 +129,14 @@ def build_bitnet_generate_cmd(
     input_file: str = "/dev/stdin",
     max_tokens: int = 128,
     temperature: float = 0.7,
-    adapter_path: Optional[str] = None
+    adapter_path: Optional[str] = None,
+    context_size: int = 4096
 ) -> list[str]:
     """Construct argument list for native llama-cli inference."""
     cmd = [
         str(BITNET_CLI_PATH),
         "-m", str(BITNET_MODEL_PATH),
+        "-c", str(max(128, context_size)),
         "-n", str(max(1, max_tokens)),
         "-t", str(max(1, BITNET_THREADS)),
         "--temp", str(max(0.0, temperature)),
@@ -230,6 +237,8 @@ def parse_llama_cli_output(raw_output: str, prompt: str) -> str:
     # Isolate assistant response from prompt echo
     if "Assistant:" in text:
         text = text.split("Assistant:", 1)[1]
+    elif "... (truncated)" in text:
+        text = text.split("... (truncated)", 1)[1]
     elif prompt in text:
         text = text.split(prompt, 1)[1]
     elif "> " in text:
@@ -455,9 +464,9 @@ async def embed_bitnet(prompt: str) -> Tuple[list[float], float]:
     if len(clean_prompt_bytes) > (MAX_SAFE_EMBED_TOKENS - 2):
         token_count = await count_embed_tokens_async(clean_prompt)
         if token_count is None:
-            raise ContextOverflowError(
+            raise TokenizerUnavailableError(
                 f"Unable to verify token count for prompt exceeding safe byte bound ({len(clean_prompt_bytes)} bytes). "
-                f"Request rejected to mitigate potential kernel memory fault."
+                f"Request rejected because token verification service is unavailable."
             )
         if token_count > MAX_SAFE_EMBED_TOKENS:
             raise ContextOverflowError(
@@ -552,9 +561,9 @@ def embed_bitnet_sync(prompt: str) -> Tuple[list[float], float]:
     if len(clean_prompt_bytes) > (MAX_SAFE_EMBED_TOKENS - 2):
         token_count = count_embed_tokens(clean_prompt)
         if token_count is None:
-            raise ContextOverflowError(
+            raise TokenizerUnavailableError(
                 f"Unable to verify token count for prompt exceeding safe byte bound ({len(clean_prompt_bytes)} bytes). "
-                f"Request rejected to mitigate potential kernel memory fault."
+                f"Request rejected because token verification service is unavailable."
             )
         if token_count > MAX_SAFE_EMBED_TOKENS:
             raise ContextOverflowError(

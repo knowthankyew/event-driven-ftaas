@@ -56,6 +56,7 @@ from bitnet_engine import (
     embed_bitnet,
     ContextOverflowError,
     BitNetExecutionError,
+    TokenizerUnavailableError,
 )
 
 def get_device() -> torch.device:
@@ -342,7 +343,6 @@ def healthz():
         "backend": model_store.backend,
         "bitnet": sanitized_bitnet,
         "cachedAdapterCount": len(model_store.adapter_cache),
-        "cachedAdapters": [Path(k).name for k in model_store.adapter_cache.keys()],
         "chatTemplate": _chat_template,
     }
 
@@ -605,6 +605,10 @@ def embed_text(req: EmbedRequest):
     except ContextOverflowError as coe:
         metrics.record_request("embed", "error")
         raise HTTPException(status_code=413, detail=str(coe))
+    except TokenizerUnavailableError as tue:
+        metrics.record_request("embed", "error")
+        logger.error(f"BitNet embedding tokenizer unavailable: {tue}")
+        raise HTTPException(status_code=503, detail="Token verification service is unavailable. Please retry later.")
     except BitNetExecutionError as bee:
         metrics.record_request("embed", "error")
         logger.error(f"BitNet execution failed: {bee}")

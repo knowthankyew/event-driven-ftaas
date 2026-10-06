@@ -158,6 +158,8 @@ Assistant: Async generation completed successfully.
         self.assertIn("-f", gen_cmd)
         self.assertIn("/dev/stdin", gen_cmd)
         self.assertNotIn("-p", gen_cmd)
+        self.assertIn("-c", gen_cmd)
+        self.assertEqual(gen_cmd[gen_cmd.index("-c") + 1], "4096")
 
         embed_cmd = bitnet_engine.build_bitnet_embed_cmd("/dev/stdin")
         self.assertIn("-f", embed_cmd)
@@ -361,7 +363,7 @@ class TestBitNetEmbedding(unittest.TestCase):
     def test_embed_bitnet_precheck_tokenizer_unavailable_fails_closed(self, mock_run, mock_count, _mock_avail):
         """When byte length exceeds safe bound and tokenizer is unavailable, service must fail closed."""
         long_prompt = "Federal reserve regulation " * 10
-        with self.assertRaises(bitnet_engine.ContextOverflowError) as ctx:
+        with self.assertRaises(bitnet_engine.TokenizerUnavailableError) as ctx:
             bitnet_engine.embed_bitnet_sync(long_prompt)
         self.assertIn("Unable to verify token count", str(ctx.exception))
         mock_run.assert_not_called()
@@ -475,6 +477,20 @@ class TestAppRoutingEmbedding(unittest.TestCase):
             app.embed_text(req)
         self.assertEqual(ctx.exception.status_code, 413)
         self.assertIn("exceeds the maximum context capacity", ctx.exception.detail)
+
+    @patch("app.is_bitnet_available", return_value=True)
+    @patch("app.get_bitnet_status")
+    @patch("app.embed_bitnet_sync")
+    def test_embed_text_tokenizer_unavailable_maps_to_503(self, mock_embed, mock_status, _mock_avail):
+        from fastapi import HTTPException
+        mock_status.return_value = {"embedAvailable": True}
+        mock_embed.side_effect = bitnet_engine.TokenizerUnavailableError("Unable to verify token count for prompt exceeding safe byte bound")
+
+        req = app.EmbedRequest(prompt="Long statute text needing verification")
+        with self.assertRaises(HTTPException) as ctx:
+            app.embed_text(req)
+        self.assertEqual(ctx.exception.status_code, 503)
+        self.assertIn("Token verification service is unavailable", ctx.exception.detail)
 
     @patch("app.is_bitnet_available", return_value=True)
     @patch("app.get_bitnet_status")
@@ -593,10 +609,7 @@ class TestAppRoutingEmbedding(unittest.TestCase):
         self.assertIn("embedAvailable", bitnet_info)
         self.assertIn("threads", bitnet_info)
         self.assertIn("cachedAdapterCount", res)
-        self.assertIsInstance(res["cachedAdapters"], list)
-        for adapter in res["cachedAdapters"]:
-            self.assertNotIn("/", adapter)
-            self.assertNotIn("\\", adapter)
+        self.assertNotIn("cachedAdapters", res)
 
     def test_cors_origin_restriction(self):
         from fastapi.testclient import TestClient
@@ -685,11 +698,37 @@ class TestBitNetIntegrationLive(unittest.TestCase):
         "BitNet 2B generation binary and weights not present on host"
     )
     def test_live_generation_long_context_does_not_hit_ceiling(self):
-        """Verify that BitNet 2B generation path does not hit the 256-token AVX2 ceiling."""
-        long_prompt = "Federal Trade Commission Act Section 5 compliance requirement. " * 20
+        """Verify that BitNet 2B generation path does not hit the 256-token AVX2 ceiling with >= 600 tokens."""
+        long_prompt = "Federal Trade Commission Act Section 5 compliance requirement. " * 65
         ans, lat = bitnet_engine.generate_bitnet_sync(long_prompt, max_tokens=10)
         self.assertGreater(len(ans), 0)
+        self.assertTrue(any(c.isalnum() for c in ans))
         self.assertGreater(lat, 0.0)
+
+    @unittest.skipUnless(
+        sys.platform == "darwin" and Path("/usr/bin/sandbox-exec").is_file(),
+        "macOS sandbox-exec required for kernel sandbox negative control test"
+    )
+    def test_darwin_sandbox_network_denial_negative_control(self):
+        """Verify that macOS sandbox profile strictly denies outbound network socket creation (negative control)."""
+        import subprocess
+        sandbox_cmd = [
+            "/usr/bin/sandbox-exec",
+            "-p",
+            "(version 1)(allow default)(deny network*)",
+            "curl",
+            "-s",
+            "-m",
+            "2",
+            "https://example.com"
+        ]
+        res = subprocess.run(sandbox_cmd, capture_output=True, text=True)
+        self.assertNotEqual(res.returncode, 0)
+
+        with patch.object(bitnet_engine, "BITNET_SANDBOX_NETWORK_DENY", True):
+            if bitnet_engine.is_bitnet_embed_available():
+                vec, _ = bitnet_engine.embed_bitnet_sync("Sandboxed embedding test")
+                self.assertEqual(len(vec), 640)
 
 
 if __name__ == "__main__":
