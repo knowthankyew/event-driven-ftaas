@@ -41,6 +41,9 @@ MAX_SAFE_EMBED_TOKENS = min(int(os.getenv("MAX_SAFE_EMBED_TOKENS", "240")), 255)
 # Maximum supported prompt character length for generation (~4,096 tokens at ~4 chars/token)
 MAX_GENERATE_PROMPT_CHARS = int(os.getenv("MAX_GENERATE_PROMPT_CHARS", "16384"))
 
+# Maximum safe generation prompt tokens (bounds prompt context before invoking subprocess)
+MAX_SAFE_GENERATE_TOKENS = int(os.getenv("MAX_SAFE_GENERATE_TOKENS", "2048"))
+
 SANDBOX_EXEC_PATH = Path("/usr/bin/sandbox-exec")
 BITNET_SANDBOX_NETWORK_DENY = os.getenv("BITNET_SANDBOX_NETWORK_DENY", "false").lower() in ("true", "1")
 
@@ -138,6 +141,68 @@ async def count_embed_tokens_async(prompt: str) -> Optional[int]:
         logger.warning(f"async llama-tokenize pre-check error: {e}")
     return None
 
+
+def count_generation_tokens(prompt: str) -> Optional[int]:
+    """
+    Count prompt tokens using native llama-tokenize against BitNet 2B generation weights.
+    Returns integer token count if CLI is available, otherwise None.
+    """
+    import subprocess
+    if not (BITNET_TOKENIZE_CLI_PATH.is_file() and os.access(str(BITNET_TOKENIZE_CLI_PATH), os.X_OK) and BITNET_MODEL_PATH.is_file()):
+        return None
+
+    cmd = wrap_sandboxed_cmd([
+        str(BITNET_TOKENIZE_CLI_PATH),
+        "-m", str(BITNET_MODEL_PATH),
+        "--show-count",
+        "--stdin",
+        "--log-disable"
+    ])
+    try:
+        res = subprocess.run(cmd, input=prompt, capture_output=True, text=True, encoding="utf-8", timeout=5.0)
+        if res.returncode == 0:
+            for line in res.stdout.splitlines():
+                if "Total number of tokens:" in line:
+                    return int(line.split(":")[-1].strip())
+    except Exception as e:
+        logger.warning(f"generation token count pre-check error: {e}")
+    return None
+
+
+async def count_generation_tokens_async(prompt: str) -> Optional[int]:
+    """Asynchronously count prompt tokens using llama-tokenize against BitNet 2B generation weights."""
+    if not (BITNET_TOKENIZE_CLI_PATH.is_file() and os.access(str(BITNET_TOKENIZE_CLI_PATH), os.X_OK) and BITNET_MODEL_PATH.is_file()):
+        return None
+
+    cmd = wrap_sandboxed_cmd([
+        str(BITNET_TOKENIZE_CLI_PATH),
+        "-m", str(BITNET_MODEL_PATH),
+        "--show-count",
+        "--stdin",
+        "--log-disable"
+    ])
+    try:
+        proc = await asyncio.wait_for(
+            asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            ),
+            timeout=5.0
+        )
+        stdout_bytes, _ = await asyncio.wait_for(
+            proc.communicate(input=prompt.encode("utf-8")),
+            timeout=5.0
+        )
+        if proc.returncode == 0:
+            stdout_str = stdout_bytes.decode("utf-8", errors="replace")
+            for line in stdout_str.splitlines():
+                if "Total number of tokens:" in line:
+                    return int(line.split(":")[-1].strip())
+    except Exception as e:
+        logger.warning(f"async generation token count pre-check error: {e}")
+    return None
 
 
 def is_completion_cli_available() -> bool:
@@ -281,13 +346,13 @@ def clean_completion_output(raw_output: str) -> str:
 def format_bitnet_chat_prompt(prompt: str, apply_template: bool = True) -> str:
     """
     Format prompt for BitNet generation.
-    When apply_template is True, neutralizes special tokens in untrusted input and wraps
-    in the official SFT chat template (User: ... <|eot_id|>\nAssistant:).
-    When False, passes the raw prompt as-is for custom low-level completion.
+    Always neutralizes special tokens (<|...|>) in untrusted input.
+    When apply_template is True, wraps in the official SFT chat template (User: ... <|eot_id|>\nAssistant:).
+    When False, returns the sanitized prompt as-is for custom low-level completion.
     """
-    if not apply_template:
-        return prompt
     sanitized = sanitize_untrusted_prompt(prompt)
+    if not apply_template:
+        return sanitized
     return f"User: {sanitized}<|eot_id|>\nAssistant:"
 
 
@@ -549,8 +614,8 @@ async def embed_bitnet(prompt: str) -> Tuple[list[float], float]:
             f"model_present={status['embedModelPresent']} ({status['embedModelPath']})."
         )
 
-    # Prevent separator collision from splitting text into multiple vectors
-    clean_prompt = prompt.replace("<#sep#>", " ")
+    # Prevent separator collision from splitting text into multiple vectors and neutralize injected special tokens
+    clean_prompt = sanitize_untrusted_prompt(prompt).replace("<#sep#>", " ")
     clean_prompt_bytes = clean_prompt.encode("utf-8")
 
     # Tokens cannot exceed UTF-8 bytes (each token is at least 1 byte).
@@ -646,8 +711,8 @@ def embed_bitnet_sync(prompt: str) -> Tuple[list[float], float]:
             f"model_present={status['embedModelPresent']} ({status['embedModelPath']})."
         )
 
-    # Prevent separator collision from splitting text into multiple vectors
-    clean_prompt = prompt.replace("<#sep#>", " ")
+    # Prevent separator collision from splitting text into multiple vectors and neutralize injected special tokens
+    clean_prompt = sanitize_untrusted_prompt(prompt).replace("<#sep#>", " ")
     clean_prompt_bytes = clean_prompt.encode("utf-8")
 
     # Tokens cannot exceed UTF-8 bytes (each token is at least 1 byte).

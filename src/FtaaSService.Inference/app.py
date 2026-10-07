@@ -47,8 +47,10 @@ if _worker_src not in _sys.path:
 import hmac
 import threading
 
-MAX_CONCURRENT_INFERENCE = int(os.getenv("FTAAS_MAX_CONCURRENT_INFERENCE", "2"))
-_inference_semaphore = threading.Semaphore(MAX_CONCURRENT_INFERENCE)
+MAX_CONCURRENT_GENERATE = int(os.getenv("FTAAS_MAX_CONCURRENT_GENERATE", "2"))
+MAX_CONCURRENT_EMBED = int(os.getenv("FTAAS_MAX_CONCURRENT_EMBED", "4"))
+_generate_semaphore = threading.Semaphore(MAX_CONCURRENT_GENERATE)
+_embed_semaphore = threading.Semaphore(MAX_CONCURRENT_EMBED)
 
 from model_registry import get_model_spec, format_inference_prompt
 from bitnet_engine import (
@@ -59,6 +61,9 @@ from bitnet_engine import (
     generate_bitnet,
     embed_bitnet_sync,
     embed_bitnet,
+    sanitize_untrusted_prompt,
+    count_generation_tokens,
+    MAX_SAFE_GENERATE_TOKENS,
     ContextOverflowError,
     BitNetExecutionError,
     TokenizerUnavailableError,
@@ -215,7 +220,7 @@ class GenerateRequest(BaseModel):
 
 def _check_prompt_context_length(target_base: str, prompt: str):
     """
-    Validate prompt context capacity per model. Bounded by model-specific context window.
+    Validate prompt context capacity per model. Bounded by model-specific context window and token counts.
     Raises ContextOverflowError (HTTP 413) if input exceeds the model context capacity.
     """
     try:
@@ -231,6 +236,16 @@ def _check_prompt_context_length(target_base: str, prompt: str):
             f"Input prompt ({len(prompt)} characters) exceeds maximum supported generation "
             f"context capacity ({max_chars} characters / {max_tokens} tokens) for model '{target_base}'."
         )
+
+    # For native BitNet generation, enforce explicit token pre-check if tokenizer is available
+    if is_bitnet_model(target_base):
+        tok_limit = min(max_tokens, MAX_SAFE_GENERATE_TOKENS)
+        tok_count = count_generation_tokens(prompt)
+        if tok_count is not None and tok_count > tok_limit:
+            raise ContextOverflowError(
+                f"Input prompt ({tok_count} tokens) exceeds maximum supported generation "
+                f"token context capacity ({tok_limit} tokens) for model '{target_base}'."
+            )
 
 def generate_tokens(
     model,
@@ -431,10 +446,11 @@ def get_metrics():
 
 @app.post("/api/v1/inference/compare")
 def compare_completions(req: CompareRequest):
-    if not _inference_semaphore.acquire(blocking=False):
+    if not _generate_semaphore.acquire(blocking=False):
         raise HTTPException(
             status_code=503,
-            detail="Inference engine is at capacity. Please retry later."
+            detail="Generation engine is at capacity. Please retry later.",
+            headers={"Retry-After": "5"}
         )
     try:
         target_base = req.baseModel or DEFAULT_BASE_MODEL
@@ -562,14 +578,15 @@ def compare_completions(req: CompareRequest):
         logger.error(f"Failed to generate comparison: {ex}")
         raise HTTPException(status_code=500, detail="Failed to generate model completion.")
     finally:
-        _inference_semaphore.release()
+        _generate_semaphore.release()
 
 @app.post("/api/v1/inference/generate")
 def generate(req: GenerateRequest):
-    if not _inference_semaphore.acquire(blocking=False):
+    if not _generate_semaphore.acquire(blocking=False):
         raise HTTPException(
             status_code=503,
-            detail="Inference engine is at capacity. Please retry later."
+            detail="Generation engine is at capacity. Please retry later.",
+            headers={"Retry-After": "5"}
         )
     try:
         target_base = req.baseModel or DEFAULT_BASE_MODEL
@@ -638,15 +655,16 @@ def generate(req: GenerateRequest):
         logger.error(f"Failed to generate completion: {ex}")
         raise HTTPException(status_code=500, detail="Failed to generate model completion.")
     finally:
-        _inference_semaphore.release()
+        _generate_semaphore.release()
 
 
 @app.post("/api/v1/inference/embed")
 def embed_text(req: EmbedRequest):
-    if not _inference_semaphore.acquire(blocking=False):
+    if not _embed_semaphore.acquire(blocking=False):
         raise HTTPException(
             status_code=503,
-            detail="Inference engine is at capacity. Please retry later."
+            detail="Embedding engine is at capacity. Please retry later.",
+            headers={"Retry-After": "5"}
         )
     try:
         if len(req.prompt) > 2048:
@@ -662,7 +680,8 @@ def embed_text(req: EmbedRequest):
                 detail="BitNet C++ native embedding runtime or weights are not available."
             )
 
-        completion, latency = embed_bitnet_sync(req.prompt)
+        sanitized_prompt = sanitize_untrusted_prompt(req.prompt)
+        completion, latency = embed_bitnet_sync(sanitized_prompt)
         metrics.record_request("embed", "success", latency)
         return {
             "embedding": completion,
@@ -690,7 +709,7 @@ def embed_text(req: EmbedRequest):
         logger.error(f"Failed to generate embedding: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate embedding vector.")
     finally:
-        _inference_semaphore.release()
+        _embed_semaphore.release()
 
 if __name__ == "__main__":
     import uvicorn
