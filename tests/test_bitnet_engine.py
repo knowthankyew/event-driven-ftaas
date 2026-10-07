@@ -628,28 +628,29 @@ class TestAppRoutingEmbedding(unittest.TestCase):
             self.assertFalse(bitnet_info["embedAvailable"])
 
     def test_generate_and_compare_prompt_overflow_returns_413(self):
-        """Prompts exceeding MAX_GENERATE_PROMPT_CHARS (16,384 characters) return HTTP 413."""
+        """Prompts exceeding MAX_GENERATE_PROMPT_CHARS (16,384 characters) return HTTP 413 across all backends."""
         long_prompt = "x" * 16385
-        req_gen = app.GenerateRequest.model_construct(
-            baseModel="microsoft/BitNet-b1.58-2B-4T",
-            prompt=long_prompt,
-            maxTokens=32
-        )
         from fastapi import HTTPException
-        with self.assertRaises(HTTPException) as ctx:
-            app.generate(req_gen)
-        self.assertEqual(ctx.exception.status_code, 413)
+        for model in ("microsoft/BitNet-b1.58-2B-4T", "HuggingFaceTB/SmolLM2-135M"):
+            req_gen = app.GenerateRequest.model_construct(
+                baseModel=model,
+                prompt=long_prompt,
+                maxTokens=32
+            )
+            with self.assertRaises(HTTPException) as ctx:
+                app.generate(req_gen)
+            self.assertEqual(ctx.exception.status_code, 413)
 
-        req_cmp = app.CompareRequest.model_construct(
-            jobId="test-job",
-            baseModel="microsoft/BitNet-b1.58-2B-4T",
-            adapterPath="test/adapter",
-            prompt=long_prompt,
-            maxTokens=32
-        )
-        with self.assertRaises(HTTPException) as ctx:
-            app.compare_completions(req_cmp)
-        self.assertEqual(ctx.exception.status_code, 413)
+            req_cmp = app.CompareRequest.model_construct(
+                jobId="test-job",
+                baseModel=model,
+                adapterPath="test/adapter",
+                prompt=long_prompt,
+                maxTokens=32
+            )
+            with self.assertRaises(HTTPException) as ctx:
+                app.compare_completions(req_cmp)
+            self.assertEqual(ctx.exception.status_code, 413)
 
     def test_cors_origin_restriction(self):
         from fastapi.testclient import TestClient

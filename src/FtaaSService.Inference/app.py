@@ -57,6 +57,7 @@ from bitnet_engine import (
     ContextOverflowError,
     BitNetExecutionError,
     TokenizerUnavailableError,
+    MAX_GENERATE_PROMPT_CHARS,
 )
 
 def get_device() -> torch.device:
@@ -404,6 +405,12 @@ def get_metrics():
 @app.post("/api/v1/inference/compare")
 def compare_completions(req: CompareRequest):
     try:
+        if len(req.prompt) > MAX_GENERATE_PROMPT_CHARS:
+            raise ContextOverflowError(
+                f"Input prompt ({len(req.prompt)} characters) exceeds maximum supported generation "
+                f"context capacity ({MAX_GENERATE_PROMPT_CHARS} characters / 4,096 tokens)."
+            )
+
         target_base = req.baseModel or DEFAULT_BASE_MODEL
 
         # Route 1: Native BitNet C++ runtime
@@ -529,6 +536,12 @@ def compare_completions(req: CompareRequest):
 @app.post("/api/v1/inference/generate")
 def generate(req: GenerateRequest):
     try:
+        if len(req.prompt) > MAX_GENERATE_PROMPT_CHARS:
+            raise ContextOverflowError(
+                f"Input prompt ({len(req.prompt)} characters) exceeds maximum supported generation "
+                f"context capacity ({MAX_GENERATE_PROMPT_CHARS} characters / 4,096 tokens)."
+            )
+
         target_base = req.baseModel or DEFAULT_BASE_MODEL
 
         # Route 1: Native BitNet C++ runtime
