@@ -18,6 +18,7 @@ logger = logging.getLogger("FtaaSService.Inference.BitNet")
 
 # Default binary and model paths with environment variable overrides
 DEFAULT_CLI_PATH = Path.home() / "Github" / "BitNet" / "build" / "bin" / "llama-cli"
+DEFAULT_COMPLETION_CLI_PATH = Path.home() / "Github" / "BitNet" / "build" / "bin" / "llama-completion"
 DEFAULT_MODEL_PATH = Path.home() / "Github" / "BitNet" / "models" / "BitNet-b1.58-2B-4T" / "ggml-model-i2_s.gguf"
 
 DEFAULT_EMBED_CLI_PATH = Path.home() / "Github" / "BitNet" / "build" / "bin" / "llama-embedding"
@@ -25,6 +26,7 @@ DEFAULT_EMBED_MODEL_PATH = Path.home() / "Github" / "BitNet" / "models" / "bitne
 DEFAULT_TOKENIZE_CLI_PATH = Path.home() / "Github" / "BitNet" / "build" / "bin" / "llama-tokenize"
 
 BITNET_CLI_PATH = Path(os.getenv("BITNET_CLI_PATH", str(DEFAULT_CLI_PATH))).resolve()
+BITNET_COMPLETION_CLI_PATH = Path(os.getenv("BITNET_COMPLETION_CLI_PATH", str(DEFAULT_COMPLETION_CLI_PATH))).resolve()
 BITNET_MODEL_PATH = Path(os.getenv("BITNET_MODEL_PATH", str(DEFAULT_MODEL_PATH))).resolve()
 BITNET_EMBED_CLI_PATH = Path(os.getenv("BITNET_EMBED_CLI_PATH", str(DEFAULT_EMBED_CLI_PATH))).resolve()
 BITNET_EMBED_MODEL_PATH = Path(os.getenv("BITNET_EMBED_MODEL_PATH", str(DEFAULT_EMBED_MODEL_PATH))).resolve()
@@ -36,6 +38,9 @@ DEV_STDIN = Path("/dev/stdin")
 # Maximum safe token context length for bitnet-embedding on AVX2 (kernel batch decode ceiling is 256; clamped at 255)
 MAX_SAFE_EMBED_TOKENS = min(int(os.getenv("MAX_SAFE_EMBED_TOKENS", "240")), 255)
 
+# Maximum supported prompt character length for generation (~4,096 tokens at ~4 chars/token)
+MAX_GENERATE_PROMPT_CHARS = int(os.getenv("MAX_GENERATE_PROMPT_CHARS", "16384"))
+
 SANDBOX_EXEC_PATH = Path("/usr/bin/sandbox-exec")
 BITNET_SANDBOX_NETWORK_DENY = os.getenv("BITNET_SANDBOX_NETWORK_DENY", "false").lower() in ("true", "1")
 
@@ -45,6 +50,15 @@ def wrap_sandboxed_cmd(cmd: list[str]) -> list[str]:
     if BITNET_SANDBOX_NETWORK_DENY and sys.platform == "darwin" and SANDBOX_EXEC_PATH.is_file():
         return [str(SANDBOX_EXEC_PATH), "-p", "(version 1)(allow default)(deny network*)"] + cmd
     return cmd
+
+
+def is_tokenizer_available() -> bool:
+    """Check whether the native llama-tokenize CLI and embedding weights are present and executable."""
+    return (
+        BITNET_TOKENIZE_CLI_PATH.is_file()
+        and os.access(str(BITNET_TOKENIZE_CLI_PATH), os.X_OK)
+        and BITNET_EMBED_MODEL_PATH.is_file()
+    )
 
 
 class ContextOverflowError(Exception):
@@ -132,21 +146,27 @@ def build_bitnet_generate_cmd(
     adapter_path: Optional[str] = None,
     context_size: int = 4096
 ) -> list[str]:
-    """Construct argument list for native llama-cli inference."""
+    """Construct argument list for native BitNet inference, preferring llama-completion if available."""
+    use_completion = BITNET_COMPLETION_CLI_PATH.is_file() and os.access(str(BITNET_COMPLETION_CLI_PATH), os.X_OK)
+    cli_bin = str(BITNET_COMPLETION_CLI_PATH) if use_completion else str(BITNET_CLI_PATH)
+
     cmd = [
-        str(BITNET_CLI_PATH),
+        cli_bin,
         "-m", str(BITNET_MODEL_PATH),
         "-c", str(max(128, context_size)),
         "-n", str(max(1, max_tokens)),
         "-t", str(max(1, BITNET_THREADS)),
         "--temp", str(max(0.0, temperature)),
         "-ngl", "0",
-        "-st",
-        "--simple-io",
         "--no-display-prompt",
-        "--log-disable",
-        "-f", input_file
     ]
+    if use_completion:
+        cmd.extend(["-no-cnv"])
+    else:
+        cmd.extend(["-st", "--simple-io", "--log-disable"])
+
+    cmd.extend(["-f", input_file])
+
     if adapter_path:
         p = Path(adapter_path)
         if p.is_file():
@@ -186,8 +206,10 @@ def is_bitnet_model(model_name: Optional[str]) -> bool:
 
 
 def is_bitnet_available() -> bool:
-    """Check whether the native bitnet binary and gguf weights are accessible on the host."""
-    cli_ok = BITNET_CLI_PATH.is_file() and os.access(str(BITNET_CLI_PATH), os.X_OK)
+    """Check whether a native bitnet binary (llama-completion or llama-cli) and gguf weights are accessible on the host."""
+    cli_ok = (BITNET_COMPLETION_CLI_PATH.is_file() and os.access(str(BITNET_COMPLETION_CLI_PATH), os.X_OK)) or (
+        BITNET_CLI_PATH.is_file() and os.access(str(BITNET_CLI_PATH), os.X_OK)
+    )
     model_ok = BITNET_MODEL_PATH.is_file()
     return cli_ok and model_ok
 
@@ -196,22 +218,28 @@ def get_bitnet_status() -> dict:
     """Return diagnostic telemetry regarding BitNet binary and weight accessibility."""
     cli_exists = BITNET_CLI_PATH.is_file()
     cli_exec = cli_exists and os.access(str(BITNET_CLI_PATH), os.X_OK)
+    completion_exists = BITNET_COMPLETION_CLI_PATH.is_file()
+    completion_exec = completion_exists and os.access(str(BITNET_COMPLETION_CLI_PATH), os.X_OK)
     model_exists = BITNET_MODEL_PATH.is_file()
     model_size_mb = round(BITNET_MODEL_PATH.stat().st_size / (1024 * 1024), 2) if model_exists else 0.0
 
+    tok_available = is_tokenizer_available()
     embed_cli_exists = BITNET_EMBED_CLI_PATH.is_file()
     embed_cli_exec = embed_cli_exists and os.access(str(BITNET_EMBED_CLI_PATH), os.X_OK)
     embed_model_exists = BITNET_EMBED_MODEL_PATH.is_file()
     embed_model_size_mb = round(BITNET_EMBED_MODEL_PATH.stat().st_size / (1024 * 1024), 2) if embed_model_exists else 0.0
 
     return {
-        "available": cli_exec and model_exists,
+        "available": (cli_exec or completion_exec) and model_exists,
         "cliPath": str(BITNET_CLI_PATH),
         "cliExecutable": cli_exec,
+        "completionPath": str(BITNET_COMPLETION_CLI_PATH),
+        "completionExecutable": completion_exec,
         "modelPath": str(BITNET_MODEL_PATH),
         "modelPresent": model_exists,
         "modelSizeMb": model_size_mb,
-        "embedAvailable": embed_cli_exec and embed_model_exists,
+        "tokenizerAvailable": tok_available,
+        "embedAvailable": embed_cli_exec and embed_model_exists and tok_available,
         "embedCliPath": str(BITNET_EMBED_CLI_PATH),
         "embedCliExecutable": embed_cli_exec,
         "embedModelPath": str(BITNET_EMBED_MODEL_PATH),
@@ -257,7 +285,7 @@ async def generate_bitnet(
     adapter_path: Optional[str] = None
 ) -> Tuple[str, float]:
     """
-    Execute asynchronous native BitNet C++ inference via llama-cli.
+    Execute asynchronous native BitNet C++ inference via llama-completion or llama-cli.
 
     Args:
         prompt: Raw input text from the user or Arena.
@@ -268,6 +296,12 @@ async def generate_bitnet(
     Returns:
         tuple[str, float]: (generated_text, elapsed_ms)
     """
+    if len(prompt) > MAX_GENERATE_PROMPT_CHARS:
+        raise ContextOverflowError(
+            f"Input prompt ({len(prompt)} characters) exceeds maximum supported generation "
+            f"context capacity ({MAX_GENERATE_PROMPT_CHARS} characters / 4,096 tokens)."
+        )
+
     if not is_bitnet_available():
         status = get_bitnet_status()
         raise RuntimeError(
@@ -277,8 +311,10 @@ async def generate_bitnet(
             f"Set BITNET_CLI_PATH and BITNET_MODEL_PATH environment variables."
         )
 
-    # Format using BitNet prompt template (User: ...<|eot_id|>\nAssistant: )
-    formatted_prompt = f"User: {prompt}<|eot_id|>\nAssistant:"
+    use_completion = BITNET_COMPLETION_CLI_PATH.is_file() and os.access(str(BITNET_COMPLETION_CLI_PATH), os.X_OK)
+    formatted_prompt = prompt if use_completion else (
+        prompt if ("User:" in prompt or "<|eot_id|>" in prompt) else f"User: {prompt}<|eot_id|>\nAssistant:"
+    )
 
     start_t = time.perf_counter()
     if DEV_STDIN.exists():
@@ -360,7 +396,7 @@ def generate_bitnet_sync(
     adapter_path: Optional[str] = None
 ) -> Tuple[str, float]:
     """
-    Synchronous execution of native BitNet C++ inference via llama-cli.
+    Synchronous execution of native BitNet C++ inference via llama-completion or llama-cli.
 
     Args:
         prompt: Raw input text from the user or Arena.
@@ -373,6 +409,12 @@ def generate_bitnet_sync(
     """
     import subprocess
 
+    if len(prompt) > MAX_GENERATE_PROMPT_CHARS:
+        raise ContextOverflowError(
+            f"Input prompt ({len(prompt)} characters) exceeds maximum supported generation "
+            f"context capacity ({MAX_GENERATE_PROMPT_CHARS} characters / 4,096 tokens)."
+        )
+
     if not is_bitnet_available():
         status = get_bitnet_status()
         raise RuntimeError(
@@ -382,7 +424,10 @@ def generate_bitnet_sync(
             f"Set BITNET_CLI_PATH and BITNET_MODEL_PATH environment variables."
         )
 
-    formatted_prompt = f"User: {prompt}<|eot_id|>\nAssistant:"
+    use_completion = BITNET_COMPLETION_CLI_PATH.is_file() and os.access(str(BITNET_COMPLETION_CLI_PATH), os.X_OK)
+    formatted_prompt = prompt if use_completion else (
+        prompt if ("User:" in prompt or "<|eot_id|>" in prompt) else f"User: {prompt}<|eot_id|>\nAssistant:"
+    )
 
     start_t = time.perf_counter()
     if DEV_STDIN.exists():
@@ -439,10 +484,11 @@ def generate_bitnet_sync(
 
 
 def is_bitnet_embed_available() -> bool:
-    """Check whether the native llama-embedding binary and gguf weights are accessible on the host."""
+    """Check whether the native llama-embedding binary, gguf weights, and tokenizer are accessible on the host."""
     cli_ok = BITNET_EMBED_CLI_PATH.is_file() and os.access(str(BITNET_EMBED_CLI_PATH), os.X_OK)
     model_ok = BITNET_EMBED_MODEL_PATH.is_file()
-    return cli_ok and model_ok
+    tok_ok = is_tokenizer_available()
+    return cli_ok and model_ok and tok_ok
 
 
 async def embed_bitnet(prompt: str) -> Tuple[list[float], float]:

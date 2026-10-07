@@ -117,8 +117,7 @@ Exiting...
         args, kwargs = mock_run.call_args
         cmd = args[0]
         self.assertIn("-ngl", cmd)
-        self.assertIn("-st", cmd)
-        self.assertIn("--simple-io", cmd)
+        self.assertTrue(("-st" in cmd and "--simple-io" in cmd) or "-no-cnv" in cmd)
         self.assertIn("-f", cmd)
         self.assertNotIn("-p", cmd)
         self.assertTrue(all("Explain Regulation CC" not in str(arg) for arg in cmd))
@@ -188,6 +187,13 @@ Assistant: Async generation completed successfully.
             sandboxed = bitnet_engine.wrap_sandboxed_cmd(base_cmd)
             self.assertEqual(sandboxed[:3], ["/usr/bin/sandbox-exec", "-p", "(version 1)(allow default)(deny network*)"])
             self.assertEqual(sandboxed[3:], base_cmd)
+
+    def test_generate_prompt_overflow_raises_context_overflow(self):
+        """Prompt exceeding MAX_GENERATE_PROMPT_CHARS (16,384 characters) raises ContextOverflowError."""
+        overflow_prompt = "a" * (bitnet_engine.MAX_GENERATE_PROMPT_CHARS + 1)
+        with self.assertRaises(bitnet_engine.ContextOverflowError) as ctx:
+            bitnet_engine.generate_bitnet_sync(overflow_prompt)
+        self.assertIn("exceeds maximum supported generation context capacity", str(ctx.exception))
 
 
 class TestAppRoutingWithBitNet(unittest.TestCase):
@@ -607,9 +613,43 @@ class TestAppRoutingEmbedding(unittest.TestCase):
         self.assertNotIn("embedModelPath", bitnet_info)
         self.assertIn("available", bitnet_info)
         self.assertIn("embedAvailable", bitnet_info)
+        self.assertIn("tokenizerAvailable", bitnet_info)
         self.assertIn("threads", bitnet_info)
         self.assertIn("cachedAdapterCount", res)
         self.assertNotIn("cachedAdapters", res)
+
+    def test_healthz_reflects_tokenizer_availability_and_embed_flag(self):
+        """When tokenizer is unavailable, /healthz reports tokenizerAvailable: False and embedAvailable: False."""
+        with patch("bitnet_engine.is_tokenizer_available", return_value=False):
+            res = app.healthz()
+            bitnet_info = res["bitnet"]
+            self.assertIn("tokenizerAvailable", bitnet_info)
+            self.assertFalse(bitnet_info["tokenizerAvailable"])
+            self.assertFalse(bitnet_info["embedAvailable"])
+
+    def test_generate_and_compare_prompt_overflow_returns_413(self):
+        """Prompts exceeding MAX_GENERATE_PROMPT_CHARS (16,384 characters) return HTTP 413."""
+        long_prompt = "x" * 16385
+        req_gen = app.GenerateRequest.model_construct(
+            baseModel="microsoft/BitNet-b1.58-2B-4T",
+            prompt=long_prompt,
+            maxTokens=32
+        )
+        from fastapi import HTTPException
+        with self.assertRaises(HTTPException) as ctx:
+            app.generate(req_gen)
+        self.assertEqual(ctx.exception.status_code, 413)
+
+        req_cmp = app.CompareRequest.model_construct(
+            jobId="test-job",
+            baseModel="microsoft/BitNet-b1.58-2B-4T",
+            adapterPath="test/adapter",
+            prompt=long_prompt,
+            maxTokens=32
+        )
+        with self.assertRaises(HTTPException) as ctx:
+            app.compare_completions(req_cmp)
+        self.assertEqual(ctx.exception.status_code, 413)
 
     def test_cors_origin_restriction(self):
         from fastapi.testclient import TestClient
@@ -698,11 +738,50 @@ class TestBitNetIntegrationLive(unittest.TestCase):
         "BitNet 2B generation binary and weights not present on host"
     )
     def test_live_generation_long_context_does_not_hit_ceiling(self):
-        """Verify that BitNet 2B generation path does not hit the 256-token AVX2 ceiling with >= 600 tokens."""
-        long_prompt = "Federal Trade Commission Act Section 5 compliance requirement. " * 65
-        ans, lat = bitnet_engine.generate_bitnet_sync(long_prompt, max_tokens=10)
+        """Verify that BitNet 2B generation path executes non-repetitive legal context (>= 600 tokens) without crashing."""
+        statute_text = (
+            "12 CFR Part 229 - Availability of Funds and Collection of Checks (Regulation CC)\n"
+            "Subpart B - Availability of Funds and Disclosure of Schedules\n"
+            "Section 229.10 - Next-day availability.\n\n"
+            "(a) Cash deposits. (1) A bank shall make funds deposited in an account by cash available for withdrawal "
+            "not later than the business day after the banking day on which the cash is deposited, if the deposit is made "
+            "in person to an employee of the depositary bank. (2) A bank shall make funds deposited in an account by cash "
+            "available for withdrawal not later than the second business day after the banking day on which the cash is "
+            "deposited, if the deposit is not made in person to an employee of the depositary bank.\n\n"
+            "(b) Electronic payments. (1) A bank shall make funds received for deposit in an account by an electronic "
+            "payment available for withdrawal not later than the business day after the banking day on which the bank "
+            "receives the electronic payment. (2) An electronic payment is received when the bank has received both "
+            "payment in collected funds and information on the account and amount to be credited.\n\n"
+            "(c) Certain check deposits. (1) General rule. A depositary bank shall make funds deposited in an account "
+            "by check available for withdrawal not later than the business day after the banking day on which the funds "
+            "are deposited, in the case of:\n"
+            "(i) A check drawn on the Treasury of the United States and deposited in an account held by a payee of the check;\n"
+            "(ii) A U.S. Postal Service money order deposited in person to an employee of the depositary bank and held "
+            "by a payee of the money order;\n"
+            "(iii) A check drawn on a Federal Reserve Bank or Federal Home Loan Bank and deposited in person to an employee "
+            "of the depositary bank;\n"
+            "(iv) A check drawn by a State or a unit of general local government and deposited in person to an employee "
+            "of the depositary bank;\n"
+            "(v) A cashier check, certified check, or teller check deposited in person to an employee of the depositary "
+            "bank and held by a payee of the check; and\n"
+            "(vi) The lesser of $225 or the aggregate amount deposited on any one banking day to all accounts of the "
+            "customer by all checks not subject to next-day availability under paragraphs (c)(1)(i) through (v) of this section.\n"
+            "(vii) Under statutory threshold adjustment schedules, the maximum aggregate exception hold for new accounts is $5,525.\n\n"
+            "(d) Time period adjustment for withdrawal by cash or similar means. A depositary bank may extend by one "
+            "business day the time that funds deposited in an account are available for withdrawal by cash or similar means.\n\n"
+            "(e) Holds on other funds. A depositary bank that accepts a check for deposit may not hold funds in any other "
+            "account of the customer unless the depositary bank gives notice of the hold to the customer.\n\n"
+            "Summary analysis: For deposits made in person to an employee of the depositary bank, funds must be made "
+            "available for withdrawal not later than"
+        )
+        token_count = bitnet_engine.count_embed_tokens(statute_text)
+        if token_count is not None:
+            self.assertGreaterEqual(token_count, 550)
+
+        ans, lat = bitnet_engine.generate_bitnet_sync(statute_text, max_tokens=15, temperature=0.0)
         self.assertGreater(len(ans), 0)
-        self.assertTrue(any(c.isalnum() for c in ans))
+        words = ans.split()
+        self.assertGreaterEqual(len(words), 2)
         self.assertGreater(lat, 0.0)
 
     @unittest.skipUnless(
@@ -710,25 +789,59 @@ class TestBitNetIntegrationLive(unittest.TestCase):
         "macOS sandbox-exec required for kernel sandbox negative control test"
     )
     def test_darwin_sandbox_network_denial_negative_control(self):
-        """Verify that macOS sandbox profile strictly denies outbound network socket creation (negative control)."""
+        """Verify that macOS sandbox profile strictly denies local loopback network socket creation (negative control)."""
+        import http.server
+        import socketserver
+        import threading
         import subprocess
-        sandbox_cmd = [
-            "/usr/bin/sandbox-exec",
-            "-p",
-            "(version 1)(allow default)(deny network*)",
-            "curl",
-            "-s",
-            "-m",
-            "2",
-            "https://example.com"
-        ]
-        res = subprocess.run(sandbox_cmd, capture_output=True, text=True)
-        self.assertNotEqual(res.returncode, 0)
 
-        with patch.object(bitnet_engine, "BITNET_SANDBOX_NETWORK_DENY", True):
-            if bitnet_engine.is_bitnet_embed_available():
-                vec, _ = bitnet_engine.embed_bitnet_sync("Sandboxed embedding test")
-                self.assertEqual(len(vec), 640)
+        class LocalHandler(http.server.SimpleHTTPRequestHandler):
+            def log_message(self, format, *args):
+                pass
+            def do_GET(self):
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"OK")
+
+        httpd = socketserver.TCPServer(("127.0.0.1", 0), LocalHandler)
+        port = httpd.server_address[1]
+        server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        server_thread.start()
+
+        try:
+            # 1. Unsandboxed curl succeeds against local loopback HTTP server
+            unsandboxed_res = subprocess.run(
+                ["curl", "-s", f"http://127.0.0.1:{port}"],
+                capture_output=True,
+                text=True
+            )
+            self.assertEqual(unsandboxed_res.returncode, 0)
+            self.assertEqual(unsandboxed_res.stdout, "OK")
+
+            # 2. Sandboxed curl is kernel-blocked from opening local socket (exit code non-zero)
+            sandbox_cmd = [
+                "/usr/bin/sandbox-exec",
+                "-p",
+                "(version 1)(allow default)(deny network*)",
+                "curl",
+                "-s",
+                f"http://127.0.0.1:{port}"
+            ]
+            sandboxed_res = subprocess.run(sandbox_cmd, capture_output=True, text=True)
+            self.assertNotEqual(sandboxed_res.returncode, 0)
+
+            # 3. Assert embed command is actually wrapped when sandbox is enabled
+            with patch.object(bitnet_engine, "BITNET_SANDBOX_NETWORK_DENY", True):
+                embed_cmd = bitnet_engine.build_bitnet_embed_cmd("/dev/stdin")
+                self.assertEqual(
+                    embed_cmd[:3],
+                    ["/usr/bin/sandbox-exec", "-p", "(version 1)(allow default)(deny network*)"]
+                )
+                if bitnet_engine.is_bitnet_embed_available():
+                    vec, _ = bitnet_engine.embed_bitnet_sync("Sandboxed embedding test")
+                    self.assertEqual(len(vec), 640)
+        finally:
+            httpd.shutdown()
 
 
 if __name__ == "__main__":

@@ -188,7 +188,7 @@ class CompareRequest(BaseModel):
     jobId: Optional[str] = None
     baseModel: Optional[str] = DEFAULT_BASE_MODEL
     adapterPath: Optional[str] = None
-    prompt: str = Field(..., min_length=3)
+    prompt: str = Field(..., min_length=3, max_length=16384)
     maxTokens: int = Field(default=64, ge=1, le=256)
     temperature: float = Field(default=0.2, ge=0.0, le=1.0)
 
@@ -200,7 +200,7 @@ class EmbedRequest(BaseModel):
 class GenerateRequest(BaseModel):
     baseModel: Optional[str] = DEFAULT_BASE_MODEL
     adapterPath: Optional[str] = None
-    prompt: str = Field(..., min_length=3)
+    prompt: str = Field(..., min_length=3, max_length=16384)
     maxTokens: int = Field(default=64, ge=1, le=256)
     temperature: float = Field(default=0.2, ge=0.0, le=1.0)
 
@@ -326,9 +326,11 @@ def healthz():
     sanitized_bitnet = {
         "available": raw_bitnet.get("available", False),
         "cliExecutable": raw_bitnet.get("cliExecutable", False),
+        "completionExecutable": raw_bitnet.get("completionExecutable", False),
         "modelPresent": raw_bitnet.get("modelPresent", False),
         "modelSizeMb": raw_bitnet.get("modelSizeMb", 0.0),
         "embedAvailable": raw_bitnet.get("embedAvailable", False),
+        "tokenizerAvailable": raw_bitnet.get("tokenizerAvailable", False),
         "embedCliExecutable": raw_bitnet.get("embedCliExecutable", False),
         "embedModelPresent": raw_bitnet.get("embedModelPresent", False),
         "embedModelSizeMb": raw_bitnet.get("embedModelSizeMb", 0.0),
@@ -510,6 +512,9 @@ def compare_completions(req: CompareRequest):
                 "fineTuned": fine_tuned_latency
             }
         }
+    except ContextOverflowError as coe:
+        metrics.record_request("compare", "error")
+        raise HTTPException(status_code=413, detail=str(coe))
     except HTTPException:
         metrics.record_request("compare", "error")
         raise
@@ -574,6 +579,9 @@ def generate(req: GenerateRequest):
             "completion": completion,
             "latencyMs": latency
         }
+    except ContextOverflowError as coe:
+        metrics.record_request("generate", "error")
+        raise HTTPException(status_code=413, detail=str(coe))
     except HTTPException:
         metrics.record_request("generate", "error")
         raise
