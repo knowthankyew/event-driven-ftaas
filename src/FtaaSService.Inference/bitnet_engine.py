@@ -259,7 +259,7 @@ def build_bitnet_embed_cmd(
         "-m", str(BITNET_EMBED_MODEL_PATH),
         "-t", str(max(1, BITNET_THREADS)),
         "-c", "512",
-        "--pooling", "last",
+        "--pooling", "mean",
         "--embd-normalize", "2",
         "--embd-separator", embd_separator,
         "--embd-output-format", "array",

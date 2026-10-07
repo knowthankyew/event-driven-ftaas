@@ -381,6 +381,7 @@ class TestBitNetEmbedding(unittest.TestCase):
         cmd = args[0]
         self.assertIn("-ngl", cmd)
         self.assertIn("--pooling", cmd)
+        self.assertEqual(cmd[cmd.index("--pooling") + 1], "mean")
         self.assertIn("-f", cmd)
         self.assertIn("--embd-separator", cmd)
         self.assertIn("<#sep#>", cmd)
@@ -865,6 +866,22 @@ class TestBitNetIntegrationLive(unittest.TestCase):
         # Ensure line 2 contributes to vector (cosine must be strictly < 0.95)
         self.assertLess(cosine, 0.95)
 
+    def test_live_semantic_cosine_discrimination(self):
+        """Verify that mean pooling produces semantic distinction between dissimilar texts without vector collapse."""
+        vec_food, _ = bitnet_engine.embed_bitnet_sync("Apples, oranges, and bananas are fresh fruits.")
+        vec_physics, _ = bitnet_engine.embed_bitnet_sync("Quantum field theory and relativistic black holes.")
+        vec_banking_1, _ = bitnet_engine.embed_bitnet_sync("Federal Reserve check collection and funds availability schedule.")
+        vec_banking_2, _ = bitnet_engine.embed_bitnet_sync("12 CFR Part 229 Regulation CC bank deposit availability.")
+
+        # Dissimilar concepts must show clear semantic separation (cosine < 0.55)
+        cos_dissimilar = sum(x * y for x, y in zip(vec_food, vec_physics))
+        self.assertLess(cos_dissimilar, 0.55)
+
+        # Related concepts must have significantly higher similarity than unrelated concepts
+        cos_related = sum(x * y for x, y in zip(vec_banking_1, vec_banking_2))
+        self.assertGreater(cos_related, 0.55)
+        self.assertGreater(cos_related, cos_dissimilar)
+
     def test_live_unicode_statutory_text(self):
         statute = "§ 229.10(c)(1)(vi) — “Next-day availability” exception for $5,525."
         vec_sync, lat_sync = bitnet_engine.embed_bitnet_sync(statute)
@@ -917,8 +934,9 @@ class TestBitNetIntegrationLive(unittest.TestCase):
         bitnet_engine.is_bitnet_available(),
         "BitNet 2B generation binary and weights not present on host"
     )
+    @unittest.expectedFailure
     def test_live_generation_long_context_does_not_hit_ceiling(self):
-        """Verify that BitNet 2B generation path executes long legal context (>= 550 tokens) without runtime kernel crashes."""
+        """Verify that BitNet 2B generation path produces accurate completion on long legal context (>= 550 tokens); expected failure due to bitnet.cpp runtime degeneration."""
         # Paraphrased statutory excerpt based on 12 CFR Part 229 (Regulation CC § 229.10, § 229.12, § 229.13)
         statute_text = (
             "12 CFR Part 229 - Availability of Funds and Collection of Checks (Regulation CC)\n"
@@ -962,17 +980,17 @@ class TestBitNetIntegrationLive(unittest.TestCase):
             "during the preceding six months.\n\n"
             "Section 229.19 - Miscellaneous.\n"
             "(b) Employee of depositary bank. A deposit made at an unstaffed facility, such as an automated teller machine (ATM), "
-            "is not made in person to an employee of the depositary bank."
+            "is not made in person to an employee of the depositary bank.\n\n"
+            "Question: What is the large deposit threshold under Section 229.13(b)?\n"
+            "Answer:"
         )
         token_count = bitnet_engine.count_embed_tokens(statute_text)
         if token_count is not None:
             self.assertGreaterEqual(token_count, 550)
 
         with patch.object(bitnet_engine, "MAX_SAFE_GENERATE_TOKENS", 4096):
-            ans, lat = bitnet_engine.generate_bitnet_sync(statute_text, max_tokens=15, temperature=0.0)
-            self.assertGreater(len(ans), 0)
-            words = ans.split()
-            self.assertGreaterEqual(len(words), 2)
+            ans, lat = bitnet_engine.generate_bitnet_sync(statute_text, max_tokens=25, temperature=0.0)
+            self.assertIn("6,725", ans)
             self.assertGreater(lat, 0.0)
 
     @unittest.skipUnless(

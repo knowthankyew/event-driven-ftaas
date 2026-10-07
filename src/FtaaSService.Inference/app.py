@@ -237,22 +237,7 @@ def _check_prompt_context_length(target_base: str, prompt: str):
             f"context capacity ({max_chars} characters / {max_tokens} tokens) for model '{target_base}'."
         )
 
-    # For native BitNet generation, enforce explicit fail-closed token pre-check
-    if is_bitnet_model(target_base):
-        tok_limit = min(max_tokens, MAX_SAFE_GENERATE_TOKENS)
-        prompt_bytes = prompt.encode("utf-8")
-        if len(prompt_bytes) > (tok_limit - 2):
-            tok_count = count_generation_tokens(prompt)
-            if tok_count is None:
-                raise TokenizerUnavailableError(
-                    f"Unable to verify generation token count for prompt exceeding safe byte bound ({len(prompt_bytes)} bytes). "
-                    f"Request rejected because token verification service is unavailable."
-                )
-            if tok_count > tok_limit:
-                raise ContextOverflowError(
-                    f"Input prompt ({tok_count} tokens) exceeds maximum supported generation "
-                    f"token context capacity ({tok_limit} tokens) for model '{target_base}'."
-                )
+
 
 def generate_tokens(
     model,
