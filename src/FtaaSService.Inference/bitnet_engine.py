@@ -139,6 +139,12 @@ async def count_embed_tokens_async(prompt: str) -> Optional[int]:
     return None
 
 
+
+def is_completion_cli_available() -> bool:
+    """Check whether native llama-completion binary is accessible and executable on the host."""
+    return BITNET_COMPLETION_CLI_PATH.is_file() and os.access(str(BITNET_COMPLETION_CLI_PATH), os.X_OK)
+
+
 def build_bitnet_generate_cmd(
     input_file: str = "/dev/stdin",
     max_tokens: int = 128,
@@ -147,7 +153,7 @@ def build_bitnet_generate_cmd(
     context_size: int = 4096
 ) -> list[str]:
     """Construct argument list for native BitNet inference, preferring llama-completion if available."""
-    use_completion = BITNET_COMPLETION_CLI_PATH.is_file() and os.access(str(BITNET_COMPLETION_CLI_PATH), os.X_OK)
+    use_completion = is_completion_cli_available()
     cli_bin = str(BITNET_COMPLETION_CLI_PATH) if use_completion else str(BITNET_CLI_PATH)
 
     cmd = [
@@ -207,7 +213,7 @@ def is_bitnet_model(model_name: Optional[str]) -> bool:
 
 def is_bitnet_available() -> bool:
     """Check whether a native bitnet binary (llama-completion or llama-cli) and gguf weights are accessible on the host."""
-    cli_ok = (BITNET_COMPLETION_CLI_PATH.is_file() and os.access(str(BITNET_COMPLETION_CLI_PATH), os.X_OK)) or (
+    cli_ok = is_completion_cli_available() or (
         BITNET_CLI_PATH.is_file() and os.access(str(BITNET_CLI_PATH), os.X_OK)
     )
     model_ok = BITNET_MODEL_PATH.is_file()
@@ -219,7 +225,7 @@ def get_bitnet_status() -> dict:
     cli_exists = BITNET_CLI_PATH.is_file()
     cli_exec = cli_exists and os.access(str(BITNET_CLI_PATH), os.X_OK)
     completion_exists = BITNET_COMPLETION_CLI_PATH.is_file()
-    completion_exec = completion_exists and os.access(str(BITNET_COMPLETION_CLI_PATH), os.X_OK)
+    completion_exec = is_completion_cli_available()
     model_exists = BITNET_MODEL_PATH.is_file()
     model_size_mb = round(BITNET_MODEL_PATH.stat().st_size / (1024 * 1024), 2) if model_exists else 0.0
 
@@ -247,6 +253,42 @@ def get_bitnet_status() -> dict:
         "embedModelSizeMb": embed_model_size_mb,
         "threads": BITNET_THREADS
     }
+
+
+def sanitize_untrusted_prompt(prompt: str) -> str:
+    """
+    Neutralize special token sequences (<|...|>) in untrusted user/document text
+    to prevent prompt injection and forged assistant turns.
+    """
+    return re.sub(r"<\|.*?\|>", lambda m: f"[{m.group(0)[2:-2]}]", prompt)
+
+
+def clean_completion_output(raw_output: str) -> str:
+    """
+    Clean output from llama-completion (-no-cnv mode).
+    Because llama-completion in -no-cnv mode outputs ONLY newly generated tokens
+    (without echoing prompt, banner, or interactive prompts), we only need to strip
+    special termination markers and trailing whitespace.
+    Crucially: does NOT split on 'Assistant:' or '> ', preserving legitimate legal/domain text.
+    """
+    text = raw_output.strip()
+    for end_tok in ("[end of text]", "<|eot_id|>", "<|end_of_text|>", "<|im_end|>", "</s>"):
+        if text.endswith(end_tok):
+            text = text[:-len(end_tok)].strip()
+    return text
+
+
+def format_bitnet_chat_prompt(prompt: str, apply_template: bool = True) -> str:
+    """
+    Format prompt for BitNet generation.
+    When apply_template is True, neutralizes special tokens in untrusted input and wraps
+    in the official SFT chat template (User: ... <|eot_id|>\nAssistant:).
+    When False, passes the raw prompt as-is for custom low-level completion.
+    """
+    if not apply_template:
+        return prompt
+    sanitized = sanitize_untrusted_prompt(prompt)
+    return f"User: {sanitized}<|eot_id|>\nAssistant:"
 
 
 def parse_llama_cli_output(raw_output: str, prompt: str) -> str:
@@ -282,7 +324,8 @@ async def generate_bitnet(
     prompt: str,
     max_tokens: int = 128,
     temperature: float = 0.7,
-    adapter_path: Optional[str] = None
+    adapter_path: Optional[str] = None,
+    apply_chat_template: bool = True
 ) -> Tuple[str, float]:
     """
     Execute asynchronous native BitNet C++ inference via llama-completion or llama-cli.
@@ -292,6 +335,7 @@ async def generate_bitnet(
         max_tokens: Maximum new tokens to generate.
         temperature: Sampling temperature (0.0 for greedy).
         adapter_path: Optional path to a GGUF LoRA adapter file.
+        apply_chat_template: Whether to wrap input in the BitNet chat template with sanitized special tokens.
 
     Returns:
         tuple[str, float]: (generated_text, elapsed_ms)
@@ -311,10 +355,8 @@ async def generate_bitnet(
             f"Set BITNET_CLI_PATH and BITNET_MODEL_PATH environment variables."
         )
 
-    use_completion = BITNET_COMPLETION_CLI_PATH.is_file() and os.access(str(BITNET_COMPLETION_CLI_PATH), os.X_OK)
-    formatted_prompt = prompt if use_completion else (
-        prompt if ("User:" in prompt or "<|eot_id|>" in prompt) else f"User: {prompt}<|eot_id|>\nAssistant:"
-    )
+    use_completion = is_completion_cli_available()
+    formatted_prompt = format_bitnet_chat_prompt(prompt, apply_template=apply_chat_template)
 
     start_t = time.perf_counter()
     if DEV_STDIN.exists():
@@ -384,7 +426,10 @@ async def generate_bitnet(
         raise RuntimeError(f"BitNet inference exited with code {proc.returncode}: {err_msg}")
 
     raw_output = stdout.decode("utf-8", errors="replace")
-    completion_text = parse_llama_cli_output(raw_output, formatted_prompt)
+    if use_completion:
+        completion_text = clean_completion_output(raw_output)
+    else:
+        completion_text = parse_llama_cli_output(raw_output, formatted_prompt)
 
     return completion_text, elapsed_ms
 
@@ -393,7 +438,8 @@ def generate_bitnet_sync(
     prompt: str,
     max_tokens: int = 128,
     temperature: float = 0.7,
-    adapter_path: Optional[str] = None
+    adapter_path: Optional[str] = None,
+    apply_chat_template: bool = True
 ) -> Tuple[str, float]:
     """
     Synchronous execution of native BitNet C++ inference via llama-completion or llama-cli.
@@ -403,6 +449,7 @@ def generate_bitnet_sync(
         max_tokens: Maximum new tokens to generate.
         temperature: Sampling temperature (0.0 for greedy).
         adapter_path: Optional path to a GGUF LoRA adapter file.
+        apply_chat_template: Whether to wrap input in the BitNet chat template with sanitized special tokens.
 
     Returns:
         tuple[str, float]: (generated_text, elapsed_ms)
@@ -424,10 +471,8 @@ def generate_bitnet_sync(
             f"Set BITNET_CLI_PATH and BITNET_MODEL_PATH environment variables."
         )
 
-    use_completion = BITNET_COMPLETION_CLI_PATH.is_file() and os.access(str(BITNET_COMPLETION_CLI_PATH), os.X_OK)
-    formatted_prompt = prompt if use_completion else (
-        prompt if ("User:" in prompt or "<|eot_id|>" in prompt) else f"User: {prompt}<|eot_id|>\nAssistant:"
-    )
+    use_completion = is_completion_cli_available()
+    formatted_prompt = format_bitnet_chat_prompt(prompt, apply_template=apply_chat_template)
 
     start_t = time.perf_counter()
     if DEV_STDIN.exists():
@@ -478,7 +523,10 @@ def generate_bitnet_sync(
         logger.error(f"BitNet inference process failed (exit {res.returncode}): {res.stderr}")
         raise RuntimeError(f"BitNet inference exited with code {res.returncode}: {res.stderr}")
 
-    completion_text = parse_llama_cli_output(res.stdout, formatted_prompt)
+    if use_completion:
+        completion_text = clean_completion_output(res.stdout)
+    else:
+        completion_text = parse_llama_cli_output(res.stdout, formatted_prompt)
     return completion_text, elapsed_ms
 
 

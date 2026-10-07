@@ -45,6 +45,11 @@ if _worker_src not in _sys.path:
     _sys.path.insert(0, _worker_src)
 
 import hmac
+import threading
+
+MAX_CONCURRENT_INFERENCE = int(os.getenv("FTAAS_MAX_CONCURRENT_INFERENCE", "2"))
+_inference_semaphore = threading.Semaphore(MAX_CONCURRENT_INFERENCE)
+
 from model_registry import get_model_spec, format_inference_prompt
 from bitnet_engine import (
     is_bitnet_model,
@@ -189,9 +194,10 @@ class CompareRequest(BaseModel):
     jobId: Optional[str] = None
     baseModel: Optional[str] = DEFAULT_BASE_MODEL
     adapterPath: Optional[str] = None
-    prompt: str = Field(..., min_length=3, max_length=16384)
+    prompt: str = Field(..., min_length=1, max_length=65536)
     maxTokens: int = Field(default=64, ge=1, le=256)
     temperature: float = Field(default=0.2, ge=0.0, le=1.0)
+    applyChatTemplate: bool = Field(default=True)
 
 
 class EmbedRequest(BaseModel):
@@ -201,9 +207,30 @@ class EmbedRequest(BaseModel):
 class GenerateRequest(BaseModel):
     baseModel: Optional[str] = DEFAULT_BASE_MODEL
     adapterPath: Optional[str] = None
-    prompt: str = Field(..., min_length=3, max_length=16384)
+    prompt: str = Field(..., min_length=1, max_length=65536)
     maxTokens: int = Field(default=64, ge=1, le=256)
     temperature: float = Field(default=0.2, ge=0.0, le=1.0)
+    applyChatTemplate: bool = Field(default=True)
+
+
+def _check_prompt_context_length(target_base: str, prompt: str):
+    """
+    Validate prompt context capacity per model. Bounded by model-specific context window.
+    Raises ContextOverflowError (HTTP 413) if input exceeds the model context capacity.
+    """
+    try:
+        spec = get_model_spec(target_base)
+        max_tokens = spec.context_length
+        max_chars = spec.context_length * 4
+    except Exception:
+        max_tokens = 4096
+        max_chars = MAX_GENERATE_PROMPT_CHARS
+
+    if len(prompt) > max_chars:
+        raise ContextOverflowError(
+            f"Input prompt ({len(prompt)} characters) exceeds maximum supported generation "
+            f"context capacity ({max_chars} characters / {max_tokens} tokens) for model '{target_base}'."
+        )
 
 def generate_tokens(
     model,
@@ -404,14 +431,14 @@ def get_metrics():
 
 @app.post("/api/v1/inference/compare")
 def compare_completions(req: CompareRequest):
+    if not _inference_semaphore.acquire(blocking=False):
+        raise HTTPException(
+            status_code=503,
+            detail="Inference engine is at capacity. Please retry later."
+        )
     try:
-        if len(req.prompt) > MAX_GENERATE_PROMPT_CHARS:
-            raise ContextOverflowError(
-                f"Input prompt ({len(req.prompt)} characters) exceeds maximum supported generation "
-                f"context capacity ({MAX_GENERATE_PROMPT_CHARS} characters / 4,096 tokens)."
-            )
-
         target_base = req.baseModel or DEFAULT_BASE_MODEL
+        _check_prompt_context_length(target_base, req.prompt)
 
         # Route 1: Native BitNet C++ runtime
         if is_bitnet_model(target_base):
@@ -433,7 +460,8 @@ def compare_completions(req: CompareRequest):
             base_completion, base_latency = generate_bitnet_sync(
                 req.prompt,
                 req.maxTokens,
-                req.temperature
+                req.temperature,
+                apply_chat_template=req.applyChatTemplate
             )
 
             # 2. Fine-tuned adapter completion
@@ -442,7 +470,8 @@ def compare_completions(req: CompareRequest):
                 req.prompt,
                 req.maxTokens,
                 req.temperature,
-                adapter_path=full_adapter_path
+                adapter_path=full_adapter_path,
+                apply_chat_template=req.applyChatTemplate
             )
 
             metrics.record_request("compare", "success", max(base_latency, fine_tuned_latency))
@@ -532,17 +561,19 @@ def compare_completions(req: CompareRequest):
         metrics.record_request("compare", "error")
         logger.error(f"Failed to generate comparison: {ex}")
         raise HTTPException(status_code=500, detail="Failed to generate model completion.")
+    finally:
+        _inference_semaphore.release()
 
 @app.post("/api/v1/inference/generate")
 def generate(req: GenerateRequest):
+    if not _inference_semaphore.acquire(blocking=False):
+        raise HTTPException(
+            status_code=503,
+            detail="Inference engine is at capacity. Please retry later."
+        )
     try:
-        if len(req.prompt) > MAX_GENERATE_PROMPT_CHARS:
-            raise ContextOverflowError(
-                f"Input prompt ({len(req.prompt)} characters) exceeds maximum supported generation "
-                f"context capacity ({MAX_GENERATE_PROMPT_CHARS} characters / 4,096 tokens)."
-            )
-
         target_base = req.baseModel or DEFAULT_BASE_MODEL
+        _check_prompt_context_length(target_base, req.prompt)
 
         # Route 1: Native BitNet C++ runtime
         if is_bitnet_model(target_base):
@@ -559,7 +590,8 @@ def generate(req: GenerateRequest):
                 req.prompt,
                 req.maxTokens,
                 req.temperature,
-                adapter_path=full_adapter
+                adapter_path=full_adapter,
+                apply_chat_template=req.applyChatTemplate
             )
             metrics.record_request("generate", "success", latency)
             return {
@@ -605,11 +637,24 @@ def generate(req: GenerateRequest):
         metrics.record_request("generate", "error")
         logger.error(f"Failed to generate completion: {ex}")
         raise HTTPException(status_code=500, detail="Failed to generate model completion.")
+    finally:
+        _inference_semaphore.release()
 
 
 @app.post("/api/v1/inference/embed")
 def embed_text(req: EmbedRequest):
+    if not _inference_semaphore.acquire(blocking=False):
+        raise HTTPException(
+            status_code=503,
+            detail="Inference engine is at capacity. Please retry later."
+        )
     try:
+        if len(req.prompt) > 2048:
+            raise ContextOverflowError(
+                f"Input prompt ({len(req.prompt)} characters) exceeds maximum supported embedding "
+                f"context capacity (2048 characters)."
+            )
+
         status = get_bitnet_status()
         if not status.get("embedAvailable"):
             raise HTTPException(
@@ -644,6 +689,8 @@ def embed_text(req: EmbedRequest):
         metrics.record_request("embed", "error")
         logger.error(f"Failed to generate embedding: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate embedding vector.")
+    finally:
+        _inference_semaphore.release()
 
 if __name__ == "__main__":
     import uvicorn
