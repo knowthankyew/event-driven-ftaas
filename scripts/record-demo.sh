@@ -13,8 +13,8 @@ if ! command -v node &> /dev/null; then
     exit 1
 fi
 
-# Ensure playwright-core is installed locally in scratch/ or global
-if [ ! -d "$REPO_ROOT/node_modules/playwright-core" ]; then
+# Ensure Playwright is available locally or via portfolio root
+if [ ! -d "$REPO_ROOT/node_modules/playwright-core" ] && [ ! -d "$REPO_ROOT/../node_modules/playwright" ]; then
     echo "Installing playwright-core..."
     npm install --no-save playwright-core
 fi
