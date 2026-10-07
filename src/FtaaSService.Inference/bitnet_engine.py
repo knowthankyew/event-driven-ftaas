@@ -41,8 +41,8 @@ MAX_SAFE_EMBED_TOKENS = min(int(os.getenv("MAX_SAFE_EMBED_TOKENS", "240")), 255)
 # Maximum supported prompt character length for generation (~4,096 tokens at ~4 chars/token)
 MAX_GENERATE_PROMPT_CHARS = int(os.getenv("MAX_GENERATE_PROMPT_CHARS", "16384"))
 
-# Maximum safe generation prompt tokens (bounds prompt context before invoking subprocess)
-MAX_SAFE_GENERATE_TOKENS = int(os.getenv("MAX_SAFE_GENERATE_TOKENS", "2048"))
+# Maximum safe generation prompt tokens (bounds prompt context before invoking subprocess to prevent degeneration)
+MAX_SAFE_GENERATE_TOKENS = int(os.getenv("MAX_SAFE_GENERATE_TOKENS", "150"))
 
 SANDBOX_EXEC_PATH = Path("/usr/bin/sandbox-exec")
 BITNET_SANDBOX_NETWORK_DENY = os.getenv("BITNET_SANDBOX_NETWORK_DENY", "false").lower() in ("true", "1")
@@ -423,6 +423,21 @@ async def generate_bitnet(
     use_completion = is_completion_cli_available()
     formatted_prompt = format_bitnet_chat_prompt(prompt, apply_template=apply_chat_template)
 
+    # Fail-closed pre-check for generation context ceiling to prevent degeneration loops
+    prompt_bytes = formatted_prompt.encode("utf-8")
+    if len(prompt_bytes) > (MAX_SAFE_GENERATE_TOKENS - 2):
+        tok_count = await count_generation_tokens_async(formatted_prompt)
+        if tok_count is None:
+            raise TokenizerUnavailableError(
+                f"Unable to verify generation token count for prompt exceeding safe byte bound ({len(prompt_bytes)} bytes). "
+                f"Request rejected because token verification service is unavailable."
+            )
+        if tok_count > MAX_SAFE_GENERATE_TOKENS:
+            raise ContextOverflowError(
+                f"Input prompt ({tok_count} tokens) exceeds maximum supported generation "
+                f"token context capacity ({MAX_SAFE_GENERATE_TOKENS} tokens)."
+            )
+
     start_t = time.perf_counter()
     if DEV_STDIN.exists():
         cmd = build_bitnet_generate_cmd(
@@ -538,6 +553,21 @@ def generate_bitnet_sync(
 
     use_completion = is_completion_cli_available()
     formatted_prompt = format_bitnet_chat_prompt(prompt, apply_template=apply_chat_template)
+
+    # Fail-closed pre-check for generation context ceiling to prevent degeneration loops
+    prompt_bytes = formatted_prompt.encode("utf-8")
+    if len(prompt_bytes) > (MAX_SAFE_GENERATE_TOKENS - 2):
+        tok_count = count_generation_tokens(formatted_prompt)
+        if tok_count is None:
+            raise TokenizerUnavailableError(
+                f"Unable to verify generation token count for prompt exceeding safe byte bound ({len(prompt_bytes)} bytes). "
+                f"Request rejected because token verification service is unavailable."
+            )
+        if tok_count > MAX_SAFE_GENERATE_TOKENS:
+            raise ContextOverflowError(
+                f"Input prompt ({tok_count} tokens) exceeds maximum supported generation "
+                f"token context capacity ({MAX_SAFE_GENERATE_TOKENS} tokens)."
+            )
 
     start_t = time.perf_counter()
     if DEV_STDIN.exists():

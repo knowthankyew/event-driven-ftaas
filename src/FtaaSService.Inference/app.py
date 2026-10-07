@@ -47,8 +47,8 @@ if _worker_src not in _sys.path:
 import hmac
 import threading
 
-MAX_CONCURRENT_GENERATE = int(os.getenv("FTAAS_MAX_CONCURRENT_GENERATE", "2"))
-MAX_CONCURRENT_EMBED = int(os.getenv("FTAAS_MAX_CONCURRENT_EMBED", "4"))
+MAX_CONCURRENT_GENERATE = int(os.getenv("FTAAS_MAX_CONCURRENT_GENERATE", "1"))
+MAX_CONCURRENT_EMBED = int(os.getenv("FTAAS_MAX_CONCURRENT_EMBED", "2"))
 _generate_semaphore = threading.Semaphore(MAX_CONCURRENT_GENERATE)
 _embed_semaphore = threading.Semaphore(MAX_CONCURRENT_EMBED)
 
@@ -237,15 +237,22 @@ def _check_prompt_context_length(target_base: str, prompt: str):
             f"context capacity ({max_chars} characters / {max_tokens} tokens) for model '{target_base}'."
         )
 
-    # For native BitNet generation, enforce explicit token pre-check if tokenizer is available
+    # For native BitNet generation, enforce explicit fail-closed token pre-check
     if is_bitnet_model(target_base):
         tok_limit = min(max_tokens, MAX_SAFE_GENERATE_TOKENS)
-        tok_count = count_generation_tokens(prompt)
-        if tok_count is not None and tok_count > tok_limit:
-            raise ContextOverflowError(
-                f"Input prompt ({tok_count} tokens) exceeds maximum supported generation "
-                f"token context capacity ({tok_limit} tokens) for model '{target_base}'."
-            )
+        prompt_bytes = prompt.encode("utf-8")
+        if len(prompt_bytes) > (tok_limit - 2):
+            tok_count = count_generation_tokens(prompt)
+            if tok_count is None:
+                raise TokenizerUnavailableError(
+                    f"Unable to verify generation token count for prompt exceeding safe byte bound ({len(prompt_bytes)} bytes). "
+                    f"Request rejected because token verification service is unavailable."
+                )
+            if tok_count > tok_limit:
+                raise ContextOverflowError(
+                    f"Input prompt ({tok_count} tokens) exceeds maximum supported generation "
+                    f"token context capacity ({tok_limit} tokens) for model '{target_base}'."
+                )
 
 def generate_tokens(
     model,
@@ -567,6 +574,10 @@ def compare_completions(req: CompareRequest):
     except ContextOverflowError as coe:
         metrics.record_request("compare", "error")
         raise HTTPException(status_code=413, detail=str(coe))
+    except TokenizerUnavailableError as tue:
+        metrics.record_request("compare", "error")
+        logger.error(f"BitNet comparison tokenizer unavailable: {tue}")
+        raise HTTPException(status_code=503, detail="Token verification service is unavailable. Please retry later.", headers={"Retry-After": "5"})
     except HTTPException:
         metrics.record_request("compare", "error")
         raise
@@ -644,6 +655,10 @@ def generate(req: GenerateRequest):
     except ContextOverflowError as coe:
         metrics.record_request("generate", "error")
         raise HTTPException(status_code=413, detail=str(coe))
+    except TokenizerUnavailableError as tue:
+        metrics.record_request("generate", "error")
+        logger.error(f"BitNet generation tokenizer unavailable: {tue}")
+        raise HTTPException(status_code=503, detail="Token verification service is unavailable. Please retry later.", headers={"Retry-After": "5"})
     except HTTPException:
         metrics.record_request("generate", "error")
         raise
