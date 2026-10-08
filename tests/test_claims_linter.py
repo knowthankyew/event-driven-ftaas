@@ -18,7 +18,9 @@ DOCS_DIR = REPO_ROOT / "docs"
 
 import sys
 sys.path.insert(0, str(REPO_ROOT / "src/FtaaSService.Inference"))
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import bitnet_engine
+import sync_benchmark_docs
 
 
 class TestClaimsLinter(unittest.TestCase):
@@ -153,6 +155,69 @@ class TestClaimsLinter(unittest.TestCase):
         conclusion = data["metadata"]["conclusion"]
         self.assertNotIn("higher correlation on short sequences", conclusion.lower())
         self.assertIn("lower rank correlation on short sequences", conclusion.lower())
+
+    def test_roadmap_benchmark_table_sync(self):
+        """Verify docs/ROADMAP.md benchmark table is strictly synced with empirical_retrieval_benchmark.json."""
+        import sync_benchmark_docs
+
+        bench_path = DOCS_DIR / "empirical_retrieval_benchmark.json"
+        roadmap_path = DOCS_DIR / "ROADMAP.md"
+
+        matches, msg = sync_benchmark_docs.check_roadmap_sync(bench_path, roadmap_path)
+        self.assertTrue(matches, f"ROADMAP.md benchmark table is out of sync with JSON ground truth:\n{msg}")
+
+        # Also directly inspect the table markdown in ROADMAP.md
+        roadmap_text = roadmap_path.read_text(encoding="utf-8")
+        self.assertIn("<!-- BEGIN_RETRIEVAL_BENCHMARK_TABLE -->", roadmap_text)
+        self.assertIn("<!-- END_RETRIEVAL_BENCHMARK_TABLE -->", roadmap_text)
+
+        # Assert key empirical cells appear verbatim in the table
+        self.assertIn("**82.9%** (29/35)", roadmap_text)  # BM25 Top-1
+        self.assertIn("[67.3%, 91.9%]", roadmap_text)      # BM25 Top-1 CI
+        self.assertIn("**97.1%** (34/35)", roadmap_text)  # BM25 Top-3
+        self.assertIn("[85.5%, 99.5%]", roadmap_text)      # BM25 Top-3 CI
+        self.assertIn("**0.8952**", roadmap_text)         # BM25 MRR
+
+        self.assertIn("14.3% (5/35)", roadmap_text)       # Regex Top-1
+        self.assertIn("[6.3%, 29.4%]", roadmap_text)       # Regex Top-1 CI
+        self.assertIn("17.1% (6/35)", roadmap_text)       # Regex Top-3
+        self.assertIn("[8.1%, 32.7%]", roadmap_text)       # Regex Top-3 CI
+        self.assertIn("0.2253", roadmap_text)             # Regex MRR
+
+        self.assertIn("20.0% (7/35)", roadmap_text)       # BitNet Top-1
+        self.assertIn("[10.0%, 35.9%]", roadmap_text)      # BitNet Top-1 CI
+        self.assertIn("34.3% (12/35)", roadmap_text)      # BitNet Top-3
+        self.assertIn("[20.8%, 50.8%]", roadmap_text)      # BitNet Top-3 CI
+        self.assertIn("0.3378", roadmap_text)             # BitNet MRR
+
+        self.assertIn("**88.6%** (31/35)", roadmap_text)  # Hybrid Top-1
+        self.assertIn("[74.1%, 95.5%]", roadmap_text)      # Hybrid Top-1 CI
+        self.assertIn("**0.9333**", roadmap_text)         # Hybrid MRR
+
+    def test_roadmap_constants_and_policy_invariants(self):
+        """Verify code constants (MAX_SAFE_GENERATE_TOKENS) match ROADMAP.md and outdated ceilings are absent."""
+        roadmap_path = DOCS_DIR / "ROADMAP.md"
+        roadmap_text = roadmap_path.read_text(encoding="utf-8")
+
+        # Assert no personal /Users/ paths exist in ROADMAP.md
+        self.assertNotIn("/Users/", roadmap_text, "Found leaked personal /Users/ path in docs/ROADMAP.md")
+
+        # Any explicit definition or setting of MAX_SAFE_GENERATE_TOKENS in ROADMAP.md must equal the engine constant
+        matches = re.findall(r"MAX_SAFE_GENERATE_TOKENS\s*=\s*(\d+)", roadmap_text)
+        self.assertGreater(len(matches), 0, "MAX_SAFE_GENERATE_TOKENS not referenced in docs/ROADMAP.md")
+        for val_str in matches:
+            self.assertEqual(
+                int(val_str),
+                bitnet_engine.MAX_SAFE_GENERATE_TOKENS,
+                f"ROADMAP.md cites MAX_SAFE_GENERATE_TOKENS = {val_str}, but engine constant is {bitnet_engine.MAX_SAFE_GENERATE_TOKENS}"
+            )
+
+        # Assert outdated ceilings are not present as active MAX_SAFE_GENERATE_TOKENS values
+        self.assertNotIn("MAX_SAFE_GENERATE_TOKENS = 150", roadmap_text)
+        self.assertNotIn("MAX_SAFE_GENERATE_TOKENS = 31", roadmap_text)
+
+        # Assert embedder ceiling is documented
+        self.assertIn(f"{bitnet_engine.MAX_SAFE_EMBED_TOKENS}-token embedding ceiling", roadmap_text)
 
 
 if __name__ == "__main__":

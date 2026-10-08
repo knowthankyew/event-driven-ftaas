@@ -269,12 +269,14 @@ flowchart TD
 - **Prototype Statutory Retrieval Benchmark (40 Statutory Chunks, 35 Realistic Queries)**:
   Full evaluation was executed across 35 legal queries over the full 40-chunk corpus and the 37-chunk active/enacted subset, with 95% Wilson score confidence intervals (recorded in [`docs/empirical_retrieval_benchmark.json`](empirical_retrieval_benchmark.json)):
 
+<!-- BEGIN_RETRIEVAL_BENCHMARK_TABLE -->
 | Retrieval Method | Top-1 Recall (Full) | 95% CI (Top-1) | Top-3 Recall (Full) | 95% CI (Top-3) | MRR | Role in Architecture |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **BM25 (Okapi Lexical Baseline)** | **82.9%** (29/35) | [67.3%, 91.9%] | **97.1%** (34/35) | [85.5%, 99.5%] | **0.8952** | **Production Core Baseline** |
 | **Deterministic Regex Rules** | 14.3% (5/35) | [6.3%, 29.4%] | 17.1% (6/35) | [8.1%, 32.7%] | 0.2253 | Exact Threshold Precision ($6,725, 14-day) |
 | **BitNet 270M Dense Embeddings** | 20.0% (7/35) | [10.0%, 35.9%] | 34.3% (12/35) | [20.8%, 50.8%] | 0.3378 | Experimental Prototype (0% on Short Chunks) |
 | **Hybrid Pipeline (Regex + BM25 + BitNet)** | **88.6%** (31/35) | [74.1%, 95.5%] | **97.1%** (34/35) | [85.5%, 99.5%] | **0.9333** | **Experimental Prototype (+2 Query Gain)** |
+<!-- END_RETRIEVAL_BENCHMARK_TABLE -->
 
 *Benchmark Methodology & Scientific Disclaimer*:
 - *Single-Author Prototype Benchmark*: A single author authored both corpus chunk texts and query formulations; high lexical overlap between queries and statutory text inherently favors BM25.
@@ -302,6 +304,10 @@ flowchart TD
   - Benchmarked BitNet 270M Embed against BM25 Okapi lexical baseline and regex pattern rules.
   - Confirmed BM25 + Regex as the production core baseline with 97.1% Top-3 recall, with BitNet 270M embeddings classified as an experimental research prototype.
   - Explicitly integrated tracking for vacated rules (16 CFR Part 425 vacatur by 8th Cir. July 8, 2025 in *Custom Communications Engineering, Inc. v. FTC*, No. 24-3232, consolidated with *NFIB v. FTC*), ensuring vacated rules are presented with clear warning banners. Primary statutory citations verified and recorded in [`docs/verified_statutory_sources.json`](verified_statutory_sources.json). Full query-level details, reciprocal ranks, and hit rates documented in [`docs/empirical_retrieval_benchmark.json`](empirical_retrieval_benchmark.json).
+  - **Automated Claims Linter & Empirical Table Synchronization (`tests/test_claims_linter.py`, `scripts/sync_benchmark_docs.py`)**:
+    - *Binding*: Prose claims and benchmark markdown tables are programmatically bound to ground-truth empirical artifacts ([`docs/empirical_retrieval_benchmark.json`](empirical_retrieval_benchmark.json), [`docs/empirical_long_context_isolation_results.json`](empirical_long_context_isolation_results.json), [`docs/empirical_270m_embedder_validation.json`](empirical_270m_embedder_validation.json), and [`src/FtaaSService.Inference/bitnet_engine.py`](../src/FtaaSService.Inference/bitnet_engine.py)).
+    - *Enforcement*: CI executes `tests/test_claims_linter.py` and `scripts/sync_benchmark_docs.py --check` to fail closed if documentation metrics, hit counts, Wilson confidence intervals, or engine token ceilings drift from empirical evaluation runs.
+    - *Architectural Rationale*: Separating planning/authorship from review requires automated structural guardrails so engineers and peer reviewers do not need to manually fact-check floating-point figures or risk stale metrics surviving across iterations.
 
 #### [ ] Phase 11: Universal Sidecar Protocol & Everyday Hardware Appliance &mdash; 📋 PLANNED
 - **Action**: Package the complete 1-bit stack into an air-gapped, zero-egress local appliance for consumer defense with strict concurrency memory bounding.
