@@ -253,13 +253,16 @@ def build_bitnet_embed_cmd(
     input_file: str = "/dev/stdin",
     embd_separator: str = "<#sep#>"
 ) -> list[str]:
-    """Construct argument list for native llama-embedding inference."""
+    """
+    Construct argument list for native llama-embedding inference.
+    Note: --pooling is intentionally omitted so GGUF metadata (e.g. gemma3.pooling_type = 1,
+    mean pooling) governs natively.
+    """
     cmd = [
         str(BITNET_EMBED_CLI_PATH),
         "-m", str(BITNET_EMBED_MODEL_PATH),
         "-t", str(max(1, BITNET_THREADS)),
         "-c", "512",
-        "--pooling", "mean",
         "--embd-normalize", "2",
         "--embd-separator", embd_separator,
         "--embd-output-format", "array",

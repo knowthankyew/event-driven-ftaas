@@ -380,8 +380,7 @@ class TestBitNetEmbedding(unittest.TestCase):
         args, kwargs = mock_run.call_args
         cmd = args[0]
         self.assertIn("-ngl", cmd)
-        self.assertIn("--pooling", cmd)
-        self.assertEqual(cmd[cmd.index("--pooling") + 1], "mean")
+        self.assertNotIn("--pooling", cmd)
         self.assertIn("-f", cmd)
         self.assertIn("--embd-separator", cmd)
         self.assertIn("<#sep#>", cmd)

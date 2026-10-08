@@ -1,0 +1,1159 @@
+{
+  "metadata": {
+    "timestamp": "2026-10-08T00:41:36Z",
+    "platform": "macOS-26.6.2-x86_64-i386-64bit",
+    "cpu": "i386",
+    "corpus_chunks": 38,
+    "queries_evaluated": 35,
+    "model": "microsoft/bitnet-embedding-270m"
+  },
+  "summary": {
+    "bm25": {
+      "top1_recall": 0.8286,
+      "top3_recall": 0.9714,
+      "mrr": 0.9
+    },
+    "regex": {
+      "top1_recall": 0.1429,
+      "top3_recall": 0.2286,
+      "mrr": 0.2347
+    },
+    "bitnet_embedding": {
+      "top1_recall": 0.2286,
+      "top3_recall": 0.3714,
+      "mrr": 0.3645
+    },
+    "hybrid": {
+      "top1_recall": 0.8571,
+      "top3_recall": 0.9714,
+      "mrr": 0.919
+    }
+  },
+  "query_details": [
+    {
+      "query": "When must cash deposited in person at a bank teller be available?",
+      "relevant_ids": [
+        "reg_cc_229_10_a"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "reg_cc_229_10_a",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.02631578947368421
+        },
+        "bitnet_embedding": {
+          "top1_id": "reg_e_1005_10_c",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.5
+        },
+        "hybrid": {
+          "top1_id": "reg_cc_229_10_a",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "What is the availability schedule for incoming electronic wire and ACH payments?",
+      "relevant_ids": [
+        "reg_cc_229_10_b"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "reg_cc_229_10_b",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.05555555555555555
+        },
+        "bitnet_embedding": {
+          "top1_id": "reg_e_1005_10_c",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.07142857142857142
+        },
+        "hybrid": {
+          "top1_id": "reg_cc_229_10_b",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "How quickly must Treasury checks be cleared for withdrawal?",
+      "relevant_ids": [
+        "reg_cc_229_10_c_treasury"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "reg_cc_229_10_c_treasury",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "reg_cc_229_10_a",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.16666666666666666
+        },
+        "bitnet_embedding": {
+          "top1_id": "reg_e_1005_11",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.038461538461538464
+        },
+        "hybrid": {
+          "top1_id": "reg_cc_229_10_c_treasury",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "Are cashier checks eligible for next day funds availability?",
+      "relevant_ids": [
+        "reg_cc_229_10_c_cashier"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "reg_cc_229_12_b",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.5
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.0625
+        },
+        "bitnet_embedding": {
+          "top1_id": "reg_cc_229_10_c_cashier",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "top1_id": "reg_cc_229_12_b",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.5
+        }
+      }
+    },
+    {
+      "query": "What is the statutory minimum dollar amount of checks that must be available next day?",
+      "relevant_ids": [
+        "reg_cc_229_10_c_aggregate"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "reg_cc_229_10_c_aggregate",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.06666666666666667
+        },
+        "bitnet_embedding": {
+          "top1_id": "reg_e_1005_10_c",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.2
+        },
+        "hybrid": {
+          "top1_id": "reg_cc_229_10_c_aggregate",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "How long can a bank hold funds from a standard local check deposit?",
+      "relevant_ids": [
+        "reg_cc_229_12_b"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "reg_cc_229_12_b",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.07142857142857142
+        },
+        "bitnet_embedding": {
+          "top1_id": "reg_e_1005_11",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.125
+        },
+        "hybrid": {
+          "top1_id": "reg_cc_229_12_b",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "What is the large deposit dollar exception threshold under Regulation CC?",
+      "relevant_ids": [
+        "reg_cc_229_13_b"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "reg_cc_229_13_b",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.07692307692307693
+        },
+        "bitnet_embedding": {
+          "top1_id": "reg_e_1005_10_c",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.027777777777777776
+        },
+        "hybrid": {
+          "top1_id": "reg_cc_229_13_b",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "Can a bank place an extended hold if my account was repeatedly overdrawn?",
+      "relevant_ids": [
+        "reg_cc_229_13_d"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "reg_cc_229_13_d",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "reg_cc_229_13_d",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "bitnet_embedding": {
+          "top1_id": "reg_e_1005_10_c",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.5
+        },
+        "hybrid": {
+          "top1_id": "reg_cc_229_13_d",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "Does next day availability apply to cash deposits made at an unstaffed ATM?",
+      "relevant_ids": [
+        "reg_cc_229_19_b"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "reg_cc_229_19_b",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "reg_cc_229_19_b",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "bitnet_embedding": {
+          "top1_id": "reg_e_1005_10_c",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.14285714285714285
+        },
+        "hybrid": {
+          "top1_id": "reg_cc_229_19_b",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "What disclosures must a vendor make before billing for automatic renewal under federal law?",
+      "relevant_ids": [
+        "rosca_8403_1"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "dc_code_28_3872",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.16666666666666666
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.5
+        },
+        "bitnet_embedding": {
+          "top1_id": "il_815_ilcs_601",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.05
+        },
+        "hybrid": {
+          "top1_id": "dc_code_28_3872",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.16666666666666666
+        }
+      }
+    },
+    {
+      "query": "Is express informed consent required before charging a recurring subscription?",
+      "relevant_ids": [
+        "rosca_8403_2"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "rosca_8403_2",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ca_bpc_17602_a_2",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.3333333333333333
+        },
+        "bitnet_embedding": {
+          "top1_id": "reg_e_1005_10_c",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.05263157894736842
+        },
+        "hybrid": {
+          "top1_id": "rosca_8403_2",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "Does federal law require a simple online cancellation mechanism for recurring charges?",
+      "relevant_ids": [
+        "rosca_8403_3",
+        "ca_ab_2863_click_cancel"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "rosca_8403_3",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.3333333333333333
+        },
+        "bitnet_embedding": {
+          "top1_id": "va_code_59_1_207",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.038461538461538464
+        },
+        "hybrid": {
+          "top1_id": "rosca_8403_3",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "Where must recurring subscription terms be displayed on a checkout page in California?",
+      "relevant_ids": [
+        "ca_bpc_17602_a_1"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "ca_bpc_17602_a_1",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.14285714285714285
+        },
+        "bitnet_embedding": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.14285714285714285
+        },
+        "hybrid": {
+          "top1_id": "ca_bpc_17602_a_1",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "Does California law require affirmative checkbox consent for automatic renewal?",
+      "relevant_ids": [
+        "ca_bpc_17602_a_2"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "ca_bpc_17602_a_2",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.16666666666666666
+        },
+        "bitnet_embedding": {
+          "top1_id": "ca_bpc_17602_a_1",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.1111111111111111
+        },
+        "hybrid": {
+          "top1_id": "ca_bpc_17602_a_2",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "What post-purchase email confirmation is required for subscription signups in California?",
+      "relevant_ids": [
+        "ca_bpc_17602_a_3"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "ca_bpc_17602_a_3",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.2
+        },
+        "bitnet_embedding": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.2
+        },
+        "hybrid": {
+          "top1_id": "ca_bpc_17602_a_3",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "How much advance notice must a company provide before increasing subscription prices?",
+      "relevant_ids": [
+        "ca_bpc_17602_b",
+        "ca_ab_2863_fee_change"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "ca_bpc_17602_b",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.25
+        },
+        "bitnet_embedding": {
+          "top1_id": "il_815_ilcs_601",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.25
+        },
+        "hybrid": {
+          "top1_id": "ca_bpc_17602_b",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "Can I cancel an automatic subscription with a single click online in California?",
+      "relevant_ids": [
+        "ca_ab_2863_click_cancel"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "ca_ab_2863_click_cancel",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ca_ab_2863_click_cancel",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "bitnet_embedding": {
+          "top1_id": "ftc_negative_option_save",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.037037037037037035
+        },
+        "hybrid": {
+          "top1_id": "ca_ab_2863_click_cancel",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "When must companies send an annual renewal notice before charging a yearly fee?",
+      "relevant_ids": [
+        "ca_ab_2863_annual_notice",
+        "uk_dmcc_renewal_notice"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "ca_ab_2863_free_trial",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.5
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.05263157894736842
+        },
+        "bitnet_embedding": {
+          "top1_id": "reg_e_1005_10_c",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.2
+        },
+        "hybrid": {
+          "top1_id": "ca_ab_2863_free_trial",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.5
+        }
+      }
+    },
+    {
+      "query": "Does a company have to notify me before a free trial converts into a paid subscription?",
+      "relevant_ids": [
+        "ca_ab_2863_free_trial"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "ca_ab_2863_free_trial",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.05
+        },
+        "bitnet_embedding": {
+          "top1_id": "ftc_negative_option_save",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.3333333333333333
+        },
+        "hybrid": {
+          "top1_id": "ca_ab_2863_free_trial",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "Does the FTC require cancellation to be as easy as signing up?",
+      "relevant_ids": [
+        "ftc_negative_option_equal"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "ftc_negative_option_equal",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.047619047619047616
+        },
+        "bitnet_embedding": {
+          "top1_id": "ftc_negative_option_save",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.2
+        },
+        "hybrid": {
+          "top1_id": "ftc_negative_option_equal",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "Are companies allowed to force you through multiple retention offers before letting you cancel?",
+      "relevant_ids": [
+        "ftc_negative_option_save"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "ftc_negative_option_save",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.045454545454545456
+        },
+        "bitnet_embedding": {
+          "top1_id": "ftc_negative_option_save",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "top1_id": "ftc_negative_option_save",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "Can a merchant misrepresent billing dates or free trial terms?",
+      "relevant_ids": [
+        "ftc_negative_option_misrep"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "ftc_negative_option_misrep",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.02702702702702703
+        },
+        "bitnet_embedding": {
+          "top1_id": "ftc_negative_option_save",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.1
+        },
+        "hybrid": {
+          "top1_id": "ftc_negative_option_misrep",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "What is the statutory 14-day cooling off period for cancelling UK subscription contracts?",
+      "relevant_ids": [
+        "uk_dmcc_cooling_off",
+        "eu_crd_art_9_withdrawal"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "uk_dmcc_cooling_off",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "uk_dmcc_cooling_off",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "bitnet_embedding": {
+          "top1_id": "eu_crd_art_9_withdrawal",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "top1_id": "uk_dmcc_cooling_off",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "What pre-renewal notice must UK traders send to customers before a yearly contract renews?",
+      "relevant_ids": [
+        "uk_dmcc_renewal_notice"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "uk_dmcc_renewal_notice",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.02857142857142857
+        },
+        "bitnet_embedding": {
+          "top1_id": "reg_e_1005_10_c",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.16666666666666666
+        },
+        "hybrid": {
+          "top1_id": "uk_dmcc_renewal_notice",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "Does UK law require a straightforward one-step subscription cancellation process?",
+      "relevant_ids": [
+        "uk_dmcc_exit_steps"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "uk_dmcc_exit_steps",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.029411764705882353
+        },
+        "bitnet_embedding": {
+          "top1_id": "ca_bpc_17602_b",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.0625
+        },
+        "hybrid": {
+          "top1_id": "uk_dmcc_exit_steps",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "What button label is required by EU law when placing an order that requires payment?",
+      "relevant_ids": [
+        "eu_crd_art_8_button"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "eu_crd_art_8_button",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.030303030303030304
+        },
+        "bitnet_embedding": {
+          "top1_id": "eu_crd_art_8_button",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "top1_id": "eu_crd_art_8_button",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "How many days do consumers have to withdraw from an online contract in Europe?",
+      "relevant_ids": [
+        "eu_crd_art_9_withdrawal"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "eu_crd_art_9_withdrawal",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.03125
+        },
+        "bitnet_embedding": {
+          "top1_id": "il_815_ilcs_601",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.16666666666666666
+        },
+        "hybrid": {
+          "top1_id": "eu_crd_art_9_withdrawal",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "When must a trader issue a full refund after an EU customer exercises their right of withdrawal?",
+      "relevant_ids": [
+        "eu_crd_art_14_refund"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "eu_crd_art_8_button",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.5
+        },
+        "regex": {
+          "top1_id": "reg_cc_229_10_a",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.2
+        },
+        "bitnet_embedding": {
+          "top1_id": "ftc_negative_option_save",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.04
+        },
+        "hybrid": {
+          "top1_id": "eu_crd_art_14_refund",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "Can a New York customer cancel an online subscription entirely online without calling?",
+      "relevant_ids": [
+        "ny_gbl_527_a"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "ny_gbl_527_a",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.03333333333333333
+        },
+        "bitnet_embedding": {
+          "top1_id": "ny_gbl_527_a",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "top1_id": "ny_gbl_527_a",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "Does Illinois law mandate 30 to 60 days advance written notice for automatic renewals?",
+      "relevant_ids": [
+        "il_815_ilcs_601"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "il_815_ilcs_601",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.034482758620689655
+        },
+        "bitnet_embedding": {
+          "top1_id": "il_815_ilcs_601",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "top1_id": "il_815_ilcs_601",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "What are the subscription disclosure requirements under Colorado consumer protection law?",
+      "relevant_ids": [
+        "co_hb_21_1239"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "co_hb_21_1239",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.03571428571428571
+        },
+        "bitnet_embedding": {
+          "top1_id": "co_hb_21_1239",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "top1_id": "co_hb_21_1239",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "Does Virginia law require express verifiable consent before recurring charges?",
+      "relevant_ids": [
+        "va_code_59_1_207"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "va_code_59_1_207",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.037037037037037035
+        },
+        "bitnet_embedding": {
+          "top1_id": "co_hb_21_1239",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.3333333333333333
+        },
+        "hybrid": {
+          "top1_id": "va_code_59_1_207",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    },
+    {
+      "query": "What notice timeframe is required for subscription renewals in Washington D.C.?",
+      "relevant_ids": [
+        "dc_code_28_3872"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "va_code_59_1_207",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.3333333333333333
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.038461538461538464
+        },
+        "bitnet_embedding": {
+          "top1_id": "reg_e_1005_10_c",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.5
+        },
+        "hybrid": {
+          "top1_id": "va_code_59_1_207",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.5
+        }
+      }
+    },
+    {
+      "query": "What authorization is needed to debit recurring charges from a bank checking account?",
+      "relevant_ids": [
+        "reg_e_1005_10"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "rosca_8403_3",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.5
+        },
+        "regex": {
+          "top1_id": "ucc_4_406",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.04
+        },
+        "bitnet_embedding": {
+          "top1_id": "reg_e_1005_10_c",
+          "top1_hit": false,
+          "top3_hit": false,
+          "rr": 0.16666666666666666
+        },
+        "hybrid": {
+          "top1_id": "rosca_8403_3",
+          "top1_hit": false,
+          "top3_hit": true,
+          "rr": 0.5
+        }
+      }
+    },
+    {
+      "query": "How many days before a scheduled debit can a consumer stop payment under Regulation E?",
+      "relevant_ids": [
+        "reg_e_1005_10_c",
+        "ucc_4_403"
+      ],
+      "rankings": {
+        "bm25": {
+          "top1_id": "reg_e_1005_10_c",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "regex": {
+          "top1_id": "ucc_4_403",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "bitnet_embedding": {
+          "top1_id": "reg_e_1005_10_c",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "top1_id": "reg_e_1005_10_c",
+          "top1_hit": true,
+          "top3_hit": true,
+          "rr": 1.0
+        }
+      }
+    }
+  ]
+}
