@@ -280,8 +280,8 @@ def main():
         f"explaining {short_eval['variance_explained_pct']}% of variance) on short clauses (< 30 tokens). "
         f"While statistically significant (p < 10^-5), explaining 11% to 20% of semantic variance indicates that 1-bit dense embeddings "
         f"retain coarse topical clustering but lose significant discriminative signal relative to the FP16 teacher. "
-        f"The higher correlation on short sequences (< 30 tokens) is consistent with the hypothesis that sequence length and "
-        f"batch accumulation degrade 1-bit quantized representations."
+        f"The lower rank correlation on short sequences (< 30 tokens, rho={short_eval['spearman_rho']} vs rho={full_eval['spearman_rho']}) demonstrates that "
+        f"concise statutory clauses lose discriminative signal when quantized to ternary weights, explaining why standalone 1-bit retrieval drops to 0% Top-1 on short chunks."
     )
 
     output_path = os.path.abspath(os.path.join(repo_root, "docs/empirical_270m_embedder_validation.json"))

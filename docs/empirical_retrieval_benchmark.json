@@ -1,20 +1,63 @@
 {
   "metadata": {
-    "timestamp": "2026-10-08T01:55:17Z",
+    "timestamp": "2026-10-08T06:15:58Z",
     "platform": "macOS-26.6.2-x86_64-i386-64bit",
     "cpu": "i386",
-    "total_corpus_chunks": 38,
-    "in_force_chunks": 35,
+    "total_corpus_chunks": 40,
+    "in_force_chunks": 33,
+    "enacted_not_in_force_chunks": 4,
     "vacated_chunks": 3,
     "queries_evaluated": 35,
     "confidence_interval_level": "95% Wilson Score",
+    "self_retrieval_validation": {
+      "passes": 40,
+      "total": 40,
+      "accuracy_pct": 100.0,
+      "min_self_similarity": 1.0
+    },
+    "contrastive_minilm_baseline": {
+      "full_corpus": {
+        "top1_recall": 0.8857,
+        "top1_recall_pct": 88.6,
+        "top1_hits": 31,
+        "top1_ci_95": [
+          0.7405,
+          0.9546
+        ],
+        "top3_recall": 0.9143,
+        "top3_recall_pct": 91.4,
+        "top3_hits": 32,
+        "top3_ci_95": [
+          0.7762,
+          0.9704
+        ],
+        "mrr": 0.9175
+      },
+      "short_chunks": {
+        "top1_recall": 0.6571,
+        "top1_recall_pct": 65.7,
+        "top1_hits": 23,
+        "top1_ci_95": [
+          0.4915,
+          0.7917
+        ],
+        "top3_recall": 0.8857,
+        "top3_recall_pct": 88.6,
+        "top3_hits": 31,
+        "top3_ci_95": [
+          0.7405,
+          0.9546
+        ],
+        "mrr": 0.7753
+      }
+    },
     "benchmark_status": "prototype_single_author_benchmark",
-    "methodology_disclaimer": "Single-author prototype benchmark corpus and query set. Substantial lexical overlap between query phrasing and statutory text advantages BM25. The hybrid pipeline gain is marginal (+1 query over BM25, 30 vs 29). With n=35, the 95% Wilson confidence interval is approximately +/-12 to 13 points (e.g. BM25 Top-1 is [70.4%, 95.3%], Hybrid Top-1 is [74.1%, 97.3%]). These results establish BM25 as a dependable, highly effective core baseline, while standalone 1-bit dense embeddings remain unproven for production statutory retrieval without fine-tuning.",
-    "regulatory_status_note": "Includes tracking of 16 CFR Part 425 (\u00a7\u00a7 425.3, 425.5, 425.6), vacated nationwide by the Eighth Circuit on July 8, 2025 (National Federation of Independent Business v. FTC, No. 24-3232). FTC issued an ANPRM in March 2026. The benchmark explicitly evaluates performance on both the full 40-chunk corpus and the 37-chunk active in-force subset."
+    "production_architecture_recommendation": "The production serving pipeline is grounded strictly on the deterministic BM25 + Regex core. BitNet dense embeddings are classified as an experimental research prototype; on short chunks, standalone BitNet embedding retrieval drops to 0% Top-1, and its hybrid gain on full text is statistically indistinguishable from noise (+1 query over BM25, 30 vs 29, with overlapping Wilson 95% confidence intervals).",
+    "regulatory_status_note": "Includes tracking of 16 CFR Part 425 (\u00a7\u00a7 425.3, 425.5, 425.6), vacated nationwide by the Eighth Circuit on July 8, 2025 in Custom Communications Engineering, Inc. v. FTC, No. 24-3232 (consolidated with NFIB v. FTC). The 1973 prenotification negative option rule remains in effect; only the 2024 expansion was vacated. FTC issued an ANPRM in March 2026. Vacated rule chunks are returned with an explicit [VACATED BY COURT ORDER] banner. UK DMCC subscription provisions (ss. 255-258) were enacted on May 24, 2024 but are not yet commenced (implementation confirmed for Spring 2026 / 2027)."
   },
   "full_corpus_benchmark": {
     "corpus_label": "full_corpus_40_chunks",
-    "corpus_chunks_count": 38,
+    "corpus_chunks_count": 40,
     "queries_count": 35,
     "summary": {
       "bm25": {
@@ -32,7 +75,7 @@
           0.8547,
           0.9949
         ],
-        "mrr": 0.9
+        "mrr": 0.8952
       },
       "regex": {
         "top1_recall": 0.1429,
@@ -42,1217 +85,14 @@
           0.0626,
           0.2938
         ],
-        "top3_recall": 0.2571,
-        "top3_recall_pct": 25.7,
-        "top3_hits": 9,
+        "top3_recall": 0.1714,
+        "top3_recall_pct": 17.1,
+        "top3_hits": 6,
         "top3_ci_95": [
-          0.1416,
-          0.4207
+          0.081,
+          0.3268
         ],
-        "mrr": 0.2504
-      },
-      "bitnet_embedding": {
-        "top1_recall": 0.2286,
-        "top1_recall_pct": 22.9,
-        "top1_hits": 8,
-        "top1_ci_95": [
-          0.1207,
-          0.3902
-        ],
-        "top3_recall": 0.3714,
-        "top3_recall_pct": 37.1,
-        "top3_hits": 13,
-        "top3_ci_95": [
-          0.2317,
-          0.5366
-        ],
-        "mrr": 0.3595
-      },
-      "hybrid": {
-        "top1_recall": 0.8571,
-        "top1_recall_pct": 85.7,
-        "top1_hits": 30,
-        "top1_ci_95": [
-          0.7062,
-          0.9374
-        ],
-        "top3_recall": 0.9714,
-        "top3_recall_pct": 97.1,
-        "top3_hits": 34,
-        "top3_ci_95": [
-          0.8547,
-          0.9949
-        ],
-        "mrr": 0.919
-      }
-    },
-    "query_details": [
-      {
-        "query": "When must cash deposited in person at a bank teller be available?",
-        "relevant_ids": [
-          "reg_cc_229_10_a"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "reg_cc_229_10_a",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.02631578947368421
-          },
-          "bitnet_embedding": {
-            "top1_id": "reg_e_1005_10_c",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.5
-          },
-          "hybrid": {
-            "top1_id": "reg_cc_229_10_a",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "What is the availability schedule for incoming electronic wire and ACH payments?",
-        "relevant_ids": [
-          "reg_cc_229_10_b"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "reg_cc_229_10_b",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.05555555555555555
-          },
-          "bitnet_embedding": {
-            "top1_id": "reg_e_1005_10_c",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.07142857142857142
-          },
-          "hybrid": {
-            "top1_id": "reg_cc_229_10_b",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "How quickly must Treasury checks be cleared for withdrawal?",
-        "relevant_ids": [
-          "reg_cc_229_10_c_treasury"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "reg_cc_229_10_c_treasury",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "reg_cc_229_10_a",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.16666666666666666
-          },
-          "bitnet_embedding": {
-            "top1_id": "reg_e_1005_11",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.04
-          },
-          "hybrid": {
-            "top1_id": "reg_cc_229_10_c_treasury",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "Are cashier checks eligible for next day funds availability?",
-        "relevant_ids": [
-          "reg_cc_229_10_c_cashier"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "reg_cc_229_12_b",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.5
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.0625
-          },
-          "bitnet_embedding": {
-            "top1_id": "reg_cc_229_10_c_cashier",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "hybrid": {
-            "top1_id": "reg_cc_229_12_b",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.5
-          }
-        }
-      },
-      {
-        "query": "What is the statutory minimum dollar amount of checks that must be available next day?",
-        "relevant_ids": [
-          "reg_cc_229_10_c_aggregate"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "reg_cc_229_10_c_aggregate",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.06666666666666667
-          },
-          "bitnet_embedding": {
-            "top1_id": "reg_e_1005_10_c",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.2
-          },
-          "hybrid": {
-            "top1_id": "reg_cc_229_10_c_aggregate",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "How long can a bank hold funds from a standard local check deposit?",
-        "relevant_ids": [
-          "reg_cc_229_12_b"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "reg_cc_229_12_b",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.07142857142857142
-          },
-          "bitnet_embedding": {
-            "top1_id": "reg_e_1005_11",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.125
-          },
-          "hybrid": {
-            "top1_id": "reg_cc_229_12_b",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "What is the large deposit dollar exception threshold under Regulation CC?",
-        "relevant_ids": [
-          "reg_cc_229_13_b"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "reg_cc_229_13_b",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.07692307692307693
-          },
-          "bitnet_embedding": {
-            "top1_id": "reg_e_1005_10_c",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.027777777777777776
-          },
-          "hybrid": {
-            "top1_id": "reg_cc_229_13_b",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "Can a bank place an extended hold if my account was repeatedly overdrawn?",
-        "relevant_ids": [
-          "reg_cc_229_13_d"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "reg_cc_229_13_d",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "reg_cc_229_13_d",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "bitnet_embedding": {
-            "top1_id": "reg_e_1005_10_c",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.5
-          },
-          "hybrid": {
-            "top1_id": "reg_cc_229_13_d",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "Does next day availability apply to cash deposits made at an unstaffed ATM?",
-        "relevant_ids": [
-          "reg_cc_229_19_b"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "reg_cc_229_19_b",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "reg_cc_229_19_b",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "bitnet_embedding": {
-            "top1_id": "reg_e_1005_10_c",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.14285714285714285
-          },
-          "hybrid": {
-            "top1_id": "reg_cc_229_19_b",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "What disclosures must a vendor make before billing for automatic renewal under federal law?",
-        "relevant_ids": [
-          "rosca_8403_1"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "dc_code_28_3872",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.16666666666666666
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.5
-          },
-          "bitnet_embedding": {
-            "top1_id": "il_815_ilcs_601",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.05
-          },
-          "hybrid": {
-            "top1_id": "dc_code_28_3872",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.16666666666666666
-          }
-        }
-      },
-      {
-        "query": "Is express informed consent required before charging a recurring subscription?",
-        "relevant_ids": [
-          "rosca_8403_2"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "rosca_8403_2",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ca_bpc_17602_a_2",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.3333333333333333
-          },
-          "bitnet_embedding": {
-            "top1_id": "reg_e_1005_10_c",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.05263157894736842
-          },
-          "hybrid": {
-            "top1_id": "rosca_8403_2",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "Does federal law require a simple online cancellation mechanism for recurring charges?",
-        "relevant_ids": [
-          "rosca_8403_3",
-          "ca_ab_2863_click_cancel"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "rosca_8403_3",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.3333333333333333
-          },
-          "bitnet_embedding": {
-            "top1_id": "va_code_59_1_207",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.037037037037037035
-          },
-          "hybrid": {
-            "top1_id": "rosca_8403_3",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "Where must recurring subscription terms be displayed on a checkout page in California?",
-        "relevant_ids": [
-          "ca_bpc_17602_a_1"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "ca_bpc_17602_a_1",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.14285714285714285
-          },
-          "bitnet_embedding": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.125
-          },
-          "hybrid": {
-            "top1_id": "ca_bpc_17602_a_1",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "Does California law require affirmative checkbox consent for automatic renewal?",
-        "relevant_ids": [
-          "ca_bpc_17602_a_2"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "ca_bpc_17602_a_2",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.16666666666666666
-          },
-          "bitnet_embedding": {
-            "top1_id": "ca_bpc_17602_a_1",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.1111111111111111
-          },
-          "hybrid": {
-            "top1_id": "ca_bpc_17602_a_2",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "What post-purchase email confirmation is required for subscription signups in California?",
-        "relevant_ids": [
-          "ca_bpc_17602_a_3"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "ca_bpc_17602_a_3",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.2
-          },
-          "bitnet_embedding": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.2
-          },
-          "hybrid": {
-            "top1_id": "ca_bpc_17602_a_3",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "How much advance notice must a company provide before increasing subscription prices?",
-        "relevant_ids": [
-          "ca_bpc_17602_b"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "ca_bpc_17602_b",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.25
-          },
-          "bitnet_embedding": {
-            "top1_id": "il_815_ilcs_601",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.25
-          },
-          "hybrid": {
-            "top1_id": "ca_bpc_17602_b",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "Can I cancel an automatic subscription with a single click online in California?",
-        "relevant_ids": [
-          "ca_ab_2863_click_cancel"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "ca_ab_2863_click_cancel",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ca_ab_2863_click_cancel",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "bitnet_embedding": {
-            "top1_id": "ftc_negative_option_save",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.037037037037037035
-          },
-          "hybrid": {
-            "top1_id": "ca_ab_2863_click_cancel",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "When must companies send an annual renewal notice before charging a yearly fee?",
-        "relevant_ids": [
-          "ca_ab_2863_annual_notice",
-          "uk_dmcc_renewal_notice"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "ca_ab_2863_free_trial",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.5
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.05263157894736842
-          },
-          "bitnet_embedding": {
-            "top1_id": "reg_e_1005_10_c",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.2
-          },
-          "hybrid": {
-            "top1_id": "ca_ab_2863_free_trial",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.5
-          }
-        }
-      },
-      {
-        "query": "Does a company have to notify me before a free trial converts into a paid subscription?",
-        "relevant_ids": [
-          "ca_ab_2863_free_trial"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "ca_ab_2863_free_trial",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.05
-          },
-          "bitnet_embedding": {
-            "top1_id": "ftc_negative_option_save",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.3333333333333333
-          },
-          "hybrid": {
-            "top1_id": "ca_ab_2863_free_trial",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "Does federal policy require cancellation to be as easy as signing up?",
-        "relevant_ids": [
-          "ftc_negative_option_equal",
-          "rosca_8403_3"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "ftc_negative_option_equal",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.125
-          },
-          "bitnet_embedding": {
-            "top1_id": "reg_e_1005_10_c",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.03225806451612903
-          },
-          "hybrid": {
-            "top1_id": "ftc_negative_option_equal",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "Are companies allowed to force you through multiple retention offers before letting you cancel?",
-        "relevant_ids": [
-          "ftc_negative_option_save"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "ftc_negative_option_save",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.045454545454545456
-          },
-          "bitnet_embedding": {
-            "top1_id": "ftc_negative_option_save",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "hybrid": {
-            "top1_id": "ftc_negative_option_save",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "Can a merchant misrepresent billing dates or free trial terms?",
-        "relevant_ids": [
-          "ftc_negative_option_misrep",
-          "rosca_8403_1"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "ftc_negative_option_misrep",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.5
-          },
-          "bitnet_embedding": {
-            "top1_id": "ftc_negative_option_save",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.1
-          },
-          "hybrid": {
-            "top1_id": "ftc_negative_option_misrep",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "What is the statutory 14-day cooling off period for cancelling UK subscription contracts?",
-        "relevant_ids": [
-          "uk_dmcc_cooling_off",
-          "eu_crd_art_9_withdrawal"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "uk_dmcc_cooling_off",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "uk_dmcc_cooling_off",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "bitnet_embedding": {
-            "top1_id": "eu_crd_art_9_withdrawal",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "hybrid": {
-            "top1_id": "uk_dmcc_cooling_off",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "What pre-renewal notice must UK traders send to customers before a yearly contract renews?",
-        "relevant_ids": [
-          "uk_dmcc_renewal_notice"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "uk_dmcc_renewal_notice",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.02857142857142857
-          },
-          "bitnet_embedding": {
-            "top1_id": "reg_e_1005_10_c",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.14285714285714285
-          },
-          "hybrid": {
-            "top1_id": "uk_dmcc_renewal_notice",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "Does UK law require a straightforward one-step subscription cancellation process?",
-        "relevant_ids": [
-          "uk_dmcc_exit_steps"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "uk_dmcc_exit_steps",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.029411764705882353
-          },
-          "bitnet_embedding": {
-            "top1_id": "ca_bpc_17602_b",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.0625
-          },
-          "hybrid": {
-            "top1_id": "uk_dmcc_exit_steps",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "What button label is required by EU law when placing an order that requires payment?",
-        "relevant_ids": [
-          "eu_crd_art_8_button"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "eu_crd_art_8_button",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.030303030303030304
-          },
-          "bitnet_embedding": {
-            "top1_id": "eu_crd_art_8_button",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "hybrid": {
-            "top1_id": "eu_crd_art_8_button",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "How many days do consumers have to withdraw from an online contract in Europe?",
-        "relevant_ids": [
-          "eu_crd_art_9_withdrawal"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "eu_crd_art_9_withdrawal",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.03125
-          },
-          "bitnet_embedding": {
-            "top1_id": "il_815_ilcs_601",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.2
-          },
-          "hybrid": {
-            "top1_id": "eu_crd_art_9_withdrawal",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "When must a trader issue a full refund after an EU customer exercises their right of withdrawal?",
-        "relevant_ids": [
-          "eu_crd_art_14_refund"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "eu_crd_art_8_button",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.5
-          },
-          "regex": {
-            "top1_id": "reg_cc_229_10_a",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.2
-          },
-          "bitnet_embedding": {
-            "top1_id": "ftc_negative_option_save",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.04
-          },
-          "hybrid": {
-            "top1_id": "eu_crd_art_14_refund",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "Can a New York customer cancel an online subscription entirely online without calling?",
-        "relevant_ids": [
-          "ny_gbl_527_a"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "ny_gbl_527_a",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.03333333333333333
-          },
-          "bitnet_embedding": {
-            "top1_id": "ny_gbl_527_a",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "hybrid": {
-            "top1_id": "ny_gbl_527_a",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "Does Illinois law mandate 30 to 60 days advance written notice for automatic renewals?",
-        "relevant_ids": [
-          "il_815_ilcs_601"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "il_815_ilcs_601",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.034482758620689655
-          },
-          "bitnet_embedding": {
-            "top1_id": "il_815_ilcs_601",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "hybrid": {
-            "top1_id": "il_815_ilcs_601",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "What are the subscription disclosure requirements under Colorado consumer protection law?",
-        "relevant_ids": [
-          "co_hb_21_1239"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "co_hb_21_1239",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.03571428571428571
-          },
-          "bitnet_embedding": {
-            "top1_id": "co_hb_21_1239",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "hybrid": {
-            "top1_id": "co_hb_21_1239",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "Does Virginia law require express verifiable consent before recurring charges?",
-        "relevant_ids": [
-          "va_code_59_1_207"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "va_code_59_1_207",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.037037037037037035
-          },
-          "bitnet_embedding": {
-            "top1_id": "co_hb_21_1239",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.3333333333333333
-          },
-          "hybrid": {
-            "top1_id": "va_code_59_1_207",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      },
-      {
-        "query": "What notice timeframe is required for subscription renewals in Washington D.C.?",
-        "relevant_ids": [
-          "dc_code_28_3872"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "va_code_59_1_207",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.3333333333333333
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.038461538461538464
-          },
-          "bitnet_embedding": {
-            "top1_id": "reg_e_1005_10_c",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.5
-          },
-          "hybrid": {
-            "top1_id": "va_code_59_1_207",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.5
-          }
-        }
-      },
-      {
-        "query": "What authorization is needed to debit recurring charges from a bank checking account?",
-        "relevant_ids": [
-          "reg_e_1005_10"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "rosca_8403_3",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.5
-          },
-          "regex": {
-            "top1_id": "ucc_4_406",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.04
-          },
-          "bitnet_embedding": {
-            "top1_id": "reg_e_1005_10_c",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.16666666666666666
-          },
-          "hybrid": {
-            "top1_id": "rosca_8403_3",
-            "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.5
-          }
-        }
-      },
-      {
-        "query": "How many days before a scheduled debit can a consumer stop payment under Regulation E?",
-        "relevant_ids": [
-          "reg_e_1005_10_c",
-          "ucc_4_403"
-        ],
-        "rankings": {
-          "bm25": {
-            "top1_id": "reg_e_1005_10_c",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "regex": {
-            "top1_id": "ucc_4_403",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "bitnet_embedding": {
-            "top1_id": "reg_e_1005_10_c",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          },
-          "hybrid": {
-            "top1_id": "reg_e_1005_10_c",
-            "top1_hit": true,
-            "top3_hit": true,
-            "rr": 1.0
-          }
-        }
-      }
-    ]
-  },
-  "in_force_corpus_benchmark": {
-    "corpus_label": "in_force_corpus_37_chunks",
-    "corpus_chunks_count": 35,
-    "queries_count": 35,
-    "summary": {
-      "bm25": {
-        "top1_recall": 0.7143,
-        "top1_recall_pct": 71.4,
-        "top1_hits": 25,
-        "top1_ci_95": [
-          0.5495,
-          0.8367
-        ],
-        "top3_recall": 0.9143,
-        "top3_recall_pct": 91.4,
-        "top3_hits": 32,
-        "top3_ci_95": [
-          0.7762,
-          0.9704
-        ],
-        "mrr": 0.8216
-      },
-      "regex": {
-        "top1_recall": 0.1429,
-        "top1_recall_pct": 14.3,
-        "top1_hits": 5,
-        "top1_ci_95": [
-          0.0626,
-          0.2938
-        ],
-        "top3_recall": 0.2286,
-        "top3_recall_pct": 22.9,
-        "top3_hits": 8,
-        "top3_ci_95": [
-          0.1207,
-          0.3902
-        ],
-        "mrr": 0.2374
+        "mrr": 0.2253
       },
       "bitnet_embedding": {
         "top1_recall": 0.2,
@@ -1269,24 +109,24 @@
           0.2083,
           0.5085
         ],
-        "mrr": 0.337
+        "mrr": 0.3378
       },
       "hybrid": {
-        "top1_recall": 0.7429,
-        "top1_recall_pct": 74.3,
-        "top1_hits": 26,
+        "top1_recall": 0.8857,
+        "top1_recall_pct": 88.6,
+        "top1_hits": 31,
         "top1_ci_95": [
-          0.5793,
-          0.8584
+          0.7405,
+          0.9546
         ],
-        "top3_recall": 0.9143,
-        "top3_recall_pct": 91.4,
-        "top3_hits": 32,
+        "top3_recall": 0.9714,
+        "top3_recall_pct": 97.1,
+        "top3_hits": 34,
         "top3_ci_95": [
-          0.7762,
-          0.9704
+          0.8547,
+          0.9949
         ],
-        "mrr": 0.8357
+        "mrr": 0.9333
       }
     },
     "query_details": [
@@ -1300,25 +140,33 @@
             "top1_id": "reg_cc_229_10_a",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.02857142857142857
+            "rr": 0.025,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_e_1005_10_c",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_10_a",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1332,25 +180,33 @@
             "top1_id": "reg_cc_229_10_b",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.0625
+            "rr": 0.05263157894736842,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_e_1005_10_c",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.07692307692307693
+            "rr": 0.07692307692307693,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_10_b",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1364,25 +220,33 @@
             "top1_id": "reg_cc_229_10_c_treasury",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "reg_cc_229_10_a",
             "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.3333333333333333
+            "top3_hit": false,
+            "rr": 0.16666666666666666,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_e_1005_11",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.041666666666666664
+            "rr": 0.04,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_10_c_treasury",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1396,25 +260,33 @@
             "top1_id": "reg_cc_229_12_b",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.07142857142857142
+            "rr": 0.058823529411764705,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_cc_229_10_c_cashier",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
-            "top1_id": "reg_cc_229_12_b",
-            "top1_hit": false,
+            "top1_id": "reg_cc_229_10_c_cashier",
+            "top1_hit": true,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1428,25 +300,33 @@
             "top1_id": "reg_cc_229_10_c_aggregate",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.07692307692307693
+            "rr": 0.0625,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_e_1005_10_c",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.2
+            "rr": 0.2,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_10_c_aggregate",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1460,25 +340,33 @@
             "top1_id": "reg_cc_229_12_b",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.08333333333333333
+            "rr": 0.06666666666666667,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_e_1005_11",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.125
+            "rr": 0.125,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_12_b",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1492,25 +380,33 @@
             "top1_id": "reg_cc_229_13_b",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.09090909090909091
+            "rr": 0.07142857142857142,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_e_1005_10_c",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.029411764705882353
+            "rr": 0.02631578947368421,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_13_b",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1524,25 +420,33 @@
             "top1_id": "reg_cc_229_13_d",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "reg_cc_229_13_d",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_e_1005_10_c",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_13_d",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1556,25 +460,33 @@
             "top1_id": "reg_cc_229_19_b",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "reg_cc_229_19_b",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_e_1005_10_c",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.14285714285714285
+            "rr": 0.14285714285714285,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_19_b",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1588,25 +500,33 @@
             "top1_id": "dc_code_28_3872",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.16666666666666666
+            "rr": 0.16666666666666666,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.125
+            "rr": 0.09090909090909091,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "il_815_ilcs_601",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.05263157894736842
+            "rr": 0.05263157894736842,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "dc_code_28_3872",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.16666666666666666
+            "rr": 0.16666666666666666,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1620,25 +540,33 @@
             "top1_id": "rosca_8403_2",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
-            "top1_id": "ca_bpc_17602_a_2",
+            "top1_id": "ca_bpc_17603_unconditional_gift",
             "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.5
+            "top3_hit": false,
+            "rr": 0.25,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_e_1005_10_c",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.058823529411764705
+            "rr": 0.058823529411764705,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "rosca_8403_2",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1653,25 +581,33 @@
             "top1_id": "rosca_8403_3",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.16666666666666666
+            "rr": 0.25,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "va_code_59_1_207",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.038461538461538464
+            "rr": 0.03333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "rosca_8403_3",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1685,25 +621,33 @@
             "top1_id": "ca_bpc_17602_a_1",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.2
+            "rr": 0.125,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.14285714285714285
+            "rr": 0.14285714285714285,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ca_bpc_17602_a_1",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1717,25 +661,33 @@
             "top1_id": "ca_bpc_17602_a_2",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.25
+            "rr": 0.14285714285714285,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ca_bpc_17602_a_1",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.1111111111111111
+            "rr": 0.1111111111111111,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ca_bpc_17602_a_2",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1746,28 +698,36 @@
         ],
         "rankings": {
           "bm25": {
-            "top1_id": "ca_bpc_17602_a_1",
-            "top1_hit": false,
+            "top1_id": "ca_bpc_17602_a_3",
+            "top1_hit": true,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.3333333333333333
+            "top3_hit": false,
+            "rr": 0.16666666666666666,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.2
+            "rr": 0.2,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
-            "top1_id": "ca_bpc_17602_a_1",
-            "top1_hit": false,
+            "top1_id": "ca_bpc_17602_a_3",
+            "top1_hit": true,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1781,25 +741,33 @@
             "top1_id": "ca_bpc_17602_b",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.058823529411764705
+            "rr": 0.2,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "il_815_ilcs_601",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.25
+            "rr": 0.25,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ca_bpc_17602_b",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1813,25 +781,33 @@
             "top1_id": "ca_ab_2863_click_cancel",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ca_ab_2863_click_cancel",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "co_hb_21_1239",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.041666666666666664
+            "rr": 0.03571428571428571,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ca_ab_2863_click_cancel",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1846,25 +822,33 @@
             "top1_id": "ca_ab_2863_free_trial",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.05555555555555555
+            "top3_hit": true,
+            "rr": 0.3333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_e_1005_10_c",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.2
+            "rr": 0.2,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ca_ab_2863_free_trial",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1878,25 +862,33 @@
             "top1_id": "ca_ab_2863_free_trial",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.03571428571428571
+            "rr": 0.05,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ca_ab_2863_free_trial",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -1908,28 +900,36 @@
         ],
         "rankings": {
           "bm25": {
-            "top1_id": "ca_ab_2863_click_cancel",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.09090909090909091
+            "top1_id": "ftc_negative_option_equal",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "vacated_by_court_order",
+            "vacated_banner_present": true
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.16666666666666666
+            "rr": 0.1111111111111111,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_e_1005_10_c",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.02857142857142857
+            "rr": 0.038461538461538464,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
-            "top1_id": "ca_ab_2863_click_cancel",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.08333333333333333
+            "top1_id": "ftc_negative_option_equal",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "vacated_by_court_order",
+            "vacated_banner_present": true
           }
         }
       },
@@ -1940,28 +940,36 @@
         ],
         "rankings": {
           "bm25": {
-            "top1_id": "rosca_8403_2",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.0
+            "top1_id": "ftc_negative_option_save",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "vacated_by_court_order",
+            "vacated_banner_present": true
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.0
+            "rr": 0.03125,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "co_hb_21_1239",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.0
+            "rr": 0.058823529411764705,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
-            "top1_id": "rosca_8403_2",
-            "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.0
+            "top1_id": "ftc_negative_option_save",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "vacated_by_court_order",
+            "vacated_banner_present": true
           }
         }
       },
@@ -1973,28 +981,36 @@
         ],
         "rankings": {
           "bm25": {
-            "top1_id": "ca_ab_2863_free_trial",
-            "top1_hit": false,
+            "top1_id": "ftc_negative_option_misrep",
+            "top1_hit": true,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 1.0,
+            "top1_status": "vacated_by_court_order",
+            "vacated_banner_present": true
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.125
+            "rr": 0.09090909090909091,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "il_815_ilcs_601",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.07142857142857142
+            "rr": 0.0625,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
-            "top1_id": "ca_ab_2863_free_trial",
-            "top1_hit": false,
+            "top1_id": "ftc_negative_option_misrep",
+            "top1_hit": true,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 1.0,
+            "top1_status": "vacated_by_court_order",
+            "vacated_banner_present": true
           }
         }
       },
@@ -2009,25 +1025,33 @@
             "top1_id": "uk_dmcc_cooling_off",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "uk_dmcc_cooling_off",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "eu_crd_art_9_withdrawal",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "uk_dmcc_cooling_off",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2041,25 +1065,33 @@
             "top1_id": "uk_dmcc_renewal_notice",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.030303030303030304
+            "rr": 0.027777777777777776,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_e_1005_10_c",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.16666666666666666
+            "rr": 0.16666666666666666,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "uk_dmcc_renewal_notice",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2073,25 +1105,33 @@
             "top1_id": "uk_dmcc_exit_steps",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.03125
+            "rr": 0.02857142857142857,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ca_bpc_17602_b",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.07142857142857142
+            "rr": 0.058823529411764705,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "uk_dmcc_exit_steps",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2105,25 +1145,33 @@
             "top1_id": "eu_crd_art_8_button",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.03225806451612903
+            "rr": 0.029411764705882353,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "eu_crd_art_8_button",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "eu_crd_art_8_button",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2137,25 +1185,33 @@
             "top1_id": "eu_crd_art_9_withdrawal",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.03333333333333333
+            "rr": 0.030303030303030304,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "il_815_ilcs_601",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.2
+            "rr": 0.2,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "eu_crd_art_9_withdrawal",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2169,25 +1225,33 @@
             "top1_id": "eu_crd_art_8_button",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.3333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "reg_cc_229_10_a",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.16666666666666666
+            "rr": 0.2,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_e_1005_10_c",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.045454545454545456
+            "rr": 0.043478260869565216,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "eu_crd_art_14_refund",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2201,25 +1265,33 @@
             "top1_id": "ny_gbl_527_a",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.037037037037037035
+            "rr": 0.043478260869565216,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ny_gbl_527_a",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ny_gbl_527_a",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2233,25 +1305,33 @@
             "top1_id": "il_815_ilcs_601",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.05
+            "rr": 0.03333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "il_815_ilcs_601",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "il_815_ilcs_601",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2265,25 +1345,33 @@
             "top1_id": "co_hb_21_1239",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.038461538461538464
+            "rr": 0.034482758620689655,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "co_hb_21_1239",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "co_hb_21_1239",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2297,25 +1385,33 @@
             "top1_id": "va_code_59_1_207",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.04
+            "rr": 0.03571428571428571,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "co_hb_21_1239",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.3333333333333333
+            "rr": 0.3333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "va_code_59_1_207",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2329,25 +1425,33 @@
             "top1_id": "va_code_59_1_207",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.3333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.041666666666666664
+            "rr": 0.037037037037037035,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_e_1005_10_c",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "va_code_59_1_207",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2361,25 +1465,33 @@
             "top1_id": "rosca_8403_3",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.043478260869565216
+            "rr": 0.038461538461538464,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_e_1005_10_c",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.16666666666666666
+            "rr": 0.16666666666666666,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "rosca_8403_3",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2394,25 +1506,1516 @@
             "top1_id": "reg_e_1005_10_c",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_403",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "reg_e_1005_10_c",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_e_1005_10_c",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      }
+    ]
+  },
+  "in_force_corpus_benchmark": {
+    "corpus_label": "in_force_corpus_37_chunks",
+    "corpus_chunks_count": 37,
+    "queries_count": 35,
+    "summary": {
+      "bm25": {
+        "top1_recall": 0.7429,
+        "top1_recall_pct": 74.3,
+        "top1_hits": 26,
+        "top1_ci_95": [
+          0.5793,
+          0.8584
+        ],
+        "top3_recall": 0.9143,
+        "top3_recall_pct": 91.4,
+        "top3_hits": 32,
+        "top3_ci_95": [
+          0.7762,
+          0.9704
+        ],
+        "mrr": 0.8312
+      },
+      "regex": {
+        "top1_recall": 0.1429,
+        "top1_recall_pct": 14.3,
+        "top1_hits": 5,
+        "top1_ci_95": [
+          0.0626,
+          0.2938
+        ],
+        "top3_recall": 0.2,
+        "top3_recall_pct": 20.0,
+        "top3_hits": 7,
+        "top3_ci_95": [
+          0.1004,
+          0.3589
+        ],
+        "mrr": 0.2389
+      },
+      "bitnet_embedding": {
+        "top1_recall": 0.2,
+        "top1_recall_pct": 20.0,
+        "top1_hits": 7,
+        "top1_ci_95": [
+          0.1004,
+          0.3589
+        ],
+        "top3_recall": 0.3429,
+        "top3_recall_pct": 34.3,
+        "top3_hits": 12,
+        "top3_ci_95": [
+          0.2083,
+          0.5085
+        ],
+        "mrr": 0.3365
+      },
+      "hybrid": {
+        "top1_recall": 0.8,
+        "top1_recall_pct": 80.0,
+        "top1_hits": 28,
+        "top1_ci_95": [
+          0.6411,
+          0.8996
+        ],
+        "top3_recall": 0.9143,
+        "top3_recall_pct": 91.4,
+        "top3_hits": 32,
+        "top3_ci_95": [
+          0.7762,
+          0.9704
+        ],
+        "mrr": 0.8643
+      }
+    },
+    "query_details": [
+      {
+        "query": "When must cash deposited in person at a bank teller be available?",
+        "relevant_ids": [
+          "reg_cc_229_10_a"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "reg_cc_229_10_a",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.02702702702702703,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_e_1005_10_c",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "reg_cc_229_10_a",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "What is the availability schedule for incoming electronic wire and ACH payments?",
+        "relevant_ids": [
+          "reg_cc_229_10_b"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "reg_cc_229_10_b",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.058823529411764705,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_e_1005_10_c",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.07692307692307693,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "reg_cc_229_10_b",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "How quickly must Treasury checks be cleared for withdrawal?",
+        "relevant_ids": [
+          "reg_cc_229_10_c_treasury"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "reg_cc_229_10_c_treasury",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "reg_cc_229_10_a",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.16666666666666666,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_e_1005_11",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.041666666666666664,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "reg_cc_229_10_c_treasury",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "Are cashier checks eligible for next day funds availability?",
+        "relevant_ids": [
+          "reg_cc_229_10_c_cashier"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "reg_cc_229_10_c_cashier",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.06666666666666667,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_cc_229_10_c_cashier",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "reg_cc_229_10_c_cashier",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "What is the statutory minimum dollar amount of checks that must be available next day?",
+        "relevant_ids": [
+          "reg_cc_229_10_c_aggregate"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "reg_cc_229_10_c_aggregate",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.07142857142857142,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_e_1005_10_c",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.2,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "reg_cc_229_10_c_aggregate",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "How long can a bank hold funds from a standard local check deposit?",
+        "relevant_ids": [
+          "reg_cc_229_12_b"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "reg_cc_229_12_b",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.07692307692307693,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_e_1005_11",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.125,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "reg_cc_229_12_b",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "What is the large deposit dollar exception threshold under Regulation CC?",
+        "relevant_ids": [
+          "reg_cc_229_13_b"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "reg_cc_229_13_b",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.08333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_e_1005_10_c",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.027777777777777776,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "reg_cc_229_13_b",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "Can a bank place an extended hold if my account was repeatedly overdrawn?",
+        "relevant_ids": [
+          "reg_cc_229_13_d"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "reg_cc_229_13_d",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "reg_cc_229_13_d",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_e_1005_10_c",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "reg_cc_229_13_d",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "Does next day availability apply to cash deposits made at an unstaffed ATM?",
+        "relevant_ids": [
+          "reg_cc_229_19_b"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "reg_cc_229_19_b",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "reg_cc_229_19_b",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_e_1005_10_c",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.14285714285714285,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "reg_cc_229_19_b",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "What disclosures must a vendor make before billing for automatic renewal under federal law?",
+        "relevant_ids": [
+          "rosca_8403_1"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "dc_code_28_3872",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.16666666666666666,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.1111111111111111,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "il_815_ilcs_601",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.05263157894736842,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "dc_code_28_3872",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.16666666666666666,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "Is express informed consent required before charging a recurring subscription?",
+        "relevant_ids": [
+          "rosca_8403_2"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "rosca_8403_2",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ca_bpc_17603_unconditional_gift",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.25,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_e_1005_10_c",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.058823529411764705,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "rosca_8403_2",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "Does federal law require a simple online cancellation mechanism for recurring charges?",
+        "relevant_ids": [
+          "rosca_8403_3",
+          "ca_ab_2863_click_cancel"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "rosca_8403_3",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.14285714285714285,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "va_code_59_1_207",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.037037037037037035,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "rosca_8403_3",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "Where must recurring subscription terms be displayed on a checkout page in California?",
+        "relevant_ids": [
+          "ca_bpc_17602_a_1"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "reg_e_1005_10",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.16666666666666666,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.14285714285714285,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "ca_bpc_17602_a_1",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "Does California law require affirmative checkbox consent for automatic renewal?",
+        "relevant_ids": [
+          "ca_bpc_17602_a_2"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "ca_bpc_17602_a_2",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.2,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "ca_bpc_17602_a_1",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.1111111111111111,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "ca_bpc_17602_a_2",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "What post-purchase email confirmation is required for subscription signups in California?",
+        "relevant_ids": [
+          "ca_bpc_17602_a_3"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "ca_bpc_17602_a_3",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.25,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.2,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "ca_bpc_17602_a_3",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "How much advance notice must a company provide before increasing subscription prices?",
+        "relevant_ids": [
+          "ca_bpc_17602_b"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "ca_bpc_17602_b",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.3333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "il_815_ilcs_601",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.25,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "ca_bpc_17602_b",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "Can I cancel an automatic subscription with a single click online in California?",
+        "relevant_ids": [
+          "ca_ab_2863_click_cancel"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "ca_ab_2863_click_cancel",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ca_ab_2863_click_cancel",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "co_hb_21_1239",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.04,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "ca_ab_2863_click_cancel",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "When must companies send an annual renewal notice before charging a yearly fee?",
+        "relevant_ids": [
+          "ca_ab_2863_annual_notice",
+          "uk_dmcc_renewal_notice"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "ca_ab_2863_free_trial",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_e_1005_10_c",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.2,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "ca_ab_2863_free_trial",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "Does a company have to notify me before a free trial converts into a paid subscription?",
+        "relevant_ids": [
+          "ca_ab_2863_free_trial"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "ca_ab_2863_free_trial",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.05263157894736842,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "ca_ab_2863_free_trial",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "Does federal policy require cancellation to be as easy as signing up?",
+        "relevant_ids": [
+          "ftc_negative_option_equal",
+          "rosca_8403_3"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "ca_ab_2863_click_cancel",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.09090909090909091,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.14285714285714285,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_e_1005_10_c",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.02702702702702703,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "ca_ab_2863_click_cancel",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.08333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "Are companies allowed to force you through multiple retention offers before letting you cancel?",
+        "relevant_ids": [
+          "ftc_negative_option_save"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "rosca_8403_2",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "co_hb_21_1239",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "rosca_8403_2",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "Can a merchant misrepresent billing dates or free trial terms?",
+        "relevant_ids": [
+          "ftc_negative_option_misrep",
+          "rosca_8403_1"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "ca_ab_2863_free_trial",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.1111111111111111,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "il_815_ilcs_601",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.06666666666666667,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "ca_ab_2863_free_trial",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "What is the statutory 14-day cooling off period for cancelling UK subscription contracts?",
+        "relevant_ids": [
+          "uk_dmcc_cooling_off",
+          "eu_crd_art_9_withdrawal"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "uk_dmcc_cooling_off",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "uk_dmcc_cooling_off",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "eu_crd_art_9_withdrawal",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "uk_dmcc_cooling_off",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "What pre-renewal notice must UK traders send to customers before a yearly contract renews?",
+        "relevant_ids": [
+          "uk_dmcc_renewal_notice"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "uk_dmcc_renewal_notice",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.029411764705882353,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_e_1005_10_c",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.16666666666666666,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "uk_dmcc_renewal_notice",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "Does UK law require a straightforward one-step subscription cancellation process?",
+        "relevant_ids": [
+          "uk_dmcc_exit_steps"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "uk_dmcc_exit_steps",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.030303030303030304,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "ca_bpc_17602_b",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.06666666666666667,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "uk_dmcc_exit_steps",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "What button label is required by EU law when placing an order that requires payment?",
+        "relevant_ids": [
+          "eu_crd_art_8_button"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "eu_crd_art_8_button",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.03125,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "eu_crd_art_8_button",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "eu_crd_art_8_button",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "How many days do consumers have to withdraw from an online contract in Europe?",
+        "relevant_ids": [
+          "eu_crd_art_9_withdrawal"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "eu_crd_art_9_withdrawal",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.03225806451612903,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "il_815_ilcs_601",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.2,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "eu_crd_art_9_withdrawal",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "When must a trader issue a full refund after an EU customer exercises their right of withdrawal?",
+        "relevant_ids": [
+          "eu_crd_art_14_refund"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "eu_crd_art_8_button",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "reg_cc_229_10_a",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.2,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_e_1005_10_c",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.045454545454545456,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "eu_crd_art_14_refund",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "Can a New York customer cancel an online subscription entirely online without calling?",
+        "relevant_ids": [
+          "ny_gbl_527_a"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "ny_gbl_527_a",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.034482758620689655,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "ny_gbl_527_a",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "ny_gbl_527_a",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "Does Illinois law mandate 30 to 60 days advance written notice for automatic renewals?",
+        "relevant_ids": [
+          "il_815_ilcs_601"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "il_815_ilcs_601",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.03571428571428571,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "il_815_ilcs_601",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "il_815_ilcs_601",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "What are the subscription disclosure requirements under Colorado consumer protection law?",
+        "relevant_ids": [
+          "co_hb_21_1239"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "co_hb_21_1239",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.037037037037037035,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "co_hb_21_1239",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "co_hb_21_1239",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "Does Virginia law require express verifiable consent before recurring charges?",
+        "relevant_ids": [
+          "va_code_59_1_207"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "va_code_59_1_207",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.038461538461538464,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "co_hb_21_1239",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.3333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "va_code_59_1_207",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "What notice timeframe is required for subscription renewals in Washington D.C.?",
+        "relevant_ids": [
+          "dc_code_28_3872"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "va_code_59_1_207",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.3333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.04,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_e_1005_10_c",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "va_code_59_1_207",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "What authorization is needed to debit recurring charges from a bank checking account?",
+        "relevant_ids": [
+          "reg_e_1005_10"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "rosca_8403_3",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_406",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.041666666666666664,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_e_1005_10_c",
+            "top1_hit": false,
+            "top3_hit": false,
+            "rr": 0.16666666666666666,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "rosca_8403_3",
+            "top1_hit": false,
+            "top3_hit": true,
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          }
+        }
+      },
+      {
+        "query": "How many days before a scheduled debit can a consumer stop payment under Regulation E?",
+        "relevant_ids": [
+          "reg_e_1005_10_c",
+          "ucc_4_403"
+        ],
+        "rankings": {
+          "bm25": {
+            "top1_id": "reg_e_1005_10_c",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "regex": {
+            "top1_id": "ucc_4_403",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "bitnet_embedding": {
+            "top1_id": "reg_e_1005_10_c",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
+          },
+          "hybrid": {
+            "top1_id": "reg_e_1005_10_c",
+            "top1_hit": true,
+            "top3_hit": true,
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       }
@@ -2420,7 +3023,7 @@
   },
   "short_chunks_benchmark": {
     "corpus_label": "short_chunks_under_30_tokens",
-    "corpus_chunks_count": 38,
+    "corpus_chunks_count": 40,
     "queries_count": 35,
     "summary": {
       "bm25": {
@@ -2438,7 +3041,7 @@
           0.6732,
           0.919
         ],
-        "mrr": 0.7273
+        "mrr": 0.727
       },
       "regex": {
         "top1_recall": 0.1143,
@@ -2448,14 +3051,14 @@
           0.0454,
           0.2595
         ],
-        "top3_recall": 0.2571,
-        "top3_recall_pct": 25.7,
-        "top3_hits": 9,
+        "top3_recall": 0.2,
+        "top3_recall_pct": 20.0,
+        "top3_hits": 7,
         "top3_ci_95": [
-          0.1416,
-          0.4207
+          0.1004,
+          0.3589
         ],
-        "mrr": 0.2348
+        "mrr": 0.2068
       },
       "bitnet_embedding": {
         "top1_recall": 0.0,
@@ -2465,14 +3068,14 @@
           0.0,
           0.0989
         ],
-        "top3_recall": 0.2,
-        "top3_recall_pct": 20.0,
-        "top3_hits": 7,
+        "top3_recall": 0.2286,
+        "top3_recall_pct": 22.9,
+        "top3_hits": 8,
         "top3_ci_95": [
-          0.1004,
-          0.3589
+          0.1207,
+          0.3902
         ],
-        "mrr": 0.1787
+        "mrr": 0.1852
       },
       "hybrid": {
         "top1_recall": 0.5714,
@@ -2489,7 +3092,7 @@
           0.6732,
           0.919
         ],
-        "mrr": 0.7012
+        "mrr": 0.7009
       }
     },
     "query_details": [
@@ -2503,25 +3106,33 @@
             "top1_id": "reg_cc_229_10_a",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.02631578947368421
+            "rr": 0.025,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.14285714285714285
+            "rr": 0.16666666666666666,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_10_a",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2535,25 +3146,33 @@
             "top1_id": "reg_cc_229_10_b",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.05555555555555555
+            "rr": 0.05263157894736842,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.03571428571428571
+            "rr": 0.03333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_10_b",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2567,25 +3186,33 @@
             "top1_id": "reg_cc_229_10_c_treasury",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "eu_crd_art_14_refund",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.05555555555555555
+            "rr": 0.05263157894736842,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.03571428571428571
+            "rr": 0.034482758620689655,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "eu_crd_art_9_withdrawal",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.3333333333333333
+            "rr": 0.3333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2599,25 +3226,33 @@
             "top1_id": "reg_cc_229_10_c_cashier",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.0625
+            "rr": 0.058823529411764705,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.14285714285714285
+            "rr": 0.125,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_10_c_cashier",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2631,25 +3266,33 @@
             "top1_id": "reg_cc_229_10_c_treasury",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.3333333333333333
+            "rr": 0.3333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.06666666666666667
+            "rr": 0.0625,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.14285714285714285
+            "rr": 0.14285714285714285,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_10_c_cashier",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.3333333333333333
+            "rr": 0.3333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2663,25 +3306,33 @@
             "top1_id": "reg_cc_229_10_a",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.1
+            "rr": 0.1,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.07142857142857142
+            "rr": 0.06666666666666667,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.038461538461538464
+            "rr": 0.03571428571428571,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_10_a",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.1
+            "rr": 0.1,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2695,25 +3346,33 @@
             "top1_id": "reg_cc_229_13_b",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.07692307692307693
+            "rr": 0.07142857142857142,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.034482758620689655
+            "rr": 0.034482758620689655,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_13_b",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2727,25 +3386,33 @@
             "top1_id": "reg_cc_229_13_d",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "reg_cc_229_13_d",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_13_d",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2759,25 +3426,33 @@
             "top1_id": "reg_cc_229_10_a",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.14285714285714285
+            "rr": 0.14285714285714285,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.1
+            "rr": 0.08333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.08333333333333333
+            "rr": 0.07692307692307693,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_10_a",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.125
+            "rr": 0.125,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2791,25 +3466,33 @@
             "top1_id": "co_hb_21_1239",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.037037037037037035
+            "rr": 0.03571428571428571,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.5
+            "top3_hit": false,
+            "rr": 0.09090909090909091,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.08333333333333333
+            "rr": 0.07692307692307693,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "co_hb_21_1239",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.03333333333333333
+            "rr": 0.03125,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2823,25 +3506,33 @@
             "top1_id": "rosca_8403_2",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
-            "top1_id": "ca_bpc_17602_a_2",
+            "top1_id": "ca_bpc_17603_unconditional_gift",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.3333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.0625
+            "rr": 0.07142857142857142,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "rosca_8403_2",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2856,25 +3547,33 @@
             "top1_id": "ny_gbl_527_a",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.3333333333333333
+            "top3_hit": false,
+            "rr": 0.25,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.16666666666666666
+            "rr": 0.16666666666666666,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ny_gbl_527_a",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2888,25 +3587,33 @@
             "top1_id": "ftc_negative_option_save",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.16666666666666666
+            "rr": 0.16666666666666666,
+            "top1_status": "vacated_by_court_order",
+            "vacated_banner_present": false
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.14285714285714285
+            "rr": 0.125,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.037037037037037035
+            "rr": 0.03571428571428571,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ftc_negative_option_save",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.16666666666666666
+            "rr": 0.16666666666666666,
+            "top1_status": "vacated_by_court_order",
+            "vacated_banner_present": false
           }
         }
       },
@@ -2920,25 +3627,33 @@
             "top1_id": "ca_bpc_17602_a_2",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.16666666666666666
+            "rr": 0.14285714285714285,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.2
+            "rr": 0.2,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ca_bpc_17602_a_2",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2952,25 +3667,33 @@
             "top1_id": "ca_bpc_17602_a_3",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.2
+            "rr": 0.16666666666666666,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.14285714285714285
+            "rr": 0.14285714285714285,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ca_bpc_17602_a_3",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -2984,25 +3707,33 @@
             "top1_id": "ca_ab_2863_free_trial",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.25
+            "rr": 0.2,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.05555555555555555
+            "rr": 0.05263157894736842,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ca_ab_2863_free_trial",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3016,25 +3747,33 @@
             "top1_id": "ca_ab_2863_click_cancel",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ftc_negative_option_equal",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "vacated_by_court_order",
+            "vacated_banner_present": false
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.04
+            "rr": 0.038461538461538464,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ca_ab_2863_click_cancel",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3049,25 +3788,33 @@
             "top1_id": "ca_bpc_17602_a_2",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.05263157894736842
+            "top3_hit": true,
+            "rr": 0.3333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.14285714285714285
+            "rr": 0.125,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ca_bpc_17602_a_2",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3081,25 +3828,33 @@
             "top1_id": "ca_ab_2863_free_trial",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.05
+            "rr": 0.05,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.3333333333333333
+            "rr": 0.3333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ca_ab_2863_free_trial",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3114,25 +3869,33 @@
             "top1_id": "ca_bpc_17602_a_3",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.125
+            "rr": 0.1111111111111111,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.043478260869565216
+            "rr": 0.07142857142857142,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ca_bpc_17602_a_3",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.3333333333333333
+            "rr": 0.3333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3146,25 +3909,33 @@
             "top1_id": "ftc_negative_option_equal",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.3333333333333333
+            "rr": 0.3333333333333333,
+            "top1_status": "vacated_by_court_order",
+            "vacated_banner_present": false
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.045454545454545456
+            "rr": 0.03125,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.25
+            "top3_hit": true,
+            "rr": 0.3333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ftc_negative_option_equal",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.3333333333333333
+            "rr": 0.3333333333333333,
+            "top1_status": "vacated_by_court_order",
+            "vacated_banner_present": false
           }
         }
       },
@@ -3179,25 +3950,33 @@
             "top1_id": "ca_ab_2863_free_trial",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.25
+            "rr": 0.25,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.5
+            "top3_hit": false,
+            "rr": 0.09090909090909091,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
-            "top3_hit": false,
-            "rr": 0.25
+            "top3_hit": true,
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ca_ab_2863_free_trial",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.2
+            "rr": 0.2,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3212,25 +3991,33 @@
             "top1_id": "uk_dmcc_cooling_off",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "uk_dmcc_cooling_off",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.16666666666666666
+            "rr": 0.16666666666666666,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "uk_dmcc_cooling_off",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3244,25 +4031,33 @@
             "top1_id": "uk_dmcc_renewal_notice",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.02857142857142857
+            "rr": 0.027777777777777776,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.1111111111111111
+            "rr": 0.1111111111111111,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "uk_dmcc_renewal_notice",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3276,25 +4071,33 @@
             "top1_id": "uk_dmcc_exit_steps",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.029411764705882353
+            "rr": 0.02857142857142857,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.06666666666666667
+            "rr": 0.0625,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "uk_dmcc_exit_steps",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "enacted_not_in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3308,25 +4111,33 @@
             "top1_id": "eu_crd_art_8_button",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.030303030303030304
+            "rr": 0.029411764705882353,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "eu_crd_art_8_button",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3340,25 +4151,33 @@
             "top1_id": "reg_cc_229_19_b",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.09090909090909091
+            "rr": 0.08333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.03125
+            "rr": 0.030303030303030304,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
-            "top3_hit": true,
-            "rr": 0.3333333333333333
+            "top3_hit": false,
+            "rr": 0.25,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "reg_cc_229_19_b",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.08333333333333333
+            "rr": 0.07692307692307693,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3372,25 +4191,33 @@
             "top1_id": "eu_crd_art_9_withdrawal",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "eu_crd_art_14_refund",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.038461538461538464
+            "rr": 0.038461538461538464,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "eu_crd_art_9_withdrawal",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3404,25 +4231,33 @@
             "top1_id": "ny_gbl_527_a",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.03333333333333333
+            "rr": 0.043478260869565216,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ny_gbl_527_a",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3436,25 +4271,33 @@
             "top1_id": "il_815_ilcs_601",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.034482758620689655
+            "rr": 0.03333333333333333,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "il_815_ilcs_601",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3468,25 +4311,33 @@
             "top1_id": "co_hb_21_1239",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.03571428571428571
+            "rr": 0.034482758620689655,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.14285714285714285
+            "rr": 0.125,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "co_hb_21_1239",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3500,25 +4351,33 @@
             "top1_id": "va_code_59_1_207",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.037037037037037035
+            "rr": 0.03571428571428571,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "va_code_59_1_207",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3532,25 +4391,33 @@
             "top1_id": "dc_code_28_3872",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.038461538461538464
+            "rr": 0.037037037037037035,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.038461538461538464
+            "rr": 0.038461538461538464,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "dc_code_28_3872",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3564,25 +4431,33 @@
             "top1_id": "ucc_4_403",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.04
+            "rr": 0.038461538461538464,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.14285714285714285
+            "rr": 0.14285714285714285,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ucc_4_403",
             "top1_hit": false,
             "top3_hit": true,
-            "rr": 0.5
+            "rr": 0.5,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       },
@@ -3597,25 +4472,33 @@
             "top1_id": "ucc_4_403",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "regex": {
             "top1_id": "ucc_4_403",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "bitnet_embedding": {
             "top1_id": "ucc_4_406",
             "top1_hit": false,
             "top3_hit": false,
-            "rr": 0.25
+            "rr": 0.25,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           },
           "hybrid": {
             "top1_id": "ucc_4_403",
             "top1_hit": true,
             "top3_hit": true,
-            "rr": 1.0
+            "rr": 1.0,
+            "top1_status": "in_force",
+            "vacated_banner_present": null
           }
         }
       }
@@ -3627,7 +4510,7 @@
       "statute": "12 CFR \u00a7 229.10(a)",
       "status": "in_force",
       "effective_from": "1988-09-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(a)",
       "legal_notes": null
     },
@@ -3636,7 +4519,7 @@
       "statute": "12 CFR \u00a7 229.10(b)",
       "status": "in_force",
       "effective_from": "1988-09-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(b)",
       "legal_notes": null
     },
@@ -3645,7 +4528,7 @@
       "statute": "12 CFR \u00a7 229.10(c)(1)(i)",
       "status": "in_force",
       "effective_from": "1988-09-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(c)(1)(i)",
       "legal_notes": null
     },
@@ -3654,7 +4537,7 @@
       "statute": "12 CFR \u00a7 229.10(c)(1)(v)",
       "status": "in_force",
       "effective_from": "1988-09-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(c)(1)(v)",
       "legal_notes": null
     },
@@ -3663,7 +4546,7 @@
       "statute": "12 CFR \u00a7 229.10(c)(1)(vi)",
       "status": "in_force",
       "effective_from": "2025-07-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(c)(1)(vi)",
       "legal_notes": null
     },
@@ -3672,7 +4555,7 @@
       "statute": "12 CFR \u00a7 229.12(b)",
       "status": "in_force",
       "effective_from": "1990-09-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.12#p-229.12(b)",
       "legal_notes": null
     },
@@ -3681,7 +4564,7 @@
       "statute": "12 CFR \u00a7 229.13(b)",
       "status": "in_force",
       "effective_from": "2025-07-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.13#p-229.13(b)",
       "legal_notes": null
     },
@@ -3690,7 +4573,7 @@
       "statute": "12 CFR \u00a7 229.13(d)",
       "status": "in_force",
       "effective_from": "1988-09-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.13#p-229.13(d)",
       "legal_notes": null
     },
@@ -3699,7 +4582,7 @@
       "statute": "12 CFR \u00a7 229.19(b)",
       "status": "in_force",
       "effective_from": "1988-09-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.19#p-229.19(b)",
       "legal_notes": null
     },
@@ -3708,7 +4591,7 @@
       "statute": "15 U.S.C. \u00a7 8403(1)",
       "status": "in_force",
       "effective_from": "2010-12-29",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title15-section8403",
       "legal_notes": null
     },
@@ -3717,7 +4600,7 @@
       "statute": "15 U.S.C. \u00a7 8403(2)",
       "status": "in_force",
       "effective_from": "2010-12-29",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title15-section8403",
       "legal_notes": null
     },
@@ -3726,7 +4609,7 @@
       "statute": "15 U.S.C. \u00a7 8403(3)",
       "status": "in_force",
       "effective_from": "2010-12-29",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title15-section8403",
       "legal_notes": null
     },
@@ -3735,7 +4618,7 @@
       "statute": "Cal. Bus. & Prof. Code \u00a7 17602(a)(1)",
       "status": "in_force",
       "effective_from": "2010-12-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17602",
       "legal_notes": null
     },
@@ -3744,7 +4627,7 @@
       "statute": "Cal. Bus. & Prof. Code \u00a7 17602(a)(2)",
       "status": "in_force",
       "effective_from": "2010-12-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17602",
       "legal_notes": null
     },
@@ -3753,7 +4636,7 @@
       "statute": "Cal. Bus. & Prof. Code \u00a7 17602(a)(3)",
       "status": "in_force",
       "effective_from": "2010-12-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17602",
       "legal_notes": null
     },
@@ -3762,7 +4645,7 @@
       "statute": "Cal. Bus. & Prof. Code \u00a7 17602(b)",
       "status": "in_force",
       "effective_from": "2010-12-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17602",
       "legal_notes": null
     },
@@ -3771,7 +4654,7 @@
       "statute": "Cal. Bus. & Prof. Code \u00a7 17602(a)(4)",
       "status": "in_force",
       "effective_from": "2025-07-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB2863",
       "legal_notes": null
     },
@@ -3780,7 +4663,7 @@
       "statute": "Cal. Bus. & Prof. Code \u00a7 17602(d)",
       "status": "in_force",
       "effective_from": "2025-07-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB2863",
       "legal_notes": null
     },
@@ -3789,8 +4672,17 @@
       "statute": "Cal. Bus. & Prof. Code \u00a7 17602(c)",
       "status": "in_force",
       "effective_from": "2025-07-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB2863",
+      "legal_notes": null
+    },
+    {
+      "id": "ca_bpc_17603_unconditional_gift",
+      "statute": "Cal. Bus. & Prof. Code \u00a7 17603",
+      "status": "in_force",
+      "effective_from": "2010-12-01",
+      "verified_on": "2026-10-08",
+      "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17603",
       "legal_notes": null
     },
     {
@@ -3798,52 +4690,61 @@
       "statute": "16 CFR \u00a7 425.5",
       "status": "vacated_by_court_order",
       "effective_from": "2024-10-16 (promulgated); vacated 2025-07-08",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
-      "legal_notes": "Vacated nationwide by 8th Circuit on July 8, 2025 (NFIB v. FTC, No. 24-3232). FTC issued ANPRM in March 2026."
+      "legal_notes": "Vacated nationwide by 8th Circuit on July 8, 2025 (Custom Communications Engineering, Inc. v. FTC, No. 24-3232, consolidated with NFIB v. FTC). 1973 prenotification negative option rule remains in effect; only 2024 expansion was vacated. FTC issued ANPRM in March 2026."
     },
     {
       "id": "ftc_negative_option_save",
       "statute": "16 CFR \u00a7 425.6",
       "status": "vacated_by_court_order",
       "effective_from": "2024-10-16 (promulgated); vacated 2025-07-08",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
-      "legal_notes": "Vacated nationwide by 8th Circuit on July 8, 2025 (NFIB v. FTC, No. 24-3232). FTC issued ANPRM in March 2026."
+      "legal_notes": "Vacated nationwide by 8th Circuit on July 8, 2025 (Custom Communications Engineering, Inc. v. FTC, No. 24-3232). FTC issued ANPRM in March 2026."
     },
     {
       "id": "ftc_negative_option_misrep",
       "statute": "16 CFR \u00a7 425.3",
       "status": "vacated_by_court_order",
       "effective_from": "2024-10-16 (promulgated); vacated 2025-07-08",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
-      "legal_notes": "Vacated nationwide by 8th Circuit on July 8, 2025 (NFIB v. FTC, No. 24-3232). FTC issued ANPRM in March 2026."
+      "legal_notes": "Vacated nationwide by 8th Circuit on July 8, 2025 (Custom Communications Engineering, Inc. v. FTC, No. 24-3232). FTC issued ANPRM in March 2026."
+    },
+    {
+      "id": "uk_dmcc_precontract_info",
+      "statute": "UK DMCC Act 2024 s. 255",
+      "status": "enacted_not_in_force",
+      "effective_from": "Enacted 2024-05-24; implementation scheduled Spring 2026 / 2027",
+      "verified_on": "2026-10-08",
+      "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/255",
+      "legal_notes": null
     },
     {
       "id": "uk_dmcc_cooling_off",
       "statute": "UK DMCC Act 2024 s. 256",
-      "status": "in_force",
-      "effective_from": "2024-05-24",
-      "verified_on": "2026-10-07",
+      "status": "enacted_not_in_force",
+      "effective_from": "Enacted 2024-05-24; implementation scheduled Spring 2026 / 2027",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/256",
       "legal_notes": null
     },
     {
       "id": "uk_dmcc_renewal_notice",
       "statute": "UK DMCC Act 2024 s. 257",
-      "status": "in_force",
-      "effective_from": "2024-05-24",
-      "verified_on": "2026-10-07",
+      "status": "enacted_not_in_force",
+      "effective_from": "Enacted 2024-05-24; implementation scheduled Spring 2026 / 2027",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/257",
       "legal_notes": null
     },
     {
       "id": "uk_dmcc_exit_steps",
       "statute": "UK DMCC Act 2024 s. 258",
-      "status": "in_force",
-      "effective_from": "2024-05-24",
-      "verified_on": "2026-10-07",
+      "status": "enacted_not_in_force",
+      "effective_from": "Enacted 2024-05-24; implementation scheduled Spring 2026 / 2027",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/258",
       "legal_notes": null
     },
@@ -3852,7 +4753,7 @@
       "statute": "EU Directive 2011/83/EU Art. 8",
       "status": "in_force",
       "effective_from": "2014-06-13",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32011L0083",
       "legal_notes": null
     },
@@ -3861,7 +4762,7 @@
       "statute": "EU Directive 2011/83/EU Art. 9",
       "status": "in_force",
       "effective_from": "2014-06-13",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32011L0083",
       "legal_notes": null
     },
@@ -3870,7 +4771,7 @@
       "statute": "EU Directive 2011/83/EU Art. 14",
       "status": "in_force",
       "effective_from": "2014-06-13",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32011L0083",
       "legal_notes": null
     },
@@ -3879,7 +4780,7 @@
       "statute": "N.Y. Gen. Bus. Law \u00a7 527-a",
       "status": "in_force",
       "effective_from": "2021-02-09",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.nysenate.gov/legislation/laws/GBS/527-A",
       "legal_notes": null
     },
@@ -3888,7 +4789,7 @@
       "statute": "815 Ill. Comp. Stat. 601/10",
       "status": "in_force",
       "effective_from": "2000-01-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.ilga.gov/legislation/ilcs/ilcs3.asp?ActID=2334",
       "legal_notes": null
     },
@@ -3897,7 +4798,7 @@
       "statute": "Colo. Rev. Stat. \u00a7 6-1-732",
       "status": "in_force",
       "effective_from": "2022-01-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://leg.colorado.gov/bills/hb21-1239",
       "legal_notes": null
     },
@@ -3906,7 +4807,7 @@
       "statute": "Va. Code \u00a7 59.1-207.46",
       "status": "in_force",
       "effective_from": "2019-07-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://law.lis.virginia.gov/vacode/title59.1/chapter17.7/section59.1-207.46/",
       "legal_notes": null
     },
@@ -3915,7 +4816,7 @@
       "statute": "D.C. Code \u00a7 28-3872",
       "status": "in_force",
       "effective_from": "2019-03-13",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://code.dccouncil.gov/us/dc/council/code/sections/28-3872",
       "legal_notes": null
     },
@@ -3924,7 +4825,7 @@
       "statute": "12 CFR \u00a7 1005.10(b)",
       "status": "in_force",
       "effective_from": "2011-12-30",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.consumerfinance.gov/rules-policy/regulations/1005/10/#b",
       "legal_notes": null
     },
@@ -3933,7 +4834,7 @@
       "statute": "12 CFR \u00a7 1005.10(c)",
       "status": "in_force",
       "effective_from": "2011-12-30",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.consumerfinance.gov/rules-policy/regulations/1005/10/#c",
       "legal_notes": null
     },
@@ -3942,7 +4843,7 @@
       "statute": "12 CFR \u00a7 1005.11(a)",
       "status": "in_force",
       "effective_from": "2011-12-30",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.consumerfinance.gov/rules-policy/regulations/1005/11/#a",
       "legal_notes": null
     },
@@ -3951,7 +4852,7 @@
       "statute": "UCC \u00a7 4-403",
       "status": "in_force",
       "effective_from": "1990-01-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.law.cornell.edu/ucc/4/4-403",
       "legal_notes": null
     },
@@ -3960,7 +4861,7 @@
       "statute": "UCC \u00a7 4-406",
       "status": "in_force",
       "effective_from": "1990-01-01",
-      "verified_on": "2026-10-07",
+      "verified_on": "2026-10-08",
       "source_url": "https://www.law.cornell.edu/ucc/4/4-406",
       "legal_notes": null
     }

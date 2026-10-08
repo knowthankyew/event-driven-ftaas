@@ -224,7 +224,7 @@ Assistant: Async generation completed successfully.
     @patch("bitnet_engine.count_generation_tokens", return_value=200)
     @patch("subprocess.run")
     def test_generate_bitnet_sync_precheck_token_overflow(self, mock_run, mock_count, _mock_avail):
-        """Prompt exceeding MAX_SAFE_GENERATE_TOKENS (31 tokens) raises ContextOverflowError."""
+        """Prompt exceeding MAX_SAFE_GENERATE_TOKENS (24 tokens) raises ContextOverflowError."""
         long_prompt = "Federal reserve regulation " * 10
         with self.assertRaises(bitnet_engine.ContextOverflowError) as ctx:
             bitnet_engine.generate_bitnet_sync(long_prompt)
@@ -1000,7 +1000,7 @@ class TestBitNetIntegrationLive(unittest.TestCase):
         "BitNet 2B generation binary and weights not present on host"
     )
     def test_live_generation_long_context_rejected_by_safe_ceiling(self):
-        """Verify that BitNet 2B generation path enforces MAX_SAFE_GENERATE_TOKENS (31 tokens) ceiling on long inputs."""
+        """Verify that BitNet 2B generation path enforces MAX_SAFE_GENERATE_TOKENS (24 tokens) ceiling on long inputs."""
         statute_text = (
             "12 CFR Part 229 - Availability of Funds and Collection of Checks (Regulation CC)\n"
             "Section 229.10 - Next-day availability. A bank shall make funds deposited in an account by cash available "
