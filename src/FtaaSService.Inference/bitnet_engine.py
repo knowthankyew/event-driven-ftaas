@@ -41,8 +41,9 @@ MAX_SAFE_EMBED_TOKENS = min(int(os.getenv("MAX_SAFE_EMBED_TOKENS", "240")), 255)
 # Maximum supported prompt character length for generation (~4,096 tokens at ~4 chars/token)
 MAX_GENERATE_PROMPT_CHARS = int(os.getenv("MAX_GENERATE_PROMPT_CHARS", "16384"))
 
-# Maximum safe generation prompt tokens (bounds prompt context before invoking subprocess to prevent degeneration)
-MAX_SAFE_GENERATE_TOKENS = int(os.getenv("MAX_SAFE_GENERATE_TOKENS", "150"))
+# Maximum safe generation prompt tokens (bounds prompt context before invoking subprocess to prevent
+# SIMD tile prefill corruption; prompts >= 32 tokens trigger tile corruption or repetition in bitnet.cpp runtime)
+MAX_SAFE_GENERATE_TOKENS = int(os.getenv("MAX_SAFE_GENERATE_TOKENS", "31"))
 
 SANDBOX_EXEC_PATH = Path("/usr/bin/sandbox-exec")
 BITNET_SANDBOX_NETWORK_DENY = os.getenv("BITNET_SANDBOX_NETWORK_DENY", "false").lower() in ("true", "1")

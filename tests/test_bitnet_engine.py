@@ -87,8 +87,9 @@ class TestBitNetExecution(unittest.TestCase):
         self.assertIn("BitNet C++ native runtime is not available", str(ctx.exception))
 
     @patch("bitnet_engine.is_bitnet_available", return_value=True)
+    @patch("bitnet_engine.count_generation_tokens", return_value=10)
     @patch("subprocess.run")
-    def test_generate_bitnet_sync_success(self, mock_run, _mock_avail):
+    def test_generate_bitnet_sync_success(self, mock_run, _mock_count, _mock_avail):
         sample_output = """
 > User: Explain Regulation CC<|eot_id|>
 Assistant:
@@ -122,10 +123,11 @@ Exiting...
         self.assertNotIn("-p", cmd)
         self.assertTrue(all("Explain Regulation CC" not in str(arg) for arg in cmd))
 
+    @patch("bitnet_engine.count_generation_tokens_async", return_value=10)
     @patch("bitnet_engine.is_completion_cli_available", return_value=False)
     @patch("bitnet_engine.is_bitnet_available", return_value=True)
     @patch("asyncio.create_subprocess_exec")
-    def test_generate_bitnet_async_success(self, mock_exec, _mock_avail, _mock_comp):
+    def test_generate_bitnet_async_success(self, mock_exec, _mock_avail, _mock_comp, _mock_count):
         sample_output = """
 > User: Async test<|eot_id|>
 Assistant: Async generation completed successfully.
@@ -152,10 +154,11 @@ Assistant: Async generation completed successfully.
         self.assertNotIn("-p", exec_args)
         self.assertTrue(all("Async test" not in str(arg) for arg in exec_args))
 
+    @patch("bitnet_engine.count_generation_tokens_async", return_value=10)
     @patch("bitnet_engine.is_completion_cli_available", return_value=True)
     @patch("bitnet_engine.is_bitnet_available", return_value=True)
     @patch("asyncio.create_subprocess_exec")
-    def test_generate_bitnet_async_completion_binary_success(self, mock_exec, _mock_avail, _mock_comp):
+    def test_generate_bitnet_async_completion_binary_success(self, mock_exec, _mock_avail, _mock_comp, _mock_count):
         sample_output = "Pure async completion text without banners. [end of text]\n"
         mock_proc = MagicMock()
         mock_proc.returncode = 0
@@ -221,7 +224,7 @@ Assistant: Async generation completed successfully.
     @patch("bitnet_engine.count_generation_tokens", return_value=200)
     @patch("subprocess.run")
     def test_generate_bitnet_sync_precheck_token_overflow(self, mock_run, mock_count, _mock_avail):
-        """Prompt exceeding MAX_SAFE_GENERATE_TOKENS (150 tokens) raises ContextOverflowError."""
+        """Prompt exceeding MAX_SAFE_GENERATE_TOKENS (31 tokens) raises ContextOverflowError."""
         long_prompt = "Federal reserve regulation " * 10
         with self.assertRaises(bitnet_engine.ContextOverflowError) as ctx:
             bitnet_engine.generate_bitnet_sync(long_prompt)
@@ -997,7 +1000,7 @@ class TestBitNetIntegrationLive(unittest.TestCase):
         "BitNet 2B generation binary and weights not present on host"
     )
     def test_live_generation_long_context_rejected_by_safe_ceiling(self):
-        """Verify that BitNet 2B generation path enforces MAX_SAFE_GENERATE_TOKENS (150 tokens) ceiling on long inputs."""
+        """Verify that BitNet 2B generation path enforces MAX_SAFE_GENERATE_TOKENS (31 tokens) ceiling on long inputs."""
         statute_text = (
             "12 CFR Part 229 - Availability of Funds and Collection of Checks (Regulation CC)\n"
             "Section 229.10 - Next-day availability. A bank shall make funds deposited in an account by cash available "

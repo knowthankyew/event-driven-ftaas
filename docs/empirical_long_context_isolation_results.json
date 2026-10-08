@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "timestamp": "2026-10-08T01:01:41Z",
+    "timestamp": "2026-10-08T01:44:34Z",
     "platform": "macOS-26.6.2-x86_64-i386-64bit",
     "cpu": "i386",
     "python_version": "3.12.1 (v3.12.1:2305ca5144, Dec  7 2023, 17:23:39) [Clang 13.0.0 (clang-1300.0.29.30)]",
@@ -8,7 +8,11 @@
     "transformers_version": "4.57.6",
     "bitnet_cpp_version": "unknown",
     "model_id": "microsoft/BitNet-b1.58-2B-4T",
-    "prompt_token_count": 598
+    "prompt_token_counts": {
+      "long_statute": 598,
+      "intermediate_statute": 79,
+      "short_prompt": 29
+    }
   },
   "rope_configuration": {
     "hf_config": {
@@ -123,10 +127,138 @@
       "decoded_output": "The statutory dollar threshold for large deposits under Section 229.13 is $6,725 on any one banking day.<|eot_id|>",
       "factual_correctness": true,
       "extracted_threshold": "$6,725"
+    },
+    "intermediate_79tok_greedy": {
+      "generated_tokens": [
+        791,
+        45530,
+        18160,
+        12447,
+        369,
+        3544,
+        34751,
+        11,
+        439,
+        5300,
+        304,
+        220,
+        717,
+        70921,
+        17036,
+        220,
+        14378,
+        13,
+        1032,
+        1921,
+        705,
+        374,
+        400,
+        21,
+        11,
+        23309,
+        13,
+        1115,
+        3445,
+        430,
+        422,
+        279,
+        24069,
+        3392,
+        315,
+        34751,
+        555,
+        832,
+        477,
+        810
+      ],
+      "decoded_output": "The statutory dollar threshold for large deposits, as specified in 12 CFR \u00a7 229.13(b), is $6,725. This means that if the aggregate amount of deposits by one or more",
+      "classification": "correct",
+      "factual_correctness": true,
+      "extracted_target": "$6,725"
     }
   },
   "bitnet_cpp_evaluations": {
-    "batch_16_ub_16": {
+    "long_ctx_batch_1_ub_1": {
+      "returncode": 0,
+      "raw_output": "[end of text]",
+      "flags": [
+        "-t",
+        "4",
+        "-b",
+        "1",
+        "-ub",
+        "1",
+        "-n",
+        "60"
+      ],
+      "prompt_tokens": 598,
+      "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "immediate_eos",
+      "factual_correctness": false,
+      "is_corrupted": false,
+      "extracted_target": null
+    },
+    "long_ctx_batch_2_ub_2": {
+      "returncode": 0,
+      "raw_output": "1) The threshold for large deposits under Section 229.12 do not apply to the aggregate amount of deposits by one or more checks. Section 229.13 do not apply to the aggregate amount of deposits by one or more checks.Section 229.12 do not apply to the aggregate amount",
+      "flags": [
+        "-t",
+        "4",
+        "-b",
+        "2",
+        "-ub",
+        "2",
+        "-n",
+        "60"
+      ],
+      "prompt_tokens": 598,
+      "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "fluent_repetitive_loop",
+      "factual_correctness": false,
+      "is_corrupted": false,
+      "extracted_target": null
+    },
+    "long_ctx_batch_4_ub_4": {
+      "returncode": 0,
+      "raw_output": "1) The threshold for large deposits under Section 229.12 do not apply to the aggregate amount of deposits by one or more checks. Section 229.13 do not apply to the aggregate amount of deposits by one or more checks.Section 229.12 do not apply to the aggregate amount",
+      "flags": [
+        "-t",
+        "4",
+        "-b",
+        "4",
+        "-ub",
+        "4",
+        "-n",
+        "60"
+      ],
+      "prompt_tokens": 598,
+      "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "fluent_repetitive_loop",
+      "factual_correctness": false,
+      "is_corrupted": false,
+      "extracted_target": null
+    },
+    "long_ctx_batch_8_ub_8": {
+      "returncode": 0,
+      "raw_output": "1) The threshold for large deposits under Section 229.12 do not apply to the aggregate amount of deposits by one or more checks. Section 229.13 do not apply to the aggregate amount of deposits by one or more checks.Section 229.12 do not apply to the aggregate amount",
+      "flags": [
+        "-t",
+        "4",
+        "-b",
+        "8",
+        "-ub",
+        "8",
+        "-n",
+        "60"
+      ],
+      "prompt_tokens": 598,
+      "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "fluent_repetitive_loop",
+      "factual_correctness": false,
+      "is_corrupted": false,
+      "extracted_target": null
+    },
+    "long_ctx_batch_16_ub_16": {
       "returncode": 0,
       "raw_output": "1) The threshold for large deposits under Section 229.12 do not apply to the aggregate amount of deposits by one or more checks. Section 229.13 do not apply to the aggregate amount of deposits by one or more checks.Section 229.12 do not apply to the aggregate amount",
       "flags": [
@@ -139,12 +271,34 @@
         "-n",
         "60"
       ],
+      "prompt_tokens": 598,
       "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "fluent_repetitive_loop",
       "factual_correctness": false,
       "is_corrupted": false,
-      "extracted_threshold": null
+      "extracted_target": null
     },
-    "batch_64_ub_64": {
+    "long_ctx_batch_32_ub_32": {
+      "returncode": 0,
+      "raw_output": "1. The number 2 0 3 0 2 3 0 2 3 0 2 3 0 2 3 0 2 3 0 2 3 0 2 3 0 2 3 0",
+      "flags": [
+        "-t",
+        "4",
+        "-b",
+        "32",
+        "-ub",
+        "32",
+        "-n",
+        "60"
+      ],
+      "prompt_tokens": 598,
+      "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "tile_corruption_garbage",
+      "factual_correctness": false,
+      "is_corrupted": true,
+      "extracted_target": null
+    },
+    "long_ctx_batch_64_ub_64": {
       "returncode": 0,
       "raw_output": "1. The number 2 0 3 0 2 3 0 2 3 0 2 3 0 2 3 0 2 3 0 2 3 0 2 3 0 2 3 0",
       "flags": [
@@ -157,84 +311,192 @@
         "-n",
         "60"
       ],
+      "prompt_tokens": 598,
       "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "tile_corruption_garbage",
       "factual_correctness": false,
       "is_corrupted": true,
-      "extracted_threshold": null
+      "extracted_target": null
     },
-    "original_default_t4": {
+    "long_ctx_default_b512_t4": {
       "returncode": 0,
-      "raw_output": "\u5907\u4efd is showing the most is the number of the most.\n\nThe number of the most is the most is the most is the most is the most is the most is the most",
+      "raw_output": "\u5907\u4efd is showing the most is the number of the most.\n\nThe number of the most is the most is the most is the most is the most is the most is the most is the most is the most is the most is the most is the most is the most is the most is the most is",
       "flags": [
         "-t",
         "4",
         "-n",
-        "35"
+        "60"
       ],
+      "prompt_tokens": 598,
       "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "tile_corruption_garbage",
       "factual_correctness": false,
       "is_corrupted": true,
-      "extracted_threshold": null
+      "extracted_target": null
     },
-    "original_t1": {
+    "long_ctx_default_b512_t1": {
       "returncode": 0,
-      "raw_output": "\u5907\u4efd,Disemb what are what what what they call is what they call is what they call is what they call is what they call is what they call is what they call",
+      "raw_output": "\u5907\u4efd,Disemb what are what what what they call is what they call is what they call is what they call is what they call is what they call is what they call is what they call is what they call is what they call is what they call is what they call is what they call is",
       "flags": [
         "-t",
         "1",
         "-n",
-        "35"
+        "60"
       ],
+      "prompt_tokens": 598,
       "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "tile_corruption_garbage",
       "factual_correctness": false,
       "is_corrupted": true,
-      "extracted_threshold": null
+      "extracted_target": null
     },
-    "original_no_mmap": {
+    "long_ctx_default_b512_no_mmap": {
       "returncode": 0,
-      "raw_output": "\u5907\u4efd is showing the most is the number of the most.\n\nThe number of the most is the most is the most is the most is the most is the most is the most",
+      "raw_output": "\u5907\u4efd is showing the most is the number of the most.\n\nThe number of the most is the most is the most is the most is the most is the most is the most is the most is the most is the most is the most is the most is the most is the most is the most is",
       "flags": [
         "-t",
         "4",
         "--no-mmap",
         "-n",
-        "35"
+        "60"
       ],
+      "prompt_tokens": 598,
       "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "tile_corruption_garbage",
       "factual_correctness": false,
       "is_corrupted": true,
-      "extracted_threshold": null
+      "extracted_target": null
     },
-    "original_rep_penalty_1_1": {
+    "long_ctx_default_b512_rep_penalty_1_1": {
       "returncode": 0,
-      "raw_output": "\u5907\u4efd.\n\nInhell, he was a he not have been they not be there are they not they not they not they not they not they not they not they not they not",
+      "raw_output": "\u5907\u4efd.\n\nInhell, he was a he not have been they not be there are they not they not they not they not they not they not they not they not they not they not they not they not they not they not they not they not they not they not they not they not they not they",
       "flags": [
         "-t",
         "4",
         "--repeat-penalty",
         "1.1",
         "-n",
-        "35"
+        "60"
       ],
+      "prompt_tokens": 598,
       "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "tile_corruption_garbage",
       "factual_correctness": false,
       "is_corrupted": true,
-      "extracted_threshold": null
+      "extracted_target": null
     },
-    "patched_gguf_canonical_template": {
+    "interm_79tok_default_b512": {
       "returncode": 0,
-      "raw_output": "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@",
+      "raw_output": "\u5907\u4efd, but I can also use this to also use this to also use this to also use this to also use this to also use this to also use this to also use this to also use this",
       "flags": [
         "-t",
         "4",
         "-n",
-        "35"
+        "40"
       ],
-      "model_path": "/tmp/BitNet-2B-fixed.gguf",
+      "prompt_tokens": 79,
+      "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "tile_corruption_garbage",
       "factual_correctness": false,
       "is_corrupted": true,
-      "extracted_threshold": null
+      "extracted_target": null
+    },
+    "interm_79tok_batch_16_ub_16": {
+      "returncode": 0,
+      "raw_output": "12 CFR \u00a7 229.13(b) Large deposits. Sections 229.10(c) and 229.12 do not apply to the aggregate amount of deposits by one or more checks.",
+      "flags": [
+        "-t",
+        "4",
+        "-b",
+        "16",
+        "-ub",
+        "16",
+        "-n",
+        "40"
+      ],
+      "prompt_tokens": 79,
+      "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "fluent_repetitive_loop",
+      "factual_correctness": false,
+      "is_corrupted": false,
+      "extracted_target": null
+    },
+    "interm_79tok_batch_1_ub_1": {
+      "returncode": 0,
+      "raw_output": "[end of text]",
+      "flags": [
+        "-t",
+        "4",
+        "-b",
+        "1",
+        "-ub",
+        "1",
+        "-n",
+        "40"
+      ],
+      "prompt_tokens": 79,
+      "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "immediate_eos",
+      "factual_correctness": false,
+      "is_corrupted": false,
+      "extracted_target": null
+    },
+    "short_29tok_default_b512": {
+      "returncode": 0,
+      "raw_output": "Under Section 10, the threshold is $500. [end of text]",
+      "flags": [
+        "-t",
+        "4",
+        "-n",
+        "30"
+      ],
+      "prompt_tokens": 29,
+      "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "correct",
+      "factual_correctness": true,
+      "is_corrupted": false,
+      "extracted_target": "$500"
+    },
+    "short_29tok_batch_16_ub_16": {
+      "returncode": 0,
+      "raw_output": "Under Section 10, the threshold is $500. [end of text]",
+      "flags": [
+        "-t",
+        "4",
+        "-b",
+        "16",
+        "-ub",
+        "16",
+        "-n",
+        "30"
+      ],
+      "prompt_tokens": 29,
+      "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "correct",
+      "factual_correctness": true,
+      "is_corrupted": false,
+      "extracted_target": "$500"
+    },
+    "short_29tok_batch_1_ub_1": {
+      "returncode": 0,
+      "raw_output": "[end of text]",
+      "flags": [
+        "-t",
+        "4",
+        "-b",
+        "1",
+        "-ub",
+        "1",
+        "-n",
+        "30"
+      ],
+      "prompt_tokens": 29,
+      "model_path": "<HOST_DIR>/Github/BitNet/models/BitNet-b1.58-2B-4T/ggml-model-i2_s.gguf",
+      "classification": "immediate_eos",
+      "factual_correctness": false,
+      "is_corrupted": false,
+      "extracted_target": null
     }
   },
-  "conclusion": "Empirical isolation confirms prompt prefill SIMD tile defect at batch sizes >= 32. Hugging Face PyTorch reference correctly extracts '$6,725' across all sampling configurations (True). Under bitnet.cpp, generation at batch size <= 16 evaluates cleanly without prefill corruption (b=16 pass=False), whereas batch size >= 32 triggers severe tile prefill corruption (b=64 corrupt=True, default b=512 corrupt=True)."
+  "conclusion": "Empirical bisection confirms prompt prefill SIMD tile defect at batch sizes >= 32. Hugging Face PyTorch reference correctly extracts expected targets across all prompt lengths and samplers. Under bitnet.cpp: 1. Short prompts < 32 tokens (29 tokens) succeed under both default (b=512) and micro-batched (b=16) prefill (extracting '$500' cleanly; short passes=2/3). 2. Prompts >= 32 tokens under default prefill (b=512) or explicit b>=32 immediately trigger SIMD tile corruption ('\u5907\u4efd', '2 0 3 0...', garbage runs=7). 3. Micro-batching prompts (b=2..16) avoids tile corruption glyphs but degenerates into repetitive loops on long context without factual retrieval (long correct=0/11). 4. Single-token prefill (b=1 oracle) emits immediate [end of text]. Conclusion: Verified-correct factual generation in bitnet.cpp is strictly confined to prompts under 32 tokens (<= 31 tokens). Long-context RAG factual generation cannot safely operate on the current bitnet.cpp runtime."
 }
