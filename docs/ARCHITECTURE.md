@@ -407,7 +407,7 @@ Dynamic Inference Server   SageMaker Multi-Model / Triton Inference    Vertex AI
 ## 7. Workspace Directory Layout
 
 ```plaintext
-/Users/cl0rkster/Dev/ml/
+ml/
 ├── docker-compose.yml            # RabbitMQ + MLflow server
 ├── README.md                     # Executive summary, trade-offs & runbook
 ├── NOTICE.md                     # Legal disclosures, privacy invariants & attribution

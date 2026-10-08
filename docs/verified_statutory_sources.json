@@ -1,13 +1,20 @@
 {
   "metadata": {
-    "timestamp": "2026-10-08T05:39:33Z",
+    "timestamp": "2026-10-08T12:44:27Z",
     "total_statutory_sources": 40,
+    "verification_state_breakdown": {
+      "verified": 16,
+      "unreachable": 11,
+      "mismatch": 13,
+      "unverified": 0
+    },
     "status_breakdown": {
       "in_force": 33,
       "vacated_by_court_order": 3,
       "enacted_not_in_force": 4
     },
-    "verification_tool": "scripts/verify_statutory_sources.py"
+    "verification_tool": "scripts/verify_statutory_sources.py",
+    "verification_version": "2.0.0"
   },
   "sources": [
     {
@@ -16,11 +23,23 @@
       "jurisdiction": "US_FEDERAL",
       "status": "in_force",
       "effective_from": "1988-09-01",
-      "verified_on": "2026-10-08T05:39:31Z",
-      "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(a)",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "dd765d2c891cee6d35648f6a0c34a8c3f960dfda5052292b1feb67500b40cca8",
+      "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.10",
+      "human_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(a)",
       "citation": "12 CFR 229.10(a) Cash deposits",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "cash available for withdrawal",
+        "business day after the banking day",
+        "in person to an employee"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.10",
+      "http_status": 200,
+      "content_sha256": "5cdb3d1473c80548f6e407f93454134abb48cee9cd3a92c3c11f1b9055cf5d90",
+      "extracted_text_sha256": "5cdb3d1473c80548f6e407f93454134abb48cee9cd3a92c3c11f1b9055cf5d90",
+      "state": "verified",
+      "verified_on": "2026-10-08T12:44:27Z",
+      "failure_error": null,
       "legal_notes": null
     },
     {
@@ -29,11 +48,23 @@
       "jurisdiction": "US_FEDERAL",
       "status": "in_force",
       "effective_from": "1988-09-01",
-      "verified_on": "2026-10-08T05:39:31Z",
-      "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(b)",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "a003b08ea7b634f199df876263bbd907eeff6944932bb946da1a4505c73e8d36",
+      "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.10",
+      "human_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(b)",
       "citation": "12 CFR 229.10(b) Electronic payments",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "electronic payment",
+        "business day after the banking day",
+        "received"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.10",
+      "http_status": 200,
+      "content_sha256": "5cdb3d1473c80548f6e407f93454134abb48cee9cd3a92c3c11f1b9055cf5d90",
+      "extracted_text_sha256": "5cdb3d1473c80548f6e407f93454134abb48cee9cd3a92c3c11f1b9055cf5d90",
+      "state": "verified",
+      "verified_on": "2026-10-08T12:44:27Z",
+      "failure_error": null,
       "legal_notes": null
     },
     {
@@ -42,11 +73,23 @@
       "jurisdiction": "US_FEDERAL",
       "status": "in_force",
       "effective_from": "1988-09-01",
-      "verified_on": "2026-10-08T05:39:31Z",
-      "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(c)(1)(i)",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "0a1426deca7b0cf6a3e02a2252014957b65a13e79ce26e0fdb76f655f58358d7",
+      "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.10",
+      "human_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(c)(1)(i)",
       "citation": "12 CFR 229.10(c)(1)(i) U.S. Treasury checks",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "Treasury of the United States",
+        "payee",
+        "business day"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.10",
+      "http_status": 200,
+      "content_sha256": "5cdb3d1473c80548f6e407f93454134abb48cee9cd3a92c3c11f1b9055cf5d90",
+      "extracted_text_sha256": "5cdb3d1473c80548f6e407f93454134abb48cee9cd3a92c3c11f1b9055cf5d90",
+      "state": "verified",
+      "verified_on": "2026-10-08T12:44:27Z",
+      "failure_error": null,
       "legal_notes": null
     },
     {
@@ -55,11 +98,24 @@
       "jurisdiction": "US_FEDERAL",
       "status": "in_force",
       "effective_from": "1988-09-01",
-      "verified_on": "2026-10-08T05:39:31Z",
-      "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(c)(1)(v)",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "65a8fb11ca378d8322c2280dee8e7f5686f244a076f4cee3747530a6d19b23db",
+      "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.10",
+      "human_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(c)(1)(v)",
       "citation": "12 CFR 229.10(c)(1)(v) Cashier and teller checks",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "cashier",
+        "teller",
+        "certified",
+        "business day"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.10",
+      "http_status": 200,
+      "content_sha256": "5cdb3d1473c80548f6e407f93454134abb48cee9cd3a92c3c11f1b9055cf5d90",
+      "extracted_text_sha256": "5cdb3d1473c80548f6e407f93454134abb48cee9cd3a92c3c11f1b9055cf5d90",
+      "state": "verified",
+      "verified_on": "2026-10-08T12:44:27Z",
+      "failure_error": null,
       "legal_notes": null
     },
     {
@@ -68,12 +124,24 @@
       "jurisdiction": "US_FEDERAL",
       "status": "in_force",
       "effective_from": "2025-07-01",
-      "verified_on": "2026-10-08T05:39:31Z",
-      "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(c)(1)(vi)",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "14cbf59bdf4274d9c3aba4cc0528e277bba5c8413a3b9bc8291d511bb4965285",
+      "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.10",
+      "human_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(c)(1)(vi)",
       "citation": "12 CFR 229.10(c)(1)(vi) $275 next-day availability minimum (amended 89 FR 54997)",
-      "legal_notes": null
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "$275",
+        "lesser of",
+        "aggregate amount deposited on any one banking day"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.10",
+      "http_status": 200,
+      "content_sha256": "5cdb3d1473c80548f6e407f93454134abb48cee9cd3a92c3c11f1b9055cf5d90",
+      "extracted_text_sha256": "5cdb3d1473c80548f6e407f93454134abb48cee9cd3a92c3c11f1b9055cf5d90",
+      "state": "verified",
+      "verified_on": "2026-10-08T12:44:27Z",
+      "failure_error": null,
+      "legal_notes": "Statutory amount adjusted to $275 effective July 1, 2025 pursuant to 89 FR 54997."
     },
     {
       "id": "reg_cc_229_12_b",
@@ -81,11 +149,22 @@
       "jurisdiction": "US_FEDERAL",
       "status": "in_force",
       "effective_from": "1990-09-01",
-      "verified_on": "2026-10-08T05:39:31Z",
-      "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.12#p-229.12(b)",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "47c905afe060beebc1d4c64a7435b9998299999adb5d0f00838f23be4b3bc1ae",
+      "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.12",
+      "human_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.12#p-229.12(b)",
       "citation": "12 CFR 229.12(b) Local check availability schedule",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "local check",
+        "second business day following the banking day"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.12",
+      "http_status": 200,
+      "content_sha256": "8d2e7e63f1c724ef99686f12998078c13ece10169cfefb50589842fa7d951a9f",
+      "extracted_text_sha256": "4c394c2da89ca1dd9f338bad429492184fdc0fe7d65fa81b6a4ee908ee105f3d",
+      "state": "verified",
+      "verified_on": "2026-10-08T12:44:27Z",
+      "failure_error": null,
       "legal_notes": null
     },
     {
@@ -94,12 +173,24 @@
       "jurisdiction": "US_FEDERAL",
       "status": "in_force",
       "effective_from": "2025-07-01",
-      "verified_on": "2026-10-08T05:39:31Z",
-      "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.13#p-229.13(b)",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "83e9ceb74595cbb1702ac5fb1cec0a3f2cea8d0228e8fad6d8e973252f79ad4b",
+      "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.13",
+      "human_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.13#p-229.13(b)",
       "citation": "12 CFR 229.13(b) $6,725 large deposit exception threshold (amended 89 FR 54997)",
-      "legal_notes": null
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "$6,725",
+        "large deposits",
+        "aggregate amount"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.13",
+      "http_status": 200,
+      "content_sha256": "e174629bcf88d2e85c9c8857847918e95f057a39b21871607b001fc343b2d8c7",
+      "extracted_text_sha256": "e174629bcf88d2e85c9c8857847918e95f057a39b21871607b001fc343b2d8c7",
+      "state": "verified",
+      "verified_on": "2026-10-08T12:44:27Z",
+      "failure_error": null,
+      "legal_notes": "Threshold adjusted to $6,725 effective July 1, 2025 pursuant to 89 FR 54997."
     },
     {
       "id": "reg_cc_229_13_d",
@@ -107,11 +198,23 @@
       "jurisdiction": "US_FEDERAL",
       "status": "in_force",
       "effective_from": "1988-09-01",
-      "verified_on": "2026-10-08T05:39:31Z",
-      "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.13#p-229.13(d)",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "a3a4dcd10f3d38c0cc3233d1a733b8e631fbc3a2d91997bf6df1e37ab4f9528b",
+      "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.13",
+      "human_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.13#p-229.13(d)",
       "citation": "12 CFR 229.13(d) Repeated overdrafts exception",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "repeatedly overdrawn",
+        "six months",
+        "$6,725"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.13",
+      "http_status": 200,
+      "content_sha256": "e174629bcf88d2e85c9c8857847918e95f057a39b21871607b001fc343b2d8c7",
+      "extracted_text_sha256": "e174629bcf88d2e85c9c8857847918e95f057a39b21871607b001fc343b2d8c7",
+      "state": "verified",
+      "verified_on": "2026-10-08T12:44:27Z",
+      "failure_error": null,
       "legal_notes": null
     },
     {
@@ -120,11 +223,23 @@
       "jurisdiction": "US_FEDERAL",
       "status": "in_force",
       "effective_from": "1988-09-01",
-      "verified_on": "2026-10-08T05:39:31Z",
-      "source_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.19#p-229.19(b)",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "bc3af0828e07310c40238404552fd0b4c3cdbeeb9b3d9a4e8bb2a5b7290354cd",
+      "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.19",
+      "human_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.19#p-229.19(b)",
       "citation": "12 CFR 229.19(b) ATM exclusion from in-person employee deposit",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "atm",
+        "business day",
+        "availability"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.19",
+      "http_status": 200,
+      "content_sha256": "0fe1d256f9a11b07354b05477335106450fb44decf0c80346e27e12507a0b500",
+      "extracted_text_sha256": "0fe1d256f9a11b07354b05477335106450fb44decf0c80346e27e12507a0b500",
+      "state": "verified",
+      "verified_on": "2026-10-08T12:44:27Z",
+      "failure_error": null,
       "legal_notes": null
     },
     {
@@ -133,11 +248,25 @@
       "jurisdiction": "US_FEDERAL",
       "status": "in_force",
       "effective_from": "2010-12-29",
-      "verified_on": "2026-10-08T05:39:32Z",
-      "source_url": "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title15-section8403",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "80bf4532a0c1868ab9fc68da15b788367a4af4f5d120dc3dc1a4dbf1e1f14715",
+      "source_url": "https://www.law.cornell.edu/uscode/text/15/8403",
+      "human_url": "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title15-section8403",
       "citation": "15 U.S.C. 8403(1) Clear and conspicuous disclosure of negative option terms",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "clear and conspicuous",
+        "terms"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.law.cornell.edu/uscode/text/15/8403",
+      "http_status": 200,
+      "content_sha256": "66f629731c6661ecc17115d29c8354bca8c64f31fd76c751b758f2856a34490c",
+      "extracted_text_sha256": "66f629731c6661ecc17115d29c8354bca8c64f31fd76c751b758f2856a34490c",
+      "state": "mismatch",
+      "verified_on": null,
+      "failure_error": {
+        "class": "ContentMismatchError",
+        "message": "Missing required source facts: ['clear and conspicuous']"
+      },
       "legal_notes": null
     },
     {
@@ -146,11 +275,21 @@
       "jurisdiction": "US_FEDERAL",
       "status": "in_force",
       "effective_from": "2010-12-29",
-      "verified_on": "2026-10-08T05:39:32Z",
-      "source_url": "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title15-section8403",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "9246a409602ab1ccc2edf79c69a7e878649e22beed38fb9cf988087f239edf67",
+      "source_url": "https://www.law.cornell.edu/uscode/text/15/8403",
+      "human_url": "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title15-section8403",
       "citation": "15 U.S.C. 8403(2) Express informed consent before charging",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "express informed consent"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.law.cornell.edu/uscode/text/15/8403",
+      "http_status": 200,
+      "content_sha256": "66f629731c6661ecc17115d29c8354bca8c64f31fd76c751b758f2856a34490c",
+      "extracted_text_sha256": "66f629731c6661ecc17115d29c8354bca8c64f31fd76c751b758f2856a34490c",
+      "state": "verified",
+      "verified_on": "2026-10-08T12:44:27Z",
+      "failure_error": null,
       "legal_notes": null
     },
     {
@@ -159,11 +298,22 @@
       "jurisdiction": "US_FEDERAL",
       "status": "in_force",
       "effective_from": "2010-12-29",
-      "verified_on": "2026-10-08T05:39:32Z",
-      "source_url": "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title15-section8403",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "d46c89be371b55be5845597882d77d2ac4f18ff3e99beff57e20bd0541606083",
+      "source_url": "https://www.law.cornell.edu/uscode/text/15/8403",
+      "human_url": "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title15-section8403",
       "citation": "15 U.S.C. 8403(3) Simple mechanism for cancellation",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "simple mechanism",
+        "recurring"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.law.cornell.edu/uscode/text/15/8403",
+      "http_status": 200,
+      "content_sha256": "66f629731c6661ecc17115d29c8354bca8c64f31fd76c751b758f2856a34490c",
+      "extracted_text_sha256": "66f629731c6661ecc17115d29c8354bca8c64f31fd76c751b758f2856a34490c",
+      "state": "verified",
+      "verified_on": "2026-10-08T12:44:27Z",
+      "failure_error": null,
       "legal_notes": null
     },
     {
@@ -172,11 +322,26 @@
       "jurisdiction": "US_CA",
       "status": "in_force",
       "effective_from": "2010-12-01",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17602",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "6e03aeb3b41388552061a4a9bfa77ad5bfc2231e05d99f5b498565b639219485",
+      "human_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17602",
       "citation": "Cal. BPC 17602(a)(1) Presentation in visual proximity to consent",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "visual proximity",
+        "affirmative consent",
+        "terms"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": null,
+      "http_status": 403,
+      "content_sha256": null,
+      "extracted_text_sha256": null,
+      "state": "unreachable",
+      "verified_on": null,
+      "failure_error": {
+        "class": "HTTPError",
+        "message": "HTTP Error 403: Forbidden"
+      },
       "legal_notes": null
     },
     {
@@ -185,11 +350,25 @@
       "jurisdiction": "US_CA",
       "status": "in_force",
       "effective_from": "2010-12-01",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17602",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "c3a0efa55b05ceb88f6e70b4a6f90b4fc6a9d05f6a638c779986085627fd8379",
+      "human_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17602",
       "citation": "Cal. BPC 17602(a)(2) Affirmative consent required prior to charge",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "affirmative consent",
+        "automatic renewal"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": null,
+      "http_status": 403,
+      "content_sha256": null,
+      "extracted_text_sha256": null,
+      "state": "unreachable",
+      "verified_on": null,
+      "failure_error": {
+        "class": "HTTPError",
+        "message": "HTTP Error 403: Forbidden"
+      },
       "legal_notes": null
     },
     {
@@ -198,11 +377,26 @@
       "jurisdiction": "US_CA",
       "status": "in_force",
       "effective_from": "2010-12-01",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17602",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "47a08de622680b863c68d91c2aede725e729306ab21580815a6e470df327aee6",
+      "human_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17602",
       "citation": "Cal. BPC 17602(a)(3) Post-sale acknowledgment capable of retention",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "acknowledgment",
+        "cancellation policy",
+        "retention"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": null,
+      "http_status": 403,
+      "content_sha256": null,
+      "extracted_text_sha256": null,
+      "state": "unreachable",
+      "verified_on": null,
+      "failure_error": {
+        "class": "HTTPError",
+        "message": "HTTP Error 403: Forbidden"
+      },
       "legal_notes": null
     },
     {
@@ -211,11 +405,25 @@
       "jurisdiction": "US_CA",
       "status": "in_force",
       "effective_from": "2010-12-01",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17602",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "bdbdc5de05d09d987c19406435b2e05e088a93fc933054abf590e1d0ea4948c1",
+      "human_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17602",
       "citation": "Cal. BPC 17602(b) Clear and conspicuous notice of material change",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "material change",
+        "clear and conspicuous"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": null,
+      "http_status": 403,
+      "content_sha256": null,
+      "extracted_text_sha256": null,
+      "state": "unreachable",
+      "verified_on": null,
+      "failure_error": {
+        "class": "HTTPError",
+        "message": "HTTP Error 403: Forbidden"
+      },
       "legal_notes": null
     },
     {
@@ -224,12 +432,27 @@
       "jurisdiction": "US_CA",
       "status": "in_force",
       "effective_from": "2025-07-01",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB2863",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "dc71114d5d97edf3a10af3f16486de137af3c081a5a35a73fccce9845cde7a34",
+      "human_url": "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB2863",
       "citation": "Cal. AB 2863 click-to-cancel statutory online mechanism (Cal. BPC 17602(a)(4))",
-      "legal_notes": null
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "click-to-cancel",
+        "online mechanism",
+        "cancel"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": null,
+      "http_status": 403,
+      "content_sha256": null,
+      "extracted_text_sha256": null,
+      "state": "unreachable",
+      "verified_on": null,
+      "failure_error": {
+        "class": "HTTPError",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      "legal_notes": "Added by Stats. 2024, Ch. 789 (AB 2863), effective July 1, 2025."
     },
     {
       "id": "ca_ab_2863_annual_notice",
@@ -237,12 +460,27 @@
       "jurisdiction": "US_CA",
       "status": "in_force",
       "effective_from": "2025-07-01",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB2863",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "5b12b0eb0b89b19f0015a6e37ed9b0aa759c4927b3fcabb744c8f4856a86ba88",
+      "human_url": "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB2863",
       "citation": "Cal. AB 2863 annual reminder notice between 15 and 45 days prior (Cal. BPC 17602(d))",
-      "legal_notes": null
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "notice",
+        "annual",
+        "renewal"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": null,
+      "http_status": 403,
+      "content_sha256": null,
+      "extracted_text_sha256": null,
+      "state": "unreachable",
+      "verified_on": null,
+      "failure_error": {
+        "class": "HTTPError",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      "legal_notes": "Added by AB 2863, effective July 1, 2025."
     },
     {
       "id": "ca_ab_2863_free_trial",
@@ -250,12 +488,27 @@
       "jurisdiction": "US_CA",
       "status": "in_force",
       "effective_from": "2025-07-01",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB2863",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "79563ce07a6a169da350c21582bb07c6557e4d43ce27db101fc0384c50d55b60",
+      "human_url": "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB2863",
       "citation": "Cal. AB 2863 free trial expiration notice (Cal. BPC 17602(c))",
-      "legal_notes": null
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "free gift",
+        "trial",
+        "notice"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": null,
+      "http_status": 403,
+      "content_sha256": null,
+      "extracted_text_sha256": null,
+      "state": "unreachable",
+      "verified_on": null,
+      "failure_error": {
+        "class": "HTTPError",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      "legal_notes": "Added by AB 2863, effective July 1, 2025."
     },
     {
       "id": "ca_bpc_17603_unconditional_gift",
@@ -263,11 +516,25 @@
       "jurisdiction": "US_CA",
       "status": "in_force",
       "effective_from": "2010-12-01",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17603",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "d20f80cf886ca4dbe848f845164b2a5d8abc5402d4cf16997664d70db20833a4",
+      "human_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17603",
       "citation": "Cal. BPC 17603 Goods sent without affirmative consent deemed unconditional gifts",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "unconditional gift",
+        "affirmative consent"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": null,
+      "http_status": 403,
+      "content_sha256": null,
+      "extracted_text_sha256": null,
+      "state": "unreachable",
+      "verified_on": null,
+      "failure_error": {
+        "class": "HTTPError",
+        "message": "HTTP Error 403: Forbidden"
+      },
       "legal_notes": null
     },
     {
@@ -276,12 +543,33 @@
       "jurisdiction": "US_FEDERAL",
       "status": "vacated_by_court_order",
       "effective_from": "2024-10-16 (promulgated); vacated 2025-07-08",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "5c4ef86f97b62399c54a553a9d2e29685eb52e3ee4a6aa5a7a9a9d6fa4877fea",
-      "citation": "16 CFR 425.5 Symmetric cancellation method (Vacated by 8th Cir. in Custom Communications v. FTC, No. 24-3232)",
-      "legal_notes": "Vacated nationwide by 8th Circuit on July 8, 2025 (Custom Communications Engineering, Inc. v. FTC, No. 24-3232, consolidated with NFIB v. FTC). 1973 prenotification negative option rule remains in effect. FTC issued ANPRM in March 2026."
+      "human_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
+      "citation": "16 CFR 425.5 Symmetric cancellation method (Vacated by 8th Cir. in Custom Communications, Inc. v. FTC, No. 24-3137)",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "negative option",
+        "cancel",
+        "easy"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
+      "http_status": 200,
+      "content_sha256": "6a9a6e533aadad418fa2f7eca00855fc39c3bee2299dffe17e756478f4393aa4",
+      "extracted_text_sha256": "4c141d7b1989e1a244669e05855b450f4c07aff512af0c94fb37ba7833c9ffb9",
+      "state": "mismatch",
+      "verified_on": null,
+      "failure_error": {
+        "class": "ContentMismatchError",
+        "message": "Missing required source facts: ['cancel', 'easy']"
+      },
+      "legal_notes": "Vacated nationwide by Eighth Circuit on July 8, 2025 (Custom Communications, Inc. v. FTC, No. 24-3137, consolidated with No. 24-3388). 1973 rule remains in effect; FTC issued ANPRM in March 2026.",
+      "status_evidence": {
+        "url": "https://ecf.ca8.uscourts.gov/opndir/25/07/243137P.pdf",
+        "retrieved_at": "2026-10-08T11:54:00Z",
+        "evidence_sha256": "4b684206584cba36b94e3575916323630f9a2b5358046bcf3a1eecce70d069b2",
+        "note": "Per curiam opinion in Custom Communications, Inc. v. FTC, No. 24-3137 (8th Cir. July 8, 2025) vacating rule amendments in their entirety."
+      }
     },
     {
       "id": "ftc_negative_option_save",
@@ -289,12 +577,33 @@
       "jurisdiction": "US_FEDERAL",
       "status": "vacated_by_court_order",
       "effective_from": "2024-10-16 (promulgated); vacated 2025-07-08",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "6265c8a2e45e7729caf3952bce945f1cd5c69b7be1e70d943eb944a662191fda",
-      "citation": "16 CFR 425.6 Save attempts restriction (Vacated by 8th Cir. in Custom Communications v. FTC, No. 24-3232)",
-      "legal_notes": "Vacated nationwide by 8th Circuit on July 8, 2025 (Custom Communications Engineering, Inc. v. FTC, No. 24-3232). FTC issued ANPRM in March 2026."
+      "human_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
+      "citation": "16 CFR 425.6 Save attempts restriction (Vacated by 8th Cir. in Custom Communications, Inc. v. FTC, No. 24-3137)",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "save",
+        "negative option",
+        "cancel"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
+      "http_status": 200,
+      "content_sha256": "6a9a6e533aadad418fa2f7eca00855fc39c3bee2299dffe17e756478f4393aa4",
+      "extracted_text_sha256": "4c141d7b1989e1a244669e05855b450f4c07aff512af0c94fb37ba7833c9ffb9",
+      "state": "mismatch",
+      "verified_on": null,
+      "failure_error": {
+        "class": "ContentMismatchError",
+        "message": "Missing required source facts: ['save', 'cancel']"
+      },
+      "legal_notes": "Vacated nationwide by Eighth Circuit on July 8, 2025 (Custom Communications, Inc. v. FTC, No. 24-3137).",
+      "status_evidence": {
+        "url": "https://ecf.ca8.uscourts.gov/opndir/25/07/243137P.pdf",
+        "retrieved_at": "2026-10-08T11:54:00Z",
+        "evidence_sha256": "4b684206584cba36b94e3575916323630f9a2b5358046bcf3a1eecce70d069b2",
+        "note": "Per curiam opinion in Custom Communications, Inc. v. FTC, No. 24-3137 (8th Cir. July 8, 2025) vacating rule amendments."
+      }
     },
     {
       "id": "ftc_negative_option_misrep",
@@ -302,64 +611,184 @@
       "jurisdiction": "US_FEDERAL",
       "status": "vacated_by_court_order",
       "effective_from": "2024-10-16 (promulgated); vacated 2025-07-08",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "4aec594a056af1685b1c035a27431da48887c9f2c6a5b3024cb6f9fa63cbef98",
-      "citation": "16 CFR 425.3 Prohibition of misrepresentations (Vacated by 8th Cir. in Custom Communications v. FTC, No. 24-3232)",
-      "legal_notes": "Vacated nationwide by 8th Circuit on July 8, 2025 (Custom Communications Engineering, Inc. v. FTC, No. 24-3232). FTC issued ANPRM in March 2026."
+      "human_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
+      "citation": "16 CFR 425.3 Prohibition of misrepresentations (Vacated by 8th Cir. in Custom Communications, Inc. v. FTC, No. 24-3137)",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "misrepresent",
+        "negative option"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
+      "http_status": 200,
+      "content_sha256": "6a9a6e533aadad418fa2f7eca00855fc39c3bee2299dffe17e756478f4393aa4",
+      "extracted_text_sha256": "4c141d7b1989e1a244669e05855b450f4c07aff512af0c94fb37ba7833c9ffb9",
+      "state": "mismatch",
+      "verified_on": null,
+      "failure_error": {
+        "class": "ContentMismatchError",
+        "message": "Missing required source facts: ['misrepresent']"
+      },
+      "legal_notes": "Vacated nationwide by Eighth Circuit on July 8, 2025 (Custom Communications, Inc. v. FTC, No. 24-3137).",
+      "status_evidence": {
+        "url": "https://ecf.ca8.uscourts.gov/opndir/25/07/243137P.pdf",
+        "retrieved_at": "2026-10-08T11:54:00Z",
+        "evidence_sha256": "4b684206584cba36b94e3575916323630f9a2b5358046bcf3a1eecce70d069b2",
+        "note": "Per curiam opinion in Custom Communications, Inc. v. FTC, No. 24-3137 (8th Cir. July 8, 2025) vacating rule amendments."
+      }
     },
     {
       "id": "uk_dmcc_precontract_info",
       "statute": "UK DMCC Act 2024 s. 255",
       "jurisdiction": "UK",
       "status": "enacted_not_in_force",
-      "effective_from": "Enacted 2024-05-24; implementation scheduled Spring 2026 / 2027",
-      "verified_on": "2026-10-08T05:39:32Z",
-      "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/255",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "8c1695744e3a4c389e666b3cd095b02fa99fc81601ca11372489138546d4f164",
+      "effective_from": "Enacted 2024-05-24; commencement scheduled January 2027",
+      "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/255/data.xml",
+      "human_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/255",
       "citation": "UK DMCC Act 2024 s. 255 Pre-contract information for subscription contracts (Enacted, not yet commenced)",
-      "legal_notes": null
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "pre-contract information",
+        "subscription contract",
+        "trader"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/255/data.xml",
+      "http_status": 200,
+      "content_sha256": "806538b5edf4ffe5d9c5c37eefa24b72a61619be6461cdcba8d974f3ebf897de",
+      "extracted_text_sha256": "806538b5edf4ffe5d9c5c37eefa24b72a61619be6461cdcba8d974f3ebf897de",
+      "state": "mismatch",
+      "verified_on": null,
+      "failure_error": {
+        "class": "ContentMismatchError",
+        "message": "Missing required source facts: ['pre-contract information', 'trader']"
+      },
+      "legal_notes": "Enacted May 24, 2024. UK DBT announced January 2027 commencement for subscription regime.",
+      "status_evidence": {
+        "url": "https://www.legislation.gov.uk/ukpga/2024/13/contents",
+        "retrieved_at": "2026-10-08T11:54:00Z",
+        "evidence_sha256": "81f185db2d6e382d6b38c2ea30588820c22fa59dfc35b62b7ae1e44f80c6f2a6",
+        "note": "Official statutory text enacted May 24, 2024; subscription provisions uncommenced."
+      },
+      "expected_commencement": {
+        "date": "2027-01",
+        "source": "UK Department for Business and Trade announcement (August 2026)"
+      }
     },
     {
       "id": "uk_dmcc_cooling_off",
       "statute": "UK DMCC Act 2024 s. 256",
       "jurisdiction": "UK",
       "status": "enacted_not_in_force",
-      "effective_from": "Enacted 2024-05-24; implementation scheduled Spring 2026 / 2027",
-      "verified_on": "2026-10-08T05:39:32Z",
-      "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/256",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "914a28bcec4cd294aa6b79a29377bd6f9ad7401fb93470d9f0b8a11f8c9e2c8f",
+      "effective_from": "Enacted 2024-05-24; commencement scheduled January 2027",
+      "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/256/data.xml",
+      "human_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/256",
       "citation": "UK DMCC Act 2024 s. 256 14-day cooling-off rights to cancel subscription contracts (Enacted, not yet commenced)",
-      "legal_notes": null
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "cooling-off",
+        "14 days",
+        "cancel"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/256/data.xml",
+      "http_status": 200,
+      "content_sha256": "28f602e6dac30417a0ab5cf9f5c2db70b43adba3e91c64fac4a580da83368e4c",
+      "extracted_text_sha256": "28f602e6dac30417a0ab5cf9f5c2db70b43adba3e91c64fac4a580da83368e4c",
+      "state": "mismatch",
+      "verified_on": null,
+      "failure_error": {
+        "class": "ContentMismatchError",
+        "message": "Missing required source facts: ['cooling-off', '14 days', 'cancel']"
+      },
+      "legal_notes": "Enacted May 24, 2024. UK DBT announced January 2027 commencement for subscription regime.",
+      "status_evidence": {
+        "url": "https://www.legislation.gov.uk/ukpga/2024/13/contents",
+        "retrieved_at": "2026-10-08T11:54:00Z",
+        "evidence_sha256": "81f185db2d6e382d6b38c2ea30588820c22fa59dfc35b62b7ae1e44f80c6f2a6",
+        "note": "Official statutory text enacted May 24, 2024."
+      },
+      "expected_commencement": {
+        "date": "2027-01",
+        "source": "UK Department for Business and Trade announcement (August 2026)"
+      }
     },
     {
       "id": "uk_dmcc_renewal_notice",
       "statute": "UK DMCC Act 2024 s. 257",
       "jurisdiction": "UK",
       "status": "enacted_not_in_force",
-      "effective_from": "Enacted 2024-05-24; implementation scheduled Spring 2026 / 2027",
-      "verified_on": "2026-10-08T05:39:32Z",
-      "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/257",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "5738faa26771e75beff6588020a1321bde72d3050aeafb4a69332624f808b97c",
+      "effective_from": "Enacted 2024-05-24; commencement scheduled January 2027",
+      "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/257/data.xml",
+      "human_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/257",
       "citation": "UK DMCC Act 2024 s. 257 Pre-renewal reminder notices (Enacted, not yet commenced)",
-      "legal_notes": null
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "reminder notice",
+        "renewal",
+        "subscription contract"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/257/data.xml",
+      "http_status": 200,
+      "content_sha256": "11d3970a620675f2577295976dd25d370cabe3f88a9263cbeec6a8865ebae2e7",
+      "extracted_text_sha256": "11d3970a620675f2577295976dd25d370cabe3f88a9263cbeec6a8865ebae2e7",
+      "state": "mismatch",
+      "verified_on": null,
+      "failure_error": {
+        "class": "ContentMismatchError",
+        "message": "Missing required source facts: ['reminder notice', 'renewal']"
+      },
+      "legal_notes": "Enacted May 24, 2024. UK DBT announced January 2027 commencement for subscription regime.",
+      "status_evidence": {
+        "url": "https://www.legislation.gov.uk/ukpga/2024/13/contents",
+        "retrieved_at": "2026-10-08T11:54:00Z",
+        "evidence_sha256": "81f185db2d6e382d6b38c2ea30588820c22fa59dfc35b62b7ae1e44f80c6f2a6",
+        "note": "Official statutory text enacted May 24, 2024."
+      },
+      "expected_commencement": {
+        "date": "2027-01",
+        "source": "UK Department for Business and Trade announcement (August 2026)"
+      }
     },
     {
       "id": "uk_dmcc_exit_steps",
       "statute": "UK DMCC Act 2024 s. 258",
       "jurisdiction": "UK",
       "status": "enacted_not_in_force",
-      "effective_from": "Enacted 2024-05-24; implementation scheduled Spring 2026 / 2027",
-      "verified_on": "2026-10-08T05:39:32Z",
-      "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/258",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "2ccc6bdad108a671a4c4ef2e46b9519b2f1429b58d0ffec39d1b20d6a4e1468f",
+      "effective_from": "Enacted 2024-05-24; commencement scheduled January 2027",
+      "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/258/data.xml",
+      "human_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/258",
       "citation": "UK DMCC Act 2024 s. 258 Single straightforward exit communication (Enacted, not yet commenced)",
-      "legal_notes": null
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "straightforward",
+        "exit",
+        "cancel"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/258/data.xml",
+      "http_status": 200,
+      "content_sha256": "d4cc4b66c9db3b5a79dc5b174aacc959b794cd43c1f57d9e9d755519b90eb27d",
+      "extracted_text_sha256": "d4cc4b66c9db3b5a79dc5b174aacc959b794cd43c1f57d9e9d755519b90eb27d",
+      "state": "mismatch",
+      "verified_on": null,
+      "failure_error": {
+        "class": "ContentMismatchError",
+        "message": "Missing required source facts: ['straightforward', 'exit', 'cancel']"
+      },
+      "legal_notes": "Enacted May 24, 2024. UK DBT announced January 2027 commencement for subscription regime.",
+      "status_evidence": {
+        "url": "https://www.legislation.gov.uk/ukpga/2024/13/contents",
+        "retrieved_at": "2026-10-08T11:54:00Z",
+        "evidence_sha256": "81f185db2d6e382d6b38c2ea30588820c22fa59dfc35b62b7ae1e44f80c6f2a6",
+        "note": "Official statutory text enacted May 24, 2024."
+      },
+      "expected_commencement": {
+        "date": "2027-01",
+        "source": "UK Department for Business and Trade announcement (August 2026)"
+      }
     },
     {
       "id": "eu_crd_art_8_button",
@@ -367,11 +796,26 @@
       "jurisdiction": "EU",
       "status": "in_force",
       "effective_from": "2014-06-13",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32011L0083",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "ce85f54b77840b8683b0ec48af01b990044007e01244803b7c5ecdbe41e1431e",
+      "human_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32011L0083",
       "citation": "EU Directive 2011/83/EU Art. 8 Order with obligation to pay button label mandate",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "order with obligation to pay",
+        "button",
+        "pay"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32011L0083",
+      "http_status": 200,
+      "content_sha256": "9711627e61313734dcaca203b3ff11e9fb7c67624a93d5a287999913df0d87b8",
+      "extracted_text_sha256": "9711627e61313734dcaca203b3ff11e9fb7c67624a93d5a287999913df0d87b8",
+      "state": "mismatch",
+      "verified_on": null,
+      "failure_error": {
+        "class": "ContentMismatchError",
+        "message": "Missing required source facts: ['order with obligation to pay', 'button', 'pay']"
+      },
       "legal_notes": null
     },
     {
@@ -380,11 +824,26 @@
       "jurisdiction": "EU",
       "status": "in_force",
       "effective_from": "2014-06-13",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32011L0083",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "4c4bcd98bd7128a807b574ae40da7f770667483f73bdc536a20b2e401706691d",
+      "human_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32011L0083",
       "citation": "EU Directive 2011/83/EU Art. 9 14 calendar days statutory right of withdrawal",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "14 days",
+        "withdrawal",
+        "contract"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32011L0083",
+      "http_status": 200,
+      "content_sha256": "9711627e61313734dcaca203b3ff11e9fb7c67624a93d5a287999913df0d87b8",
+      "extracted_text_sha256": "9711627e61313734dcaca203b3ff11e9fb7c67624a93d5a287999913df0d87b8",
+      "state": "mismatch",
+      "verified_on": null,
+      "failure_error": {
+        "class": "ContentMismatchError",
+        "message": "Missing required source facts: ['14 days', 'withdrawal', 'contract']"
+      },
       "legal_notes": null
     },
     {
@@ -393,11 +852,26 @@
       "jurisdiction": "EU",
       "status": "in_force",
       "effective_from": "2014-06-13",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32011L0083",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "1fa861435db4e0b8e355a359a433933dc486653e7ed47958670d5abe9354011f",
+      "human_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32011L0083",
       "citation": "EU Directive 2011/83/EU Art. 14 14-day reimbursement obligation",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "14 days",
+        "reimburse",
+        "payments"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32011L0083",
+      "http_status": 200,
+      "content_sha256": "9711627e61313734dcaca203b3ff11e9fb7c67624a93d5a287999913df0d87b8",
+      "extracted_text_sha256": "9711627e61313734dcaca203b3ff11e9fb7c67624a93d5a287999913df0d87b8",
+      "state": "mismatch",
+      "verified_on": null,
+      "failure_error": {
+        "class": "ContentMismatchError",
+        "message": "Missing required source facts: ['14 days', 'reimburse', 'payments']"
+      },
       "legal_notes": null
     },
     {
@@ -406,11 +880,26 @@
       "jurisdiction": "US_NY",
       "status": "in_force",
       "effective_from": "2021-02-09",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://www.nysenate.gov/legislation/laws/GBS/527-A",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "da7f2780373f260d35c7da16d7c8857b46deae8802b3ba60961f7a7e50c018a1",
+      "human_url": "https://www.nysenate.gov/legislation/laws/GBS/527-A",
       "citation": "N.Y. GBL 527-a Mandatory online cancellation option",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "online cancellation",
+        "consumer",
+        "automatic renewal"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": null,
+      "http_status": 403,
+      "content_sha256": null,
+      "extracted_text_sha256": null,
+      "state": "unreachable",
+      "verified_on": null,
+      "failure_error": {
+        "class": "HTTPError",
+        "message": "HTTP Error 403: Forbidden"
+      },
       "legal_notes": null
     },
     {
@@ -419,11 +908,27 @@
       "jurisdiction": "US_IL",
       "status": "in_force",
       "effective_from": "2000-01-01",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://www.ilga.gov/legislation/ilcs/ilcs3.asp?ActID=2334",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "ba65f8ea23571d7d2b42743eb06dfcbd968912e12da0a6ac7a77abdc63de730b",
+      "human_url": "https://www.ilga.gov/legislation/ilcs/ilcs3.asp?ActID=2334",
       "citation": "815 ILCS 601/10 30 to 60 days advance written reminder notice",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "30",
+        "60",
+        "written notice",
+        "renewal"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": null,
+      "http_status": null,
+      "content_sha256": null,
+      "extracted_text_sha256": null,
+      "state": "unreachable",
+      "verified_on": null,
+      "failure_error": {
+        "class": "URLError",
+        "message": "[Errno 8] nodename nor servname provided, or not known"
+      },
       "legal_notes": null
     },
     {
@@ -432,11 +937,26 @@
       "jurisdiction": "US_CO",
       "status": "in_force",
       "effective_from": "2022-01-01",
-      "verified_on": "2026-10-08T05:39:32Z",
       "source_url": "https://leg.colorado.gov/bills/hb21-1239",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "6dbd5d0aa31a1d7ddcee9979491afd08420f826bbc6b7772767b57fc467612a5",
+      "human_url": "https://leg.colorado.gov/bills/hb21-1239",
       "citation": "Colo. Rev. Stat. 6-1-732 Colorado subscription disclosures and online link",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "Colorado",
+        "subscription",
+        "notice"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://leg.colorado.gov/bills/hb21-1239",
+      "http_status": 200,
+      "content_sha256": "3aba45faa1d3df9bbbe898bb521eca6dcb7237d95a952425c9818d5229c1c495",
+      "extracted_text_sha256": "3aba45faa1d3df9bbbe898bb521eca6dcb7237d95a952425c9818d5229c1c495",
+      "state": "mismatch",
+      "verified_on": null,
+      "failure_error": {
+        "class": "ContentMismatchError",
+        "message": "Missing required source facts: ['subscription', 'notice']"
+      },
       "legal_notes": null
     },
     {
@@ -445,11 +965,26 @@
       "jurisdiction": "US_VA",
       "status": "in_force",
       "effective_from": "2019-07-01",
-      "verified_on": "2026-10-08T05:39:33Z",
       "source_url": "https://law.lis.virginia.gov/vacode/title59.1/chapter17.7/section59.1-207.46/",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "95f4ee8b5311c12c5ca388c3b5e67e8de0cf8d07f093074b17eb79e45d06cadc",
+      "human_url": "https://law.lis.virginia.gov/vacode/title59.1/chapter17.7/section59.1-207.46/",
       "citation": "Va. Code 59.1-207.46 Express verifiable consent and cancellation instructions",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "verifiable consent",
+        "automatic renewal",
+        "cancellation"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://law.lis.virginia.gov/vacode/title59.1/chapter17.7/section59.1-207.46/",
+      "http_status": 200,
+      "content_sha256": "9fbd3bfdf432930e78ceaa514263cf2c19c7acf36029cbc7091489a7356efc5d",
+      "extracted_text_sha256": "9fbd3bfdf432930e78ceaa514263cf2c19c7acf36029cbc7091489a7356efc5d",
+      "state": "mismatch",
+      "verified_on": null,
+      "failure_error": {
+        "class": "ContentMismatchError",
+        "message": "Missing required source facts: ['verifiable consent']"
+      },
       "legal_notes": null
     },
     {
@@ -458,11 +993,26 @@
       "jurisdiction": "US_DC",
       "status": "in_force",
       "effective_from": "2019-03-13",
-      "verified_on": "2026-10-08T05:39:33Z",
       "source_url": "https://code.dccouncil.gov/us/dc/council/code/sections/28-3872",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "ace76abfe57d3559ce59932277b89a8f0820da409a5ae1ed56a2cf297a6e6f8a",
+      "human_url": "https://code.dccouncil.gov/us/dc/council/code/sections/28-3872",
       "citation": "D.C. Code 28-3872 Notice between 30 and 60 days prior to renewal",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "30",
+        "60 days",
+        "renewal notice"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": null,
+      "http_status": 404,
+      "content_sha256": null,
+      "extracted_text_sha256": null,
+      "state": "unreachable",
+      "verified_on": null,
+      "failure_error": {
+        "class": "HTTPError",
+        "message": "HTTP Error 404: Not Found"
+      },
       "legal_notes": null
     },
     {
@@ -471,11 +1021,22 @@
       "jurisdiction": "US_FEDERAL",
       "status": "in_force",
       "effective_from": "2011-12-30",
-      "verified_on": "2026-10-08T05:39:33Z",
-      "source_url": "https://www.consumerfinance.gov/rules-policy/regulations/1005/10/#b",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "7ec6b231cab6b20ed8ad6ff46b5bff3ba03a9b4137e4e0ed72560be6e6dd446e",
+      "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=1005&section=1005.10",
+      "human_url": "https://www.consumerfinance.gov/rules-policy/regulations/1005/10/#b",
       "citation": "12 CFR 1005.10(b) Signed written authorization for recurring electronic debits",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "preauthorized electronic fund transfers",
+        "signed or similarly authenticated"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=1005&section=1005.10",
+      "http_status": 200,
+      "content_sha256": "7604ce69cbab07c6ca381ed9d7c5046c0f6d310bfae839de039c89a7665e2493",
+      "extracted_text_sha256": "7604ce69cbab07c6ca381ed9d7c5046c0f6d310bfae839de039c89a7665e2493",
+      "state": "verified",
+      "verified_on": "2026-10-08T12:44:27Z",
+      "failure_error": null,
       "legal_notes": null
     },
     {
@@ -484,11 +1045,23 @@
       "jurisdiction": "US_FEDERAL",
       "status": "in_force",
       "effective_from": "2011-12-30",
-      "verified_on": "2026-10-08T05:39:33Z",
-      "source_url": "https://www.consumerfinance.gov/rules-policy/regulations/1005/10/#c",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "96492d414faddc8061d60c1bdd6bec4c6264aadc17a69ff9baba4db6b792a352",
+      "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=1005&section=1005.10",
+      "human_url": "https://www.consumerfinance.gov/rules-policy/regulations/1005/10/#c",
       "citation": "12 CFR 1005.10(c) Right to stop payment up to three days before scheduled date",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "stop payment",
+        "three business days",
+        "preauthorized"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=1005&section=1005.10",
+      "http_status": 200,
+      "content_sha256": "7604ce69cbab07c6ca381ed9d7c5046c0f6d310bfae839de039c89a7665e2493",
+      "extracted_text_sha256": "7604ce69cbab07c6ca381ed9d7c5046c0f6d310bfae839de039c89a7665e2493",
+      "state": "verified",
+      "verified_on": "2026-10-08T12:44:27Z",
+      "failure_error": null,
       "legal_notes": null
     },
     {
@@ -497,11 +1070,23 @@
       "jurisdiction": "US_FEDERAL",
       "status": "in_force",
       "effective_from": "2011-12-30",
-      "verified_on": "2026-10-08T05:39:33Z",
-      "source_url": "https://www.consumerfinance.gov/rules-policy/regulations/1005/11/#a",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "41156e92bc0559ff17f29bba2037c9b064355eb38714f5550177f52cbdbffeaf",
+      "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=1005&section=1005.11",
+      "human_url": "https://www.consumerfinance.gov/rules-policy/regulations/1005/11/#a",
       "citation": "12 CFR 1005.11(a) 10 business day billing error investigation period",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "10 business days",
+        "error",
+        "investigat"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=1005&section=1005.11",
+      "http_status": 200,
+      "content_sha256": "be69ee0f2c1b9c277daa3e097a8872d76966c56d8421cb87786d796800c47154",
+      "extracted_text_sha256": "be69ee0f2c1b9c277daa3e097a8872d76966c56d8421cb87786d796800c47154",
+      "state": "verified",
+      "verified_on": "2026-10-08T12:44:27Z",
+      "failure_error": null,
       "legal_notes": null
     },
     {
@@ -510,11 +1095,23 @@
       "jurisdiction": "US_STATE_MODEL",
       "status": "in_force",
       "effective_from": "1990-01-01",
-      "verified_on": "2026-10-08T05:39:33Z",
       "source_url": "https://www.law.cornell.edu/ucc/4/4-403",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "676d92bdd899114476842028669ffc0c85225e902927c5d96447756203c9b714",
+      "human_url": "https://www.law.cornell.edu/ucc/4/4-403",
       "citation": "UCC 4-403 Customer right to order stop payment on items",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "stop payment",
+        "customer",
+        "bank"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.law.cornell.edu/ucc/4/4-403",
+      "http_status": 200,
+      "content_sha256": "5f5ea9dddde437c1d0cdebd20fa537591a220af4c5f871fff77bb55bc1d6c5ae",
+      "extracted_text_sha256": "5f5ea9dddde437c1d0cdebd20fa537591a220af4c5f871fff77bb55bc1d6c5ae",
+      "state": "verified",
+      "verified_on": "2026-10-08T12:44:27Z",
+      "failure_error": null,
       "legal_notes": null
     },
     {
@@ -523,11 +1120,23 @@
       "jurisdiction": "US_STATE_MODEL",
       "status": "in_force",
       "effective_from": "1990-01-01",
-      "verified_on": "2026-10-08T05:39:33Z",
       "source_url": "https://www.law.cornell.edu/ucc/4/4-406",
-      "http_check_status": "offline_zero_egress_sandbox",
-      "citation_hash_sha256": "9e5519129dd4bdbf45ec7f9a60c0e45a5486ddba73f9264ee51f49a9d948df26",
+      "human_url": "https://www.law.cornell.edu/ucc/4/4-406",
       "citation": "UCC 4-406 Customer duty to discover and report unauthorized signatures",
+      "chunk_type": "paraphrase",
+      "source_facts": [
+        "customer",
+        "unauthorized signature",
+        "statement"
+      ],
+      "last_attempted_on": "2026-10-08T12:44:27Z",
+      "final_url": "https://www.law.cornell.edu/ucc/4/4-406",
+      "http_status": 200,
+      "content_sha256": "84fcf3fb658c7e4900265568518019b894e8160053af6ce0aa4ecd48bd96450c",
+      "extracted_text_sha256": "2ddefdf745161801a5c87db438a5f0017182452675aa826a318c638ad489549e",
+      "state": "verified",
+      "verified_on": "2026-10-08T12:44:27Z",
+      "failure_error": null,
       "legal_notes": null
     }
   ]

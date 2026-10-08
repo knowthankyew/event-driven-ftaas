@@ -1,0 +1,6 @@
+# Source Attribution: eu_crd_art_8_button - EU Directive 2011/83/EU Art. 8
+# Source URL: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32011L0083
+# Extracted SHA-256: 9711627e61313734dcaca203b3ff11e9fb7c67624a93d5a287999913df0d87b8
+# Retrieved At: 2026-10-08T12:03:48Z
+
+JavaScript is disabled In order to continue, we need to verify that you're not a robot. This requires JavaScript. Enable JavaScript and then reload the page.

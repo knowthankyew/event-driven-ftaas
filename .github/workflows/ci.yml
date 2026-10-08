@@ -66,7 +66,9 @@ jobs:
         run: python -m unittest discover -s tests
 
       - name: Verify Documentation & Benchmark Table Synchronization
-        run: python scripts/sync_benchmark_docs.py --check
+        run: |
+          python scripts/sync_docs.py --check
+          python scripts/sync_benchmark_docs.py --check
 
       - name: Generate CycloneDX SBOM
         run: npx --yes @cyclonedx/cdxgen -o bom.json

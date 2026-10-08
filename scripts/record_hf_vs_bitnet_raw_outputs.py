@@ -83,7 +83,7 @@ def classify_output(text: str, expected_pattern: str = r'\$?6,?725') -> dict:
     - 'correct': Extracts expected factual target without tile corruption
     - 'fluent_repetitive_loop': Syntactically fluent language, no tile corruption glyphs, but loops/fails factual answer
     - 'immediate_eos': Prompt immediately emits [end of text] token
-    - 'tile_corruption_garbage': SIMD prefill tile defect artifacts (e.g. '2 0 3 0...', '备份', '@@@')
+    - 'tile_corruption_garbage': Runtime context-length degradation artifacts (e.g. '2 0 3 0...', '备份', '@@@')
     """
     clean_text = text.strip()
     match = re.search(expected_pattern, clean_text)
