@@ -1,10 +1,10 @@
 # Core ML Frameworks
 torch>=2.14.1
-transformers>=5.18.0,<5.19
-peft>=0.21.1
+transformers>=5.19.0,<5.20
+peft>=0.21.2
 accelerate>=1.15.0
-datasets>=5.0.1
-onnx>=1.23.1
+datasets>=5.1.0
+onnx>=1.23.2
 onnxruntime>=1.30.0
 
 # Compatibility Pins
@@ -12,10 +12,10 @@ numpy<3.0.0
 scipy<1.19.0
 
 # MLOps & Experiment Tracking
-mlflow>=3.16.1
+mlflow>=3.17.0
 
 # Messaging & Serving Utilities
 pika>=1.4.4
 pydantic>=2.13.5
-fastapi>=0.142.2
+fastapi>=0.142.4
 uvicorn>=0.54.0
