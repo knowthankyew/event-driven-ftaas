@@ -71,3 +71,12 @@ data/datasets/*.jsonl
 
 # Web & Node Tools
 node_modules/
+
+# Agent Steering & Local Specs
+.kiro/
+
+# CodeRabbit Local Review Artifacts
+coderabbit_*.txt
+coderabbit_*.md
+.coderabbit.yaml
+
