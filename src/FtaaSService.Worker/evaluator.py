@@ -11,6 +11,7 @@ from mlflow.tracking import MlflowClient
 
 from config import DATA_ROOT, DEVICE
 from model_registry import format_inference_prompt, format_training_prompt
+from trainer import create_instruction_mask
 
 logger = logging.getLogger("FtaaSService.Worker.Evaluator")
 
@@ -51,11 +52,20 @@ def evaluate_model(
             prompt = record.get("prompt", "")
             expected = record.get("completion", "")
 
-            # 1. Compute Cross-Entropy Loss on prompt+completion
+            # 1. Compute Cross-Entropy Loss excluding prompt tokens (instruction masking)
             full_text = format_training_prompt(base_model, prompt, expected)
             inputs = tokenizer(full_text, return_tensors="pt", truncation=True, max_length=256)
+
+            gen_prompt = format_inference_prompt(base_model, prompt)
+            prompt_tok = tokenizer(gen_prompt, truncation=True, max_length=256)
+            prompt_len = len(prompt_tok["input_ids"])
+
+            input_ids_list = inputs["input_ids"][0].tolist()
+            att_mask_list = inputs["attention_mask"][0].tolist()
+            masked_labels = create_instruction_mask(input_ids_list, prompt_len, att_mask_list)
+
             inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
-            labels = inputs["input_ids"].clone()
+            labels = torch.tensor([masked_labels], dtype=torch.long, device=DEVICE)
 
             outputs = model(**inputs, labels=labels)
             total_loss += float(outputs.loss.item())

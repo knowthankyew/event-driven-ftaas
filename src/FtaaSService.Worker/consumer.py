@@ -18,6 +18,7 @@ from config import (
     DLQ_QUEUE,
     JOB_REQUESTED_ROUTING_KEY,
     JOB_UPDATED_ROUTING_KEY,
+    DATA_ROOT,
     DEVICE
 )
 from trainer import train_job
@@ -92,6 +93,8 @@ class JobConsumer:
         self.sequence_map = {}
         self.current_context = None
         self.current_traceparent = None
+        self._in_flight_lock = threading.Lock()
+        self._in_flight_jobs = set()
 
     def get_connection(self):
         credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
@@ -104,24 +107,26 @@ class JobConsumer:
         )
         return pika.BlockingConnection(parameters)
 
-    def _safe_channel_call(self, callback):
+    def _safe_channel_call(self, callback, conn=None):
+        target_conn = conn or self.connection
         if (
-            self.connection is not None
-            and hasattr(self.connection, "add_callback_threadsafe")
-            and not getattr(self.connection, "is_closed", False)
+            target_conn is not None
+            and hasattr(target_conn, "add_callback_threadsafe")
+            and not getattr(target_conn, "is_closed", False)
         ):
             try:
-                self.connection.add_callback_threadsafe(callback)
+                target_conn.add_callback_threadsafe(callback)
                 return
             except Exception as ex:
-                logger.warning(f"add_callback_threadsafe failed ({ex}); executing directly.")
-        callback()
+                logger.warning(f"add_callback_threadsafe failed ({ex}); channel operation skipped.")
+                return
+        logger.warning("Connection closed or unavailable; skipping threadsafe channel call.")
 
-    def _safe_ack(self, ch, delivery_tag):
-        self._safe_channel_call(lambda: ch.basic_ack(delivery_tag=delivery_tag))
+    def _safe_ack(self, ch, delivery_tag, conn=None):
+        self._safe_channel_call(lambda: ch.basic_ack(delivery_tag=delivery_tag), conn=conn)
 
-    def _safe_nack(self, ch, delivery_tag, requeue=False):
-        self._safe_channel_call(lambda: ch.basic_nack(delivery_tag=delivery_tag, requeue=requeue))
+    def _safe_nack(self, ch, delivery_tag, requeue=False, conn=None):
+        self._safe_channel_call(lambda: ch.basic_nack(delivery_tag=delivery_tag, requeue=requeue), conn=conn)
 
     def publish_status_update(
         self,
@@ -191,15 +196,31 @@ class JobConsumer:
             logger.error(f"Failed to publish status update for Job {job_id}: {ex}")
 
     def on_message(self, ch, method, properties, body):
+        conn = self.connection
+        job_id = None
+        try:
+            msg = json.loads(body.decode("utf-8"))
+            job_id = msg.get("jobId")
+        except Exception:
+            pass
+
+        if job_id:
+            with self._in_flight_lock:
+                if job_id in self._in_flight_jobs:
+                    logger.warning(f"Job {job_id} is already in-flight; nacking redelivery with requeue.")
+                    self._safe_nack(ch, method.delivery_tag, requeue=True, conn=conn)
+                    return
+                self._in_flight_jobs.add(job_id)
+
         t = threading.Thread(
             target=self._process_job_thread,
-            args=(ch, method, properties, body),
+            args=(ch, method, properties, body, conn, job_id),
             daemon=True
         )
         t.start()
 
-    def _process_job_thread(self, ch, method, properties, body):
-        job_id = None
+    def _process_job_thread(self, ch, method, properties, body, conn=None, parsed_job_id=None):
+        job_id = parsed_job_id
         started_at = datetime.now(timezone.utc).isoformat()
 
         # Extract W3C trace context if present
@@ -279,6 +300,8 @@ class JobConsumer:
             adapter_size_bytes = 0
             try:
                 ad_path = Path(result["adapterPath"])
+                if not ad_path.is_absolute():
+                    ad_path = DATA_ROOT / ad_path
                 if ad_path.exists():
                     adapter_size_bytes = sum(f.stat().st_size for f in ad_path.rglob('*') if f.is_file())
             except Exception:
@@ -306,7 +329,7 @@ class JobConsumer:
             )
 
             # Acknowledge message
-            self._safe_ack(ch, method.delivery_tag)
+            self._safe_ack(ch, method.delivery_tag, conn=conn)
             logger.info(f"==> Job {job_id} successfully completed and acknowledged.")
 
         except (FileNotFoundError, PermissionError, IsADirectoryError) as ex:
@@ -325,7 +348,7 @@ class JobConsumer:
                 emit_lifecycle_span("job.failed", job_id, "Failed", attributes={
                     "error": str(ex)
                 }, parent_context=self.current_context)
-            self._safe_nack(ch, method.delivery_tag, requeue=False)
+            self._safe_nack(ch, method.delivery_tag, requeue=False, conn=conn)
 
         except (ConnectionError, TimeoutError, OSError) as ex:
             # Transient infrastructure errors (network blips, disk locks, MLflow timeouts)
@@ -359,7 +382,7 @@ class JobConsumer:
                         properties=new_props
                     )
                     ch.basic_ack(delivery_tag=method.delivery_tag)
-                self._safe_channel_call(_do_republish)
+                self._safe_channel_call(_do_republish, conn=conn)
             else:
                 logger.error(
                     f"Transient error retries exhausted ({retry_count}/{MAX_RETRIES}) for Job {job_id}: {ex}\n{tb}"
@@ -376,7 +399,7 @@ class JobConsumer:
                     emit_lifecycle_span("job.failed", job_id, "Failed", attributes={
                         "error": f"Retry limit reached: {ex}"
                     }, parent_context=self.current_context)
-                self._safe_nack(ch, method.delivery_tag, requeue=False)
+                self._safe_nack(ch, method.delivery_tag, requeue=False, conn=conn)
 
         except Exception as ex:
             # Terminal errors (OOM, corrupt dataset, model load failure, bad hyperparameters)
@@ -397,8 +420,13 @@ class JobConsumer:
                     "error": str(ex)
                 }, parent_context=self.current_context)
 
-            self._safe_nack(ch, method.delivery_tag, requeue=False)
+            self._safe_nack(ch, method.delivery_tag, requeue=False, conn=conn)
             logger.warning(f"Rejected terminal failure for Job {job_id} -> routed to DLQ.")
+        finally:
+            active_id = job_id or parsed_job_id
+            if active_id:
+                with self._in_flight_lock:
+                    self._in_flight_jobs.discard(active_id)
 
     def run(self):
         while True:

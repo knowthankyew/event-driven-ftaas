@@ -418,9 +418,15 @@ def main():
 
     safe_cap = bitnet_engine.MAX_SAFE_GENERATE_TOKENS
 
+    rope_desc = (
+        "RoPE parameters match reference configuration"
+        if rope_match
+        else "RoPE parameters diverge from reference configuration"
+    )
+
     conclusion_parts = [
-        "Empirical context-length bisection demonstrates that failure in bitnet.cpp is context-length-dependent "
-        "(exact root cause mechanism unknown; RoPE parameters match reference configuration)."
+        f"Empirical context-length bisection demonstrates that failure in bitnet.cpp is context-length-dependent "
+        f"(exact root cause mechanism unknown; {rope_desc})."
     ]
 
     if max_passing_default is not None and min_failing_default is not None:
@@ -456,9 +462,22 @@ def main():
                 f"(long context correct={long_correct_count}/{len(long_runs)})."
             )
 
-    conclusion_parts.append(
-        "KV cache precision flags (-ctk f32 -ctv f32) and Flash Attention toggles (-fa on/off) do not alter the failure boundary."
-    )
+    t4_run = bitnet_runs.get("long_ctx_default_b512_t4")
+    t4_class = t4_run.get("classification") if t4_run else None
+    toggle_diffs = []
+    for k in ["long_ctx_default_b512_fa_on", "long_ctx_default_b512_fa_off", "long_ctx_default_b512_ctk_ctv_f32"]:
+        if k in bitnet_runs and t4_class is not None:
+            if bitnet_runs[k].get("classification") != t4_class:
+                toggle_diffs.append(f"{k} differs ({bitnet_runs[k].get('classification')} vs {t4_class})")
+
+    if toggle_diffs:
+        conclusion_parts.append(
+            f"KV cache precision flags (-ctk f32 -ctv f32) and Flash Attention toggles (-fa on/off) alter classification: {', '.join(toggle_diffs)}."
+        )
+    else:
+        conclusion_parts.append(
+            "KV cache precision flags (-ctk f32 -ctv f32) and Flash Attention toggles (-fa on/off) do not alter the failure boundary."
+        )
 
     if hf_eval_runs:
         suppression_desc = ""

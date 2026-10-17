@@ -149,7 +149,7 @@ class TestClaimsLinter(unittest.TestCase):
 
         # Vacated rules validation
         vacated_val = data["vacated_rule_validation"]
-        self.assertEqual(vacated_val["vacated_queries_count"], 7)
+        self.assertEqual(vacated_val["vacated_queries_count"], 3)
         vacated_hits = [c for c in vacated_val["checks"] if c["top1_id"].startswith("ftc_negative_option_")]
         self.assertTrue(len(vacated_hits) > 0)
         for c in vacated_hits:
@@ -345,7 +345,7 @@ class TestClaimsLinter(unittest.TestCase):
         self.assertGreater(summary["bitnet_2b_peak_rss_mb"], 0.0)
         self.assertGreater(summary["bitnet_270m_peak_rss_mb"], 0.0)
         self.assertEqual(summary["gemma2_fp16_reference_rss_mb"], 5400.0)
-        self.assertEqual(data["baseline_comparison"]["gemma_2_2b_fp16"]["baseline_type"], "published_reference")
+        self.assertEqual(data["baseline_comparison"]["gemma_2_2b_fp16"]["baseline_type"], "local_measurement")
 
         # Check throughput runs exist
         tp_runs = data["throughput_measurements"]

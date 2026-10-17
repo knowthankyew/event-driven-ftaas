@@ -181,6 +181,7 @@ def evaluate_clause_set(clauses, tok, model, name="clauses"):
 
     return {
         "results": clause_results,
+        "num_pairs": len(pairs_b),
         "spearman_rho": round(rho, 4),
         "spearman_pvalue": p_rho,
         "pearson_r": round(r, 4),
@@ -279,7 +280,7 @@ def main():
 
     # Calibrated conclusion
     conclusion = (
-        f"Pairwise similarity correlation against the official unquantized teacher (Harrier 270M) across {len(pairs_full)} off-diagonal pairs "
+        f"Pairwise similarity correlation against the official unquantized teacher (Harrier 270M) across {full_eval['num_pairs']} off-diagonal pairs "
         f"demonstrates moderate, statistically significant relational rank correlation: rho={full_eval['spearman_rho']} "
         f"(R^2={full_eval['r_squared']}, explaining {full_eval['variance_explained_pct']}% of variance, spearman p={full_eval['spearman_pvalue']:.2e}) on full legal clauses, "
         f"and rho={short_eval['spearman_rho']}, r={short_eval['pearson_r']} (R^2={short_eval['r_squared']}, "

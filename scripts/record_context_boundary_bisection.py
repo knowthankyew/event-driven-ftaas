@@ -625,18 +625,27 @@ def execute_bisection_sweep(output_file: Path = DEFAULT_OUTPUT_FILE) -> dict:
             "pass_rate_pct": round(pct, 1)
         }
 
-    # Minimum failing length per prompt
+    # Ensure no runs used approximate token counts
+    if any(r.get("is_approximate", False) for r in runs_data):
+        print("[ERROR] Token counts were approximate in one or more runs; refusing to derive an empirical boundary.", file=sys.stderr)
+        sys.exit(1)
+
+    default_runs = [r for r in runs_data if r["config"] == "default_b512_t4"]
+
+    # Minimum failing length per prompt using measured exact token counts
     min_failing_per_clause = {}
     for c in CLAUSES:
         cid = c["id"]
-        failing_lens = [tlen for tlen in target_lengths if not clause_results[cid].get("default_b512_t4", {}).get(tlen, False)]
+        failing_lens = [r["exact_tokens"] for r in default_runs if r["clause_id"] == cid and not r["is_correct"]]
         min_failing_per_clause[cid] = min(failing_lens) if failing_lens else None
 
-    # Highest length where ALL clauses pass (contiguous prefix only)
+    # Highest measured exact token length where ALL runs pass (contiguous prefix only)
+    measured_token_counts = sorted(list({r["exact_tokens"] for r in default_runs}))
     highest_all_pass = None
-    for tlen in sorted(target_lengths):
-        if all(clause_results[c["id"]].get("default_b512_t4", {}).get(tlen, False) for c in CLAUSES):
-            highest_all_pass = tlen
+    for tok in measured_token_counts:
+        runs_at_tok = [r for r in default_runs if r["exact_tokens"] == tok]
+        if runs_at_tok and all(r["is_correct"] for r in runs_at_tok):
+            highest_all_pass = tok
         else:
             break
 

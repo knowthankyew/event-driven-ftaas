@@ -134,13 +134,13 @@ public sealed class DatasetService : IDatasetService
 
                         if (cols.Count > Math.Max(promptColIdx, compColIdx))
                         {
-                            prompt = cols[promptColIdx].Trim().Trim('"', '\'');
-                            completion = cols[compColIdx].Trim().Trim('"', '\'');
+                            prompt = cols[promptColIdx].Trim();
+                            completion = cols[compColIdx].Trim();
                         }
                         else if (cols.Count >= 2)
                         {
-                            prompt = cols[0].Trim().Trim('"', '\'');
-                            completion = cols[1].Trim().Trim('"', '\'');
+                            prompt = cols[0].Trim();
+                            completion = cols[1].Trim();
                         }
                         else
                         {

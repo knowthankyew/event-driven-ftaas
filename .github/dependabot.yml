@@ -1,8 +1,10 @@
 version: 2
 updates:
-  # .NET API Dependencies
+  # .NET API & Test Dependencies
   - package-ecosystem: "nuget"
-    directory: "/src/FtaaSService.Api"
+    directories:
+      - "/src/FtaaSService.Api"
+      - "/tests/FtaaSService.Api.Tests"
     schedule:
       interval: "weekly"
     assignees:

@@ -4,10 +4,10 @@
     "benchmark_version": "2.0.0",
     "git_commit": "0e0dd8e5ab1d0b79f0ea6493f8ebc4ede1eded6d",
     "provenance": {
-      "corpus_sha256": "5ea0541ee0f490c3529b2b0d04121b9ba3651e398de0083d8e599499be1f2447",
-      "queries_sha256": "aaabc1b3f2b948b2cf76f879281a802174e65ae54046ab3fb135abbce52b33a5",
+      "corpus_sha256": "5245eb62f5a6b8112836f4c431265aa45d2ee97f94cca20846007c0d2e8edd6e",
+      "queries_sha256": "830e386d20382774e19211409560f68e5b8dbea5cd0f062f95f3da6a3d5f5ce5",
       "external_queries_sha256": "51c0fc27d0dad07effcd5e1a45bb4607035a48ea0771f407070c09ccc8bd3f18",
-      "script_sha256": "d9a292da322a075058da696c615f97508304b0f2e4aeccafc706dda134228e0a",
+      "script_sha256": "474e7e20afa55447967818609805597ce94450b1d2e6633a09b80de8ed0c6ec8",
       "bitnet_embed_model_sha256": "8ee5ae971b103cd55758934be54e5c9f7cc2b58b15890615acce8e649988c751",
       "bitnet_embed_model_path": "<HOST_DIR>/Github/BitNet/models/bitnet-embedding-270m/bitnet-embeddings-270m-bf16-i2_s.gguf",
       "minilm_model_id": "sentence-transformers/all-MiniLM-L6-v2"
@@ -3551,8 +3551,7 @@
         "id": "q_012",
         "query": "Does federal law require a simple online cancellation mechanism for recurring charges?",
         "relevant_ids": [
-          "rosca_8403_3",
-          "ca_ab_2863_click_cancel"
+          "rosca_8403_3"
         ],
         "answerable_in_force": true,
         "rankings": {
@@ -5412,7 +5411,6 @@
         "id": "q_018",
         "query": "When must companies send an annual renewal notice before charging a yearly fee?",
         "relevant_ids": [
-          "ca_ab_2863_annual_notice",
           "uk_dmcc_renewal_notice"
         ],
         "answerable_in_force": false,
@@ -6033,8 +6031,7 @@
         "id": "q_020",
         "query": "Does federal policy require cancellation to be as easy as signing up?",
         "relevant_ids": [
-          "ftc_negative_option_equal",
-          "rosca_8403_3"
+          "ftc_negative_option_equal"
         ],
         "answerable_in_force": false,
         "rankings": {
@@ -6654,8 +6651,7 @@
         "id": "q_022",
         "query": "Can a merchant misrepresent billing dates or free trial terms?",
         "relevant_ids": [
-          "ftc_negative_option_misrep",
-          "rosca_8403_1"
+          "ftc_negative_option_misrep"
         ],
         "answerable_in_force": false,
         "rankings": {
@@ -6965,8 +6961,7 @@
         "id": "q_023",
         "query": "What is the statutory 14-day cooling off period for cancelling UK subscription contracts?",
         "relevant_ids": [
-          "uk_dmcc_cooling_off",
-          "eu_crd_art_9_withdrawal"
+          "uk_dmcc_cooling_off"
         ],
         "answerable_in_force": false,
         "rankings": {
@@ -14515,8 +14510,7 @@
         "id": "q_012",
         "query": "Does federal law require a simple online cancellation mechanism for recurring charges?",
         "relevant_ids": [
-          "rosca_8403_3",
-          "ca_ab_2863_click_cancel"
+          "rosca_8403_3"
         ],
         "answerable_in_force": true,
         "rankings": {
@@ -19785,26 +19779,13 @@
     ]
   },
   "vacated_rule_validation": {
-    "vacated_queries_count": 7,
+    "vacated_queries_count": 3,
     "checks": [
-      {
-        "id": "q_018",
-        "query": "When must companies send an annual renewal notice before charging a yearly fee?",
-        "relevant_ids": [
-          "ca_ab_2863_annual_notice",
-          "uk_dmcc_renewal_notice"
-        ],
-        "bm25_top3_hit": true,
-        "hybrid_top3_hit": true,
-        "top1_id": "ca_ab_2863_free_trial",
-        "vacated_banner_present": null
-      },
       {
         "id": "q_020",
         "query": "Does federal policy require cancellation to be as easy as signing up?",
         "relevant_ids": [
-          "ftc_negative_option_equal",
-          "rosca_8403_3"
+          "ftc_negative_option_equal"
         ],
         "bm25_top3_hit": true,
         "hybrid_top3_hit": true,
@@ -19826,47 +19807,12 @@
         "id": "q_022",
         "query": "Can a merchant misrepresent billing dates or free trial terms?",
         "relevant_ids": [
-          "ftc_negative_option_misrep",
-          "rosca_8403_1"
+          "ftc_negative_option_misrep"
         ],
         "bm25_top3_hit": true,
         "hybrid_top3_hit": true,
         "top1_id": "ftc_negative_option_misrep",
         "vacated_banner_present": true
-      },
-      {
-        "id": "q_023",
-        "query": "What is the statutory 14-day cooling off period for cancelling UK subscription contracts?",
-        "relevant_ids": [
-          "uk_dmcc_cooling_off",
-          "eu_crd_art_9_withdrawal"
-        ],
-        "bm25_top3_hit": true,
-        "hybrid_top3_hit": true,
-        "top1_id": "uk_dmcc_cooling_off",
-        "vacated_banner_present": null
-      },
-      {
-        "id": "q_024",
-        "query": "What pre-renewal notice must UK traders send to customers before a yearly contract renews?",
-        "relevant_ids": [
-          "uk_dmcc_renewal_notice"
-        ],
-        "bm25_top3_hit": true,
-        "hybrid_top3_hit": true,
-        "top1_id": "uk_dmcc_renewal_notice",
-        "vacated_banner_present": null
-      },
-      {
-        "id": "q_025",
-        "query": "Does UK law require a straightforward one-step subscription cancellation process?",
-        "relevant_ids": [
-          "uk_dmcc_exit_steps"
-        ],
-        "bm25_top3_hit": true,
-        "hybrid_top3_hit": true,
-        "top1_id": "uk_dmcc_exit_steps",
-        "vacated_banner_present": null
       }
     ]
   },

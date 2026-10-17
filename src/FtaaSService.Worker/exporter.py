@@ -84,10 +84,12 @@ def export_to_edge_onnx(
     quantization_type = "fp32"
 
     # 3. Export / Package ONNX model
+    published_model_path = model_onnx_path
     if mock_for_test:
         # Fast path for automated unit test execution
         logger.info("Executing mock ONNX export for test validation...")
         model_onnx_path.write_bytes(b"ONNX_MOCK_WEIGHTS_FOR_TESTING" * 1024)
+        published_model_path = model_onnx_path
     else:
         try:
             from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -97,10 +99,16 @@ def export_to_edge_onnx(
             logger.info(f"Loading base model {base_model_name} to merge with LoRA weights...")
             tokenizer = AutoTokenizer.from_pretrained(str(adapter_dir))
             
-            # If model.onnx already exists and is valid, reuse it
+            # If model.onnx already exists and is valid, validate and reuse it
             if model_onnx_path.exists() and model_onnx_path.stat().st_size > 1024 * 1024:
-                logger.info(f"Reusing existing ONNX model at {model_onnx_path}")
-            else:
+                try:
+                    onnx.checker.check_model(str(model_onnx_path))
+                    logger.info(f"Reusing existing valid ONNX model at {model_onnx_path}")
+                except Exception as check_ex:
+                    logger.warning(f"Existing model at {model_onnx_path} failed onnx check ({check_ex}); re-exporting.")
+                    model_onnx_path.unlink(missing_ok=True)
+
+            if not model_onnx_path.exists():
                 base_model = AutoModelForCausalLM.from_pretrained(
                     base_model_name,
                     torch_dtype=torch.float32,
@@ -112,12 +120,13 @@ def export_to_edge_onnx(
 
                 wrapped_model = LlamaONNXWrapper(merged_model)
 
-                logger.info(f"Tracing and exporting merged model to ONNX: {model_onnx_path}")
+                tmp_onnx_path = edge_output_dir / "model.onnx.tmp"
+                logger.info(f"Tracing and exporting merged model to temporary ONNX: {tmp_onnx_path}")
                 dummy_input = torch.tensor([[1, 2, 3, 4]], dtype=torch.long)
                 torch.onnx.export(
                     wrapped_model,
                     (dummy_input,),
-                    str(model_onnx_path),
+                    str(tmp_onnx_path),
                     input_names=["input_ids"],
                     output_names=["logits"],
                     dynamic_axes={
@@ -128,19 +137,25 @@ def export_to_edge_onnx(
                     do_constant_folding=True
                 )
 
-                # Verify ONNX model integrity
-                onnx_model = onnx.load(str(model_onnx_path))
-                onnx.checker.check_model(onnx_model)
-                logger.info("ONNX model structure checked successfully.")
+                # Verify ONNX model integrity with file path (supports models > 2GB)
+                onnx.checker.check_model(str(tmp_onnx_path))
+                shutil.move(str(tmp_onnx_path), str(model_onnx_path))
+                logger.info("ONNX model structure checked and atomically moved into place.")
 
             if quantize and model_onnx_path.stat().st_size > 300 * 1024 * 1024:
                 logger.info("Applying dynamic INT8 quantization to ONNX graph...")
                 from onnxruntime.quantization import quantize_dynamic, QuantType
                 quantized_path = edge_output_dir / "model_int8.onnx"
-                quantize_dynamic(str(model_onnx_path), str(quantized_path), weight_type=QuantType.QInt8)
-                shutil.move(str(quantized_path), str(model_onnx_path))
+                quantize_dynamic(
+                    str(model_onnx_path),
+                    str(quantized_path),
+                    weight_type=QuantType.QInt8,
+                    extra_options={"EnableExternalData": True}
+                )
+                onnx.checker.check_model(str(quantized_path))
                 quantization_type = "int8"
-                logger.info(f"Quantization complete: {model_onnx_path.stat().st_size / 1024 / 1024:.1f} MB")
+                published_model_path = quantized_path
+                logger.info(f"Quantization complete: {published_model_path.name} ({published_model_path.stat().st_size / 1024 / 1024:.1f} MB)")
         except Exception as ex:
             logger.error(f"Full PyTorch-to-ONNX tracing failed for Job {job_id}: {ex}")
             raise RuntimeError(f"Edge ONNX export failed: {ex}") from ex
@@ -155,8 +170,18 @@ def export_to_edge_onnx(
     shutil.copy2(config_file, edge_output_dir / "adapter_config.json")
 
     # 5. Compute Artifact Metadata & Checksums
-    onnx_size_bytes = model_onnx_path.stat().st_size
-    onnx_sha256 = compute_file_sha256(model_onnx_path)
+    published_file_name = published_model_path.name
+    onnx_size_bytes = published_model_path.stat().st_size
+    onnx_sha256 = compute_file_sha256(published_model_path)
+
+    # Collect all exported artifacts in edge_output_dir with their sizes and SHA-256
+    artifacts_manifest = {}
+    for f in sorted(edge_output_dir.iterdir()):
+        if f.is_file() and f.name != "edge_model_manifest.json" and not f.name.endswith(".tmp"):
+            artifacts_manifest[f.name] = {
+                "sizeBytes": f.stat().st_size,
+                "sha256": compute_file_sha256(f)
+            }
 
     # Resolve model-specific manifest metadata from the registry (safe fallback for unknowns)
     try:
@@ -186,13 +211,14 @@ def export_to_edge_onnx(
         "architecture": "CausalLM",
         "parameterCount": _param_count,
         "adapterSizeBytes": adapter_size_bytes,
-        "onnxFileName": "model.onnx",
+        "onnxFileName": published_file_name,
         "onnxSizeBytes": onnx_size_bytes,
         "onnxSha256": onnx_sha256,
         "quantization": quantization_type,
         "contextLength": _context_length,
         "supportedExecutionProviders": _execution_providers,
         "chatTemplate": _chat_template,
+        "artifacts": artifacts_manifest,
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "zeroEgressInvariant": True
     }

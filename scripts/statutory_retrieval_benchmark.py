@@ -318,9 +318,11 @@ def run_benchmark(
     # Embed corpus with BitNet (cached in memory)
     bitnet_corpus_embeds = []
     bitnet_short_corpus_embeds = []
+    zero_vector_chunk_indices = set()
+    zero_vector_short_chunk_indices = set()
     if bitnet_embed_available:
         print("Embedding corpus with BitNet 270M...")
-        for t in corpus_texts:
+        for idx, t in enumerate(corpus_texts):
             try:
                 v, _ = bitnet_engine.embed_bitnet_sync(t)
                 arr = np.array(v, dtype=np.float32)
@@ -329,13 +331,15 @@ def run_benchmark(
             except bitnet_engine.ContextOverflowError as coe:
                 print(f"Warning: Corpus chunk exceeds context limit ({coe}); using zero vector placeholder.")
                 bitnet_corpus_embeds.append(np.zeros(640, dtype=np.float32))
+                zero_vector_chunk_indices.add(idx)
             except Exception as e:
                 print(f"Warning: BitNet embedding failed ({e}); using zero vector placeholder.")
                 bitnet_corpus_embeds.append(np.zeros(640, dtype=np.float32))
+                zero_vector_chunk_indices.add(idx)
         bitnet_corpus_embeds = np.array(bitnet_corpus_embeds)
 
         # Embed short corpus with BitNet
-        for t in corpus_short_texts:
+        for idx, t in enumerate(corpus_short_texts):
             try:
                 v, _ = bitnet_engine.embed_bitnet_sync(t)
                 arr = np.array(v, dtype=np.float32)
@@ -344,13 +348,17 @@ def run_benchmark(
             except bitnet_engine.ContextOverflowError as coe:
                 print(f"Warning: Short chunk exceeds context limit ({coe}); using zero vector placeholder.")
                 bitnet_short_corpus_embeds.append(np.zeros(640, dtype=np.float32))
+                zero_vector_short_chunk_indices.add(idx)
             except Exception as e:
                 print(f"Warning: BitNet embedding failed ({e}); using zero vector placeholder.")
                 bitnet_short_corpus_embeds.append(np.zeros(640, dtype=np.float32))
+                zero_vector_short_chunk_indices.add(idx)
         bitnet_short_corpus_embeds = np.array(bitnet_short_corpus_embeds)
     else:
         bitnet_corpus_embeds = np.zeros((len(corpus), 640), dtype=np.float32)
         bitnet_short_corpus_embeds = np.zeros((len(corpus), 640), dtype=np.float32)
+        zero_vector_chunk_indices = set(range(len(corpus)))
+        zero_vector_short_chunk_indices = set(range(len(corpus)))
 
     # Embed corpus with MiniLM
     minilm_corpus_embeds = None
@@ -464,20 +472,24 @@ def run_benchmark(
     in_force_summary, in_force_details = evaluate_retrieval(corpus, answerable_queries, answerable_score_maps)
 
     # 6. Vacated rule validation (separate check)
-    vacated_indices = [idx for idx, q in enumerate(queries) if not q.get("answerable_in_force", True)]
+    corpus_by_id = {c["id"]: c for c in corpus}
+    vacated_indices = [
+        idx for idx, q in enumerate(queries)
+        if any(corpus_by_id.get(cid, {}).get("status") == "vacated_by_court_order" for cid in q.get("relevant_ids", []))
+    ]
     vacated_validation = []
     for idx in vacated_indices:
         q = queries[idx]
-        b_ranks = full_details[idx]["rankings"]["bm25"]
-        h_ranks = full_details[idx]["rankings"]["hybrid"]
+        b_ranks = full_details[idx]["rankings"].get("bm25", {})
+        h_ranks = full_details[idx]["rankings"].get("hybrid")
         vacated_validation.append({
             "id": q["id"],
             "query": q["query"],
             "relevant_ids": q["relevant_ids"],
-            "bm25_top3_hit": b_ranks["top3_hit"],
-            "hybrid_top3_hit": h_ranks["top3_hit"],
-            "top1_id": b_ranks["top1_id"],
-            "vacated_banner_present": b_ranks["vacated_banner_present"]
+            "bm25_top3_hit": b_ranks.get("top3_hit"),
+            "hybrid_top3_hit": h_ranks.get("top3_hit") if h_ranks else None,
+            "top1_id": b_ranks.get("top1_id"),
+            "vacated_banner_present": b_ranks.get("vacated_banner_present")
         })
 
     # 7. Evaluate external queries (32 queries)
@@ -561,17 +573,20 @@ def run_benchmark(
         short_sum, _ = evaluate_retrieval(corpus, queries, {"bitnet_short_chunks": bn_short_scores})
 
         # Exp 3: Self-Retrieval validation
+        valid_indices = [i for i in range(len(corpus)) if i not in zero_vector_chunk_indices]
         self_hits = 0
-        for idx, c in enumerate(corpus):
+        for idx in valid_indices:
             sims = np.dot(bitnet_corpus_embeds, bitnet_corpus_embeds[idx])
             top_idx = int(np.argmax(sims))
             if top_idx == idx:
                 self_hits += 1
 
+        total_valid = len(valid_indices)
         self_retrieval_val = {
-            "total_chunks": len(corpus),
+            "total_chunks": total_valid,
             "passes": self_hits,
-            "accuracy_pct": round_half_up((self_hits / len(corpus)) * 100.0, 1)
+            "accuracy_pct": round_half_up((self_hits / total_valid) * 100.0, 1) if total_valid > 0 else 0.0,
+            "excluded_zero_vector_indices": sorted(list(zero_vector_chunk_indices))
         }
         short_top1_pct = short_sum.get("bitnet_short_chunks", {}).get("top1_recall_pct", 0.0)
         bitnet_diagnostics_val = {
@@ -580,7 +595,7 @@ def run_benchmark(
             "short_chunks_top1_hits": short_sum.get("bitnet_short_chunks", {}).get("top1_hits", 0),
             "self_retrieval_top1_hits": self_hits,
             "diagnosis_finding": (
-                f"Self-retrieval achieves {round_half_up((self_hits / len(corpus)) * 100.0, 1)}%, but query-to-chunk matching remains weak under all prefix configurations; "
+                f"Self-retrieval achieves {round_half_up((self_hits / total_valid) * 100.0, 1) if total_valid > 0 else 0.0}%, but query-to-chunk matching remains weak under all prefix configurations; "
                 f"short chunks achieve {short_top1_pct}% top-1."
             )
         }
@@ -618,6 +633,8 @@ def run_benchmark(
             "tie_breaking_rule": "score descending, then corpus id alphabetically ascending",
             "rounding_rule": "Decimal quantize with ROUND_HALF_UP",
             "skipped_methods": skipped_methods,
+            "zero_vector_chunk_indices": sorted(list(zero_vector_chunk_indices)),
+            "zero_vector_short_chunk_indices": sorted(list(zero_vector_short_chunk_indices)),
             "self_retrieval_validation": self_retrieval_val,
             "bitnet_diagnostics": bitnet_diagnostics_val
         },

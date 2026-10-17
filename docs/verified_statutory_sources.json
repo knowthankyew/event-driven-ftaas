@@ -538,13 +538,13 @@
     },
     {
       "id": "ftc_negative_option_equal",
-      "statute": "16 CFR \u00a7 425.5",
+      "statute": "16 CFR \u00a7 425.6",
       "jurisdiction": "US_FEDERAL",
       "status": "vacated_by_court_order",
       "effective_from": "2024-10-16 (promulgated); vacated 2025-07-08",
       "source_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
       "human_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
-      "citation": "16 CFR 425.5 Symmetric cancellation method (Vacated by 8th Cir. in Custom Communications, Inc. v. FTC, No. 24-3137)",
+      "citation": "16 CFR 425.6 Symmetric cancellation method (Vacated by 8th Cir. in Custom Communications, Inc. v. FTC, No. 24-3137)",
       "chunk_type": "paraphrase",
       "source_facts": [
         "negative option",
@@ -572,13 +572,13 @@
     },
     {
       "id": "ftc_negative_option_save",
-      "statute": "16 CFR \u00a7 425.6",
+      "statute": "Proposed 16 CFR \u00a7 425.6 (NPRM 88 FR 24716; not adopted in final rule)",
       "jurisdiction": "US_FEDERAL",
       "status": "vacated_by_court_order",
-      "effective_from": "2024-10-16 (promulgated); vacated 2025-07-08",
+      "effective_from": "Non-adopted proposal (88 FR 24716; omitted from Final Rule 89 FR 83334)",
       "source_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
       "human_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
-      "citation": "16 CFR 425.6 Save attempts restriction (Vacated by 8th Cir. in Custom Communications, Inc. v. FTC, No. 24-3137)",
+      "citation": "Proposed 16 CFR 425.6 Save attempts restriction (Non-adopted proposal; vacated 8th Cir.)",
       "chunk_type": "paraphrase",
       "source_facts": [
         "save",

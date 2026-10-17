@@ -193,62 +193,72 @@ def independent_recompute_metrics(benchmark_path: Path) -> tuple[bool, list[str]
         # Fail closed: an artifact that cannot be recomputed must not pass as "verified".
         return False, ["benchmark artifact has no full_corpus_benchmark.query_details; cannot recompute metrics"]
 
-    query_details = full["query_details"]
-    summary = full.get("summary", {})
-    n = len(query_details)
-    if n == 0:
-        return False, ["query_details is empty in benchmark artifact"]
+    sections = {
+        k: v for k, v in data.items()
+        if isinstance(v, dict) and "query_details" in v
+    }
 
-    declared_n = full.get("queries_count")
-    if declared_n != n:
-        errors.append(f"queries_count mismatch: declared {declared_n}, query_details has {n}")
-
-    methods = list(query_details[0].get("rankings", {}).keys())
-    for q in query_details:
-        if set(q.get("rankings", {}).keys()) != set(methods):
-            errors.append(f"query {q.get('id', '?')!r} ranks a different method set than the first query")
-    for m in summary:
-        if m not in methods:
-            errors.append(f"summary method '{m}' has no per-query records")
-
-    for m in methods:
-        top1_hits = 0
-        top3_hits = 0
-        reciprocal_ranks = []
-
-        for q in query_details:
-            r = q["rankings"].get(m, {})
-            t1, t3, rr = bool(r.get("top1_hit")), bool(r.get("top3_hit")), float(r.get("rr", 0.0))
-            # Per-record invariants (assumes rr = 1/rank): a hit flag must agree with its own rr.
-            if t1 != (abs(rr - 1.0) < 1e-4) or t3 != (rr >= 1.0 / 3.0 - 1e-4) or (t1 and not t3):
-                errors.append(f"Method '{m}' query {q.get('id', '?')!r}: flags (top1={t1}, top3={t3}) disagree with rr={rr}")
-            top1_hits += t1
-            top3_hits += t3
-            reciprocal_ranks.append(rr)
-
-        mrr_calc = sum(reciprocal_ranks) / n
-        top1_ci = independent_wilson_score_interval(top1_hits, n)
-        top3_ci = independent_wilson_score_interval(top3_hits, n)
-
-        if m not in summary:
-            errors.append(f"Method '{m}' has per-query records but no summary entry")
+    for sec_name, sec_data in sections.items():
+        query_details = sec_data["query_details"]
+        summary = sec_data.get("summary", {})
+        n = len(query_details)
+        if n == 0:
+            errors.append(f"[{sec_name}] query_details is empty in benchmark artifact")
             continue
-        expected = summary[m]
-        if expected.get("top1_hits") != top1_hits:
-            errors.append(f"Method '{m}' top1_hits mismatch: expected {expected.get('top1_hits')}, calculated {top1_hits}")
-        if expected.get("top3_hits") != top3_hits:
-            errors.append(f"Method '{m}' top3_hits mismatch: expected {expected.get('top3_hits')}, calculated {top3_hits}")
-        if abs(expected.get("mrr", 0.0) - mrr_calc) > 1e-4:
-            errors.append(f"Method '{m}' MRR mismatch: expected {expected.get('mrr')}, calculated {mrr_calc:.4f}")
-        # The percentages and both intervals are what the docs actually render; check them too.
-        for key, hits in (("top1_recall_pct", top1_hits), ("top3_recall_pct", top3_hits)):
-            exp_pct = expected.get(key)
-            if exp_pct is None or abs(exp_pct - 100.0 * hits / n) > 0.051:
-                errors.append(f"Method '{m}' {key} mismatch: expected {exp_pct}, calculated {100.0 * hits / n:.1f}")
-        for key, calc in (("top1_ci_95", top1_ci), ("top3_ci_95", top3_ci)):
-            exp_ci = expected.get(key)
-            if not exp_ci or abs(exp_ci[0] - calc[0]) > 1e-3 or abs(exp_ci[1] - calc[1]) > 1e-3:
-                errors.append(f"Method '{m}' {key} mismatch: expected {exp_ci}, calculated {calc}")
+
+        declared_n = sec_data.get("queries_count")
+        if declared_n != n:
+            errors.append(f"[{sec_name}] queries_count mismatch: declared {declared_n}, query_details has {n}")
+
+        if not query_details:
+            continue
+
+        methods = list(query_details[0].get("rankings", {}).keys())
+        for q in query_details:
+            if set(q.get("rankings", {}).keys()) != set(methods):
+                errors.append(f"[{sec_name}] query {q.get('id', '?')!r} ranks a different method set than the first query")
+        for m in summary:
+            if m not in methods:
+                errors.append(f"[{sec_name}] summary method '{m}' has no per-query records")
+
+        for m in methods:
+            top1_hits = 0
+            top3_hits = 0
+            reciprocal_ranks = []
+
+            for q in query_details:
+                r = q["rankings"].get(m, {})
+                t1, t3, rr = bool(r.get("top1_hit")), bool(r.get("top3_hit")), float(r.get("rr", 0.0))
+                # Per-record invariants (assumes rr = 1/rank): a hit flag must agree with its own rr.
+                if t1 != (abs(rr - 1.0) < 1e-4) or t3 != (rr >= 1.0 / 3.0 - 1e-4) or (t1 and not t3):
+                    errors.append(f"[{sec_name}] Method '{m}' query {q.get('id', '?')!r}: flags (top1={t1}, top3={t3}) disagree with rr={rr}")
+                top1_hits += t1
+                top3_hits += t3
+                reciprocal_ranks.append(rr)
+
+            mrr_calc = sum(reciprocal_ranks) / n
+            top1_ci = independent_wilson_score_interval(top1_hits, n)
+            top3_ci = independent_wilson_score_interval(top3_hits, n)
+
+            if m not in summary:
+                errors.append(f"[{sec_name}] Method '{m}' has per-query records but no summary entry")
+                continue
+            expected = summary[m]
+            if expected.get("top1_hits") != top1_hits:
+                errors.append(f"[{sec_name}] Method '{m}' top1_hits mismatch: expected {expected.get('top1_hits')}, calculated {top1_hits}")
+            if expected.get("top3_hits") != top3_hits:
+                errors.append(f"[{sec_name}] Method '{m}' top3_hits mismatch: expected {expected.get('top3_hits')}, calculated {top3_hits}")
+            if abs(expected.get("mrr", 0.0) - mrr_calc) > 1e-4:
+                errors.append(f"[{sec_name}] Method '{m}' MRR mismatch: expected {expected.get('mrr')}, calculated {mrr_calc:.4f}")
+            # The percentages and both intervals are what the docs actually render; check them too.
+            for key, hits in (("top1_recall_pct", top1_hits), ("top3_recall_pct", top3_hits)):
+                exp_pct = expected.get(key)
+                if exp_pct is None or abs(exp_pct - 100.0 * hits / n) > 0.051:
+                    errors.append(f"[{sec_name}] Method '{m}' {key} mismatch: expected {exp_pct}, calculated {100.0 * hits / n:.1f}")
+            for key, calc in (("top1_ci_95", top1_ci), ("top3_ci_95", top3_ci)):
+                exp_ci = expected.get(key)
+                if not exp_ci or abs(exp_ci[0] - calc[0]) > 1e-3 or abs(exp_ci[1] - calc[1]) > 1e-3:
+                    errors.append(f"[{sec_name}] Method '{m}' {key} mismatch: expected {exp_ci}, calculated {calc}")
 
     return len(errors) == 0, errors
 

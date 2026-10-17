@@ -1,0 +1,13 @@
+# Build context relative exclusions for API Docker build
+**/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/bin/
+**/obj/
+**/data/
+ml/data/**
+ml/demo.gif
+ml/demo.mp4
+ml/docs/**
+ml/.git/**
+privacy-telemetry/.git/**

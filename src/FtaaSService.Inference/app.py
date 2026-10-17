@@ -531,9 +531,6 @@ def compare_completions(req: CompareRequest):
             }
 
         # Route 2: Standard PyTorch HuggingFace runtime
-        if not model_store.base_model or not model_store.tokenizer:
-            raise HTTPException(status_code=503, detail="Model is still loading.")
-
         # Guard: if req.baseModel is specified and doesn't match loaded PyTorch model, reject with 409
         if target_base != DEFAULT_BASE_MODEL:
             raise HTTPException(
@@ -549,6 +546,9 @@ def compare_completions(req: CompareRequest):
                     "hint": f"Restart the inference service with BASE_MODEL_NAME={target_base}",
                 }
             )
+
+        if not model_store.base_model or not model_store.tokenizer:
+            raise HTTPException(status_code=503, detail="Model is still loading.")
 
         # 1. Validate and load Fine-Tuned LoRA Adapter before running base generation
         if not req.adapterPath:
@@ -671,9 +671,6 @@ def generate(req: GenerateRequest):
             }
 
         # Route 2: Standard PyTorch HuggingFace runtime
-        if not model_store.base_model or not model_store.tokenizer:
-            raise HTTPException(status_code=503, detail="Model is still loading.")
-
         # Guard: if req.baseModel is specified and doesn't match loaded PyTorch model, reject with 409
         if target_base != DEFAULT_BASE_MODEL:
             raise HTTPException(
@@ -689,6 +686,9 @@ def generate(req: GenerateRequest):
                     "hint": f"Restart the inference service with BASE_MODEL_NAME={target_base}",
                 }
             )
+
+        if not model_store.base_model or not model_store.tokenizer:
+            raise HTTPException(status_code=503, detail="Model is still loading.")
 
         with _peft_lock:
             if req.adapterPath:

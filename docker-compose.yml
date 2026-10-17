@@ -1,6 +1,6 @@
 services:
   broker:
-    image: rabbitmq:3-management
+    image: rabbitmq:4-management
     container_name: ftaas-rabbitmq
     ports:
       - "127.0.0.1:5672:5672"

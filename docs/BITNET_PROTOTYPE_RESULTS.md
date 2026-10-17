@@ -95,10 +95,10 @@ Benchmarked using `llama-bench` targeting `models/BitNet-b1.58-2B-4T/ggml-model-
 
 Testing qualitative generation using `llama-cli` revealed critical architectural behaviors:
 
-### A. Raw Foundation Model Behavior
-`microsoft/bitnet-b1.58-2B-4T` is a **raw foundation base model** trained for causal sequence continuation across 4 trillion tokens, NOT an instruction-tuned assistant model.
-- When given unformatted instructions (e.g. *"Explain the concept of low-rank adaptation in three concise bullet points."*), the base model behaves canonically by echoing similar phrasing in list form rather than answering conversationally.
-- When formatted using the model's native chat prefix (`User: <prompt>\nAssistant: `), the model initiates structured completions (e.g., *"Hello Assistant. The assistant is ready to assist you."*). Evaluating full LLaMA 3 chat templates (`tokenizer.apply_chat_template`) and sampling parameters (repetition penalties, top-k/top-p) to suppress repetitive continuation loops remains under active investigation.
+### A. Post-Training Alignment & Instruction-Following Behavior
+`microsoft/bitnet-b1.58-2B-4T` is post-trained with supervised fine-tuning (SFT) and Direct Preference Optimization (DPO) across conversational and task corpora on top of its 4-trillion-token pre-training base.
+- When formatted using the model's native chat prefix (`User: <prompt>\nAssistant: `), the model initiates structured completions and conversational responses.
+- Evaluating full LLaMA 3 chat templates (`tokenizer.apply_chat_template`) and sampling parameters (repetition penalties, top-k/top-p) to suppress repetitive continuation loops remains under active investigation.
 
 ### B. The Need for Task Fine-Tuning (FTaaS Value Proposition)
 This empirical observation directly reinforces the core mission of **Event-Driven FTaaS**:
@@ -113,7 +113,7 @@ Fine-tuning BitNet b1.58 using Low-Rank Adaptation (LoRA) is mathematically soun
 $$h = W_0 \cdot x + \frac{\alpha}{r} (B \cdot A) \cdot x$$
 
 1. **Frozen Ternary Weights**: The base weight matrix $W_0 \in \{-1, 0, +1\}$ is 100% frozen ($\nabla_{W_0} \mathcal{L} = 0$). No floating-point gradient updates mutate the ternary integer properties of the base model.
-2. **Continuous Low-Rank Adapters**: Trainable rank decomposition matrices $A \in \mathbb{R}^{r \times d_{\text{in}}}$ and $B \in \mathbb{R}^{d_{\text{out}} \times r}$ train in standard float (`float16`/`bfloat16`), capturing nuanced domain representations.
+2. **Continuous Low-Rank Adapters**: Trainable rank decomposition matrices $A \in \mathbb{R}^{r \times d_{\text{in}}}$ and $B \in \mathbb{R}^{d_{\text{out}} \times r}$ train in standard float (`float32` on MPS), capturing nuanced domain representations.
 3. **Deployment Strategy**:
    - **Multi-Tenant Edge Serving**: Base BitNet weights stay in memory as 1.1 GB ternary integers; request-time forward passes execute ternary SIMD additions on CPU in parallel with tiny float LoRA adapter projections.
 4. **Runtime Separation (Training vs Inference)**:

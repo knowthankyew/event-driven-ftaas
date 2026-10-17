@@ -113,7 +113,9 @@ class TestTrainerModelSelection(unittest.TestCase):
              patch("trainer.Trainer", return_value=mock_trainer), \
              patch("trainer.mlflow") as mock_mlflow, \
              patch("datasets.Dataset.map", return_value=stub_tokenized), \
-             patch("trainer.format_training_prompt", side_effect=capturing_format):
+             patch("trainer.format_training_prompt", side_effect=capturing_format), \
+             patch("evaluator.register_model_in_registry") as mock_register, \
+             patch("evaluator.evaluate_model", return_value={"eval_loss": 0.35}) as mock_eval:
 
             mock_run = MagicMock()
             mock_run.__enter__ = MagicMock(return_value=mock_run)

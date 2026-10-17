@@ -24,11 +24,21 @@ import opentelemetry.trace as trace
 class TestCrossServiceContracts(unittest.TestCase):
     """Verifies schema contracts and header compatibility between .NET API and Python Worker."""
 
-    def test_job_requested_dotnet_payload_consumed_seamlessly(self):
+    @patch("consumer.train_job")
+    def test_job_requested_dotnet_payload_consumed_seamlessly(self, mock_train_job):
         """
         Validates that a JSON payload serialized according to .NET JobRequestedEvent
-        (with camelCase naming) satisfies all consumer expectations without missing fields.
+        (with camelCase naming) is processed by JobConsumer._process_job_thread,
+        correctly passing all arguments to train_job and acknowledging the message.
         """
+        mock_train_job.return_value = {
+            "totalSteps": 10,
+            "finalLoss": 0.42,
+            "mlflowExperimentId": "exp-1",
+            "mlflowRunId": "run-1",
+            "adapterPath": "/tmp/mock-adapter"
+        }
+
         dotnet_job_requested_json = {
             "jobId": "job-dotnet-123",
             "jobName": "financial-sentiment-lora",
@@ -45,49 +55,82 @@ class TestCrossServiceContracts(unittest.TestCase):
             },
             "submittedAt": "2026-10-05T18:00:00.0000000Z"
         }
-
-        # Verify all required keys are present
         body = json.dumps(dotnet_job_requested_json).encode("utf-8")
-        parsed = json.loads(body.decode("utf-8"))
 
-        self.assertIn("jobId", parsed)
-        self.assertIn("jobName", parsed)
-        self.assertIn("baseModel", parsed)
-        self.assertIn("datasetPath", parsed)
-        self.assertIn("datasetHash", parsed)
-        self.assertIn("hyperparameters", parsed)
-        self.assertIsInstance(parsed["hyperparameters"]["epochs"], int)
-        self.assertIsInstance(parsed["hyperparameters"]["learningRate"], float)
+        consumer = JobConsumer()
+        consumer._safe_ack = MagicMock()
+        consumer.publish_status_update = MagicMock()
+        mock_ch = MagicMock()
+        mock_method = MagicMock()
+        mock_method.delivery_tag = 42
+        mock_props = MagicMock()
+        mock_props.headers = {}
 
-    def test_w3c_traceparent_byte_header_extracted_by_consumer(self):
+        consumer._process_job_thread(mock_ch, mock_method, mock_props, body)
+
+        mock_train_job.assert_called_once()
+        _, kwargs = mock_train_job.call_args
+        self.assertEqual(kwargs["job_id"], "job-dotnet-123")
+        self.assertEqual(kwargs["job_name"], "financial-sentiment-lora")
+        self.assertEqual(kwargs["base_model_name"], "HuggingFaceTB/SmolLM2-135M")
+        self.assertEqual(kwargs["dataset_path"], "datasets/financial.jsonl")
+        self.assertEqual(kwargs["dataset_hash"], "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+        self.assertEqual(kwargs["hyperparameters"]["epochs"], 3)
+        self.assertEqual(kwargs["hyperparameters"]["learningRate"], 0.0002)
+        consumer._safe_ack.assert_called_once()
+
+    @patch("consumer.train_job")
+    def test_w3c_traceparent_byte_header_extracted_by_consumer(self, mock_train_job):
         """
         Validates that byte-array headers sent by .NET RabbitMqEventPublisher
-        (['traceparent'] = byte[]) are extracted into W3C OpenTelemetry SpanContext.
+        (['traceparent'] = byte[]) are extracted into W3C OpenTelemetry SpanContext
+        by JobConsumer._process_job_thread.
         """
+        mock_train_job.return_value = {
+            "totalSteps": 5,
+            "finalLoss": 0.35,
+            "mlflowExperimentId": "exp-1",
+            "mlflowRunId": "run-1",
+            "adapterPath": "/tmp/mock-adapter"
+        }
+
         trace_id = "4bf92f3577b34da6a3ce929d0e0e4736"
         span_id = "00f067aa0ba902b7"
         traceparent_str = f"00-{trace_id}-{span_id}-01"
 
-        # Simulate RabbitMQ properties containing byte headers as emitted by .NET
         mock_props = MagicMock()
         mock_props.headers = {
             "traceparent": traceparent_str.encode("utf-8"),
             "tracestate": b"rojo=1"
         }
 
-        # Consumer carrier extraction logic
-        carrier = {}
-        for k, v in mock_props.headers.items():
-            carrier[k] = v.decode("utf-8") if isinstance(v, bytes) else str(v)
+        payload = {
+            "jobId": "job-trace-test",
+            "jobName": "trace-test",
+            "baseModel": "HuggingFaceTB/SmolLM2-135M",
+            "datasetPath": "datasets/test.jsonl",
+            "datasetHash": "abc123hash",
+            "hyperparameters": {}
+        }
+        body = json.dumps(payload).encode("utf-8")
 
-        ctx = TraceContextTextMapPropagator().extract(carrier)
-        self.assertIsNotNone(ctx)
+        consumer = JobConsumer()
+        consumer._safe_ack = MagicMock()
+        consumer.publish_status_update = MagicMock()
+        mock_ch = MagicMock()
+        mock_method = MagicMock()
+        mock_method.delivery_tag = 99
 
-        # Ensure extracted span has the exact remote trace and span IDs
-        span = trace.get_current_span(ctx)
+        consumer._process_job_thread(mock_ch, mock_method, mock_props, body)
+
+        self.assertEqual(consumer.current_traceparent, traceparent_str)
+        self.assertIsNotNone(consumer.current_context)
+
+        span = trace.get_current_span(consumer.current_context)
         span_ctx = span.get_span_context()
         self.assertEqual(f"{span_ctx.trace_id:032x}", trace_id)
         self.assertEqual(f"{span_ctx.span_id:016x}", span_id)
+        consumer._safe_ack.assert_called_once()
 
     def test_job_updated_payload_matches_dotnet_contract(self):
         """
@@ -96,7 +139,11 @@ class TestCrossServiceContracts(unittest.TestCase):
         """
         consumer = JobConsumer()
         mock_channel = MagicMock()
+        mock_conn = MagicMock()
+        mock_conn.is_closed = False
+        mock_conn.add_callback_threadsafe.side_effect = lambda cb: cb()
         consumer.channel = mock_channel
+        consumer.connection = mock_conn
         consumer.current_traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 
         consumer.publish_status_update(
@@ -136,7 +183,11 @@ class TestCrossServiceContracts(unittest.TestCase):
         """Verifies sequence numbers increment monotonically per job ID to ensure AMQP idempotency."""
         consumer = JobConsumer()
         mock_channel = MagicMock()
+        mock_conn = MagicMock()
+        mock_conn.is_closed = False
+        mock_conn.add_callback_threadsafe.side_effect = lambda cb: cb()
         consumer.channel = mock_channel
+        consumer.connection = mock_conn
 
         job_id = "job-monotonic-seq"
         prev_seq = 0

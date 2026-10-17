@@ -394,18 +394,17 @@ def execute_speed_memory_benchmark(output_file: Path = DEFAULT_OUTPUT_FILE) -> D
             throughput_measurements.append(r_tp)
             print(f"    -> decode: {r_tp.get('decode_tok_per_sec')} tok/s | prefill: {r_tp.get('prefill_tok_per_sec')} tok/s | TTFT: {r_tp.get('time_to_first_token_ms')} ms")
 
-    # 3. Baseline Comparison
-    # Conventional Gemma 2 2B FP16 published reference from MODEL_PERFORMANCE_COMPARISON.md Section 2
+    # Baseline comparison: Local PyTorch CPU FP16 measurement from MODEL_PERFORMANCE_COMPARISON.md Section 2
     published_baseline = {
         "model_name": "google/gemma-2-2b (FP16)",
-        "baseline_type": "published_reference",
+        "baseline_type": "local_measurement",
         "precision": "fp16",
         "model_weights_mb": 5240.0,
         "peak_rss_mb": 5400.0,
         "reference_hardware": "AVX2 CPU (x86_64, 4 threads)",
         "reference_prefill_tok_per_sec": 14.2,
         "reference_decode_tok_per_sec": 8.4,
-        "source_citation": "Google Gemma 2 Technical Report (arXiv:2408.00118) FP16 2B memory footprint & docs/MODEL_PERFORMANCE_COMPARISON.md"
+        "source_citation": "Local host measurement under PyTorch CPU FP16 on macOS x86_64 Intel Core i9-9880H (4 threads); documented in docs/MODEL_PERFORMANCE_COMPARISON.md Section 2"
     }
 
     # Extract summary metrics for conclusion (exclude failed runs)

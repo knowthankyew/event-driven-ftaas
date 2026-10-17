@@ -83,10 +83,13 @@ public static class JobEndpoints
 
             if (body is not null)
             {
-                jobName = body.JobName;
-                baseModel = body.BaseModel;
+                if (!string.IsNullOrWhiteSpace(body.JobName))
+                    jobName = body.JobName;
+                if (!string.IsNullOrWhiteSpace(body.BaseModel))
+                    baseModel = body.BaseModel;
                 datasetPath = body.DatasetPath;
-                hyperparameters = body.Hyperparameters;
+                if (body.Hyperparameters is not null)
+                    hyperparameters = body.Hyperparameters;
             }
         }
 
