@@ -66,9 +66,9 @@ flowchart TD
 3. **Hardware-Adaptive & Local-First (Zero Cloud Cost)**:
    - Automated device detection (`mps` on Apple Silicon, `cuda` on Nvidia, or multi-threaded `cpu`).
    - Tiered baseline models:
-     - **SmolLM2-135M** (`HuggingFaceTB/SmolLM2-135M`): Ultra-compact baseline (LoRA rank 8, alpha 32, ~1.8 MB adapter) fine-tuning in 2–4 minutes on Apple Silicon (M1–M4) or CUDA.
-     - **Google Gemma 2 2B IT** (`google/gemma-2-2b-it`): High-capacity reasoning tier (LoRA rank 8, alpha 32, ~12.2 MB adapter) utilizing Gemma chat templates (`<start_of_turn>`) with hardware preflight gates (~8 GB VRAM requirement and Hugging Face license check).
-     - **Microsoft BitNet b1.58 2B-4T** (`microsoft/BitNet-b1.58-2B-4T`): 1.58-bit ternary foundation model ($W \in \{-1, 0, +1\}$) operating at ~1.10 GB RAM footprint via integer addition/subtraction, delivering up to 23.5 tokens/sec decode entirely on CPU (zero GPU required).
+     - **SmolLM2-135M** (`HuggingFaceTB/SmolLM2-135M`): Ultra-compact baseline (2,048-token context, LoRA rank 8, alpha 32, ~1.8 MB adapter) fine-tuning in 2–4 minutes on Apple Silicon (M1–M4) or CUDA.
+     - **Google Gemma 2 2B IT** (`google/gemma-2-2b-it`): High-capacity reasoning tier (8,192-token context, LoRA rank 8, alpha 32, ~12.2 MB adapter) utilizing Gemma chat templates (`<start_of_turn>`) with hardware preflight gates (~8 GB VRAM requirement and Hugging Face license check).
+     - **Microsoft BitNet b1.58 2B-4T** (`microsoft/BitNet-b1.58-2B-4T`): 1.58-bit ternary foundation model ($W \in \{-1, 0, +1\}$, 4,096-token architectural context with bounded 16-token generation and 240-token embedding ceilings) operating at ~1.10 GB RAM footprint via integer addition/subtraction, delivering up to 23.5 tokens/sec decode entirely on CPU (zero GPU required).
 4. **Observable MLOps & Distributed Tracing**:
    - Unified `JobId` correlation across HTTP headers, AMQP properties, Python structured logs, and MLflow experiment tags.
    - Step-level loss curves, learning rate, and duration recorded in MLflow.

@@ -113,9 +113,9 @@ Use this tab to create or modify custom rules for your team:
    - *Dataset Guidelines*: LoRA policy adapters typically only need 20 to 500 focused examples for high-quality convergence. The system enforces a **25 MB file size ceiling** and a **50,000 record maximum** to maintain optimal server performance and memory safety.
 3. **Select Your Target Base Model**:
    - Use the **Base Model Selector** dropdown to choose between:
-     - **Gemma 2 2B IT** *(Default • Reasoning Tier • Gated)*: Full instruction-tuned reasoning model fine-tuning into a ~12.2 MB adapter. Supports longer context (8,192 tokens).
-     - **SmolLM2 135M** *(Ultra-Compact • Fast / Zero-Cost)*: Fine-tunes in ~2 minutes with ~1.8 MB adapter footprint. Perfect for rapid prototyping and edge devices.
-     - **BitNet b1.58 2B-4T** *(Experimental • 1.58-bit Ternary CPU)*: 1.58-bit ternary foundation model operating on commodity CPUs without GPU VRAM. Includes experimental guardrails with 16-token generation cap and 240-token embedding cap.
+     - **Gemma 2 2B IT** *(Default • Reasoning Tier • Gated)*: Full instruction-tuned reasoning model fine-tuning into a ~12.2 MB adapter. Supports longer, high-capacity context (8,192 tokens).
+     - **SmolLM2 135M** *(Ultra-Compact • Fast / Zero-Cost)*: Fine-tunes in ~2 minutes with ~1.8 MB adapter footprint. Perfect for rapid prototyping, edge devices, and compact prompt context (2,048 tokens).
+     - **BitNet b1.58 2B-4T** *(Experimental • 1.58-bit Ternary CPU)*: 1.58-bit ternary foundation model operating on commodity CPUs without GPU VRAM (4,096-token architectural context, bounded by experimental safety guardrails: 16-token generation cap and 240-token embedding cap).
    - *Hardware & Licensing Guardrail*: Selecting Gemma 2B dynamically displays an amber guidance box detailing the 8 GB VRAM recommendation and reminding operators to accept Google's model license on Hugging Face and provide an `HF_TOKEN`. Selecting BitNet displays guidance noting the experimental generation cap and CPU-only ternary runtime.
 4. **Deploy Team Adapter**:
    - Give your model a name (e.g., `support-team-v1`).
@@ -154,7 +154,7 @@ If you need to explain the system to an executive, engineering director, or clie
 **A:** Traditional AI fine-tuning requires copying and saving the entire model (often 7 to 70 Gigabytes), which requires expensive dedicated GPUs and massive disk storage. FTaaS uses **LoRA (Low-Rank Adaptation)**, which freezes the base model and only trains a tiny mathematical adapter layer (~1.8 Megabytes). This allows an enterprise to run hundreds of custom department adapters on a single shared model.
 
 #### Q: What is the difference between SmolLM2-135M and Gemma 2 2B IT?
-**A:** `SmolLM2-135M` is an ultra-compact ~135M parameter baseline. It trains in ~2 minutes and requires under 1 GB VRAM, making it ideal for instant iteration, CI tests, and edge execution. `gemma-2-2b-it` is Google's 2.6B parameter instruction-tuned model. It offers substantially deeper language reasoning, handles long contexts (up to 8,192 tokens), and produces ~12.2 MB adapters, but requires ~8 GB VRAM (or Apple Silicon unified memory in `float16`) and ~7 minutes of training time.
+**A:** `SmolLM2-135M` is an ultra-compact ~135M parameter baseline with a 2,048-token context window. It trains in ~2 minutes and requires under 1 GB VRAM, making it ideal for instant iteration, CI tests, and edge execution. `gemma-2-2b-it` is Google's 2.6B parameter instruction-tuned model. It offers substantially deeper language reasoning, handles long contexts (up to 8,192 tokens), and produces ~12.2 MB adapters, but requires ~8 GB VRAM (or Apple Silicon unified memory in `float16`) and ~7 minutes of training time.
 
 #### Q: Why does Gemma 2B ask for Hugging Face authentication?
 **A:** Google publishes Gemma under open-weights terms that require accepting the Gemma Terms of Use on [huggingface.co/google/gemma-2-2b-it](https://huggingface.co/google/gemma-2-2b-it). Once accepted, set your `HF_TOKEN` environment variable with a Read-scoped token so the worker can securely download the model weights.
