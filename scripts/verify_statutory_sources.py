@@ -753,21 +753,6 @@ def verify_single_source(
         text_sha = hashlib.sha256(extracted_text.encode("utf-8")).hexdigest()
         record["extracted_text_sha256"] = text_sha
 
-        # Save snapshot excerpt if snapshot_dir provided
-        if snapshot_dir:
-            snapshot_dir.mkdir(parents=True, exist_ok=True)
-            snapshot_file = snapshot_dir / f"{text_sha}.txt"
-            if not snapshot_file.is_file():
-                header = (
-                    f"# Source Attribution: {source_id} - {source['statute']}\n"
-                    f"# Source URL: {url}\n"
-                    f"# Extracted SHA-256: {text_sha}\n"
-                    f"# Retrieved At: {attempt_time}\n\n"
-                )
-                # Store excerpt (up to 4000 characters) to respect reuse terms
-                excerpt = extracted_text[:4000]
-                snapshot_file.write_text(header + excerpt, encoding="utf-8")
-
         # Verify facts or verbatim containment
         chunk_type = source.get("chunk_type", "paraphrase")
         source_facts = source.get("source_facts", [])
@@ -790,6 +775,20 @@ def verify_single_source(
         if facts_present and len(source_facts) > 0:
             record["state"] = "verified"
             record["verified_on"] = attempt_time
+            # Save snapshot excerpt only after facts are verified
+            if snapshot_dir:
+                snapshot_dir.mkdir(parents=True, exist_ok=True)
+                snapshot_file = snapshot_dir / f"{text_sha}.txt"
+                if not snapshot_file.is_file():
+                    header = (
+                        f"# Source Attribution: {source_id} - {source['statute']}\n"
+                        f"# Source URL: {url}\n"
+                        f"# Extracted SHA-256: {text_sha}\n"
+                        f"# Retrieved At: {attempt_time}\n\n"
+                    )
+                    # Store excerpt (up to 4000 characters) to respect reuse terms
+                    excerpt = extracted_text[:4000]
+                    snapshot_file.write_text(header + excerpt, encoding="utf-8")
         else:
             record["state"] = "mismatch"
             record["failure_error"] = {
@@ -876,6 +875,10 @@ def main():
     parser.add_argument("--snapshots", type=Path, default=DEFAULT_SNAPSHOT_DIR, help="Path to snapshot directory")
 
     args = parser.parse_args()
+    if not args.run:
+        parser.print_help()
+        print("\nPass --run to perform live verification and overwrite artifacts.")
+        return
     verify_all_sources(snapshot_dir=args.snapshots, output_file=args.output)
 
 

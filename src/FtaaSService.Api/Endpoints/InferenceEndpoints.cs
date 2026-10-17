@@ -79,6 +79,14 @@ public static class InferenceEndpoints
             var fallback = GenerateStudioPreview(request.Prompt, request.JobId, baseModel, adapterPath);
             return Results.Ok(fallback);
         }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status504GatewayTimeout,
+                title: "Inference Engine Timeout",
+                detail: "Inference engine timed out while processing completion."
+            );
+        }
     }
 
     private static InferenceCompareResponse GenerateStudioPreview(string prompt, string? jobId, string baseModel, string? adapterPath)

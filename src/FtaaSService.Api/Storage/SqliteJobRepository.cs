@@ -165,6 +165,14 @@ public sealed class SqliteJobRepository : IJobRepository
             return false;
         }
 
+        // Validate status enum
+        if (!Enum.TryParse<JobStatus>(update.Status, ignoreCase: false, out var parsedStatus)
+            || !Enum.IsDefined(parsedStatus))
+        {
+            _logger.LogWarning("Status update rejected: Job {JobId} has unknown status '{Status}'.", update.JobId, update.Status);
+            return false;
+        }
+
         const string sql = """
             UPDATE jobs SET
                 status = @Status,
@@ -188,7 +196,7 @@ public sealed class SqliteJobRepository : IJobRepository
         var parameters = new
         {
             update.JobId,
-            update.Status,
+            Status = parsedStatus.ToString(),
             update.ProgressPercent,
             update.CurrentStep,
             update.TotalSteps,
@@ -223,7 +231,7 @@ public sealed class SqliteJobRepository : IJobRepository
         {
             Id = r.id,
             JobName = r.job_name,
-            Status = Enum.Parse<JobStatus>(r.status, ignoreCase: true),
+            Status = Enum.TryParse<JobStatus>(r.status, ignoreCase: true, out var parsedStatus) ? parsedStatus : JobStatus.Failed,
             BaseModel = r.base_model,
             DatasetPath = r.dataset_path,
             DatasetHash = r.dataset_hash,

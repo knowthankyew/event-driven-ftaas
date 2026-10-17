@@ -67,7 +67,7 @@ fi
 
 if ! curl -s http://localhost:8000/healthz >/dev/null 2>&1; then
     echo "Launching Python Dynamic Inference Engine..."
-    PYTHONUNBUFFERED=1 "$PYTHON_EXEC" src/FtaaSService.Inference/app.py > /dev/null 2>&1 &
+    BASE_MODEL_NAME=HuggingFaceTB/SmolLM2-135M PYTHONUNBUFFERED=1 "$PYTHON_EXEC" src/FtaaSService.Inference/app.py > /dev/null 2>&1 &
     SPAWNED_PIDS+=($!)
     for i in {1..25}; do
         if curl -s http://localhost:8000/healthz >/dev/null 2>&1; then
@@ -96,9 +96,14 @@ fi
 echo -e "${GREEN}✅ Job accepted with ID: ${JOB_ID}${NC}"
 echo "⏳ Waiting for worker to process training run..."
 
+MAX_WAIT_SECONDS="${E2E_MAX_WAIT_SECONDS:-1800}"
 START_TIME=$(date +%s)
 STATUS="Queued"
 while [ "$STATUS" != "Succeeded" ] && [ "$STATUS" != "Failed" ]; do
+    if [ $(( $(date +%s) - START_TIME )) -gt "$MAX_WAIT_SECONDS" ]; then
+        echo -e "${YELLOW}❌ Timed out after ${MAX_WAIT_SECONDS}s waiting for job ${JOB_ID} (last status: ${STATUS}).${NC}"
+        exit 1
+    fi
     sleep 3
     JOB_DETAILS=$(curl -s "http://localhost:5100/api/v1/jobs/$JOB_ID")
     STATUS=$(echo "$JOB_DETAILS" | "$PYTHON_EXEC" -c "import sys, json; print(json.load(sys.stdin).get('status', ''))")
@@ -144,6 +149,11 @@ BASE_COMP=$(echo "$COMPARE_RES" | "$PYTHON_EXEC" -c "import sys, json; print(jso
 FINE_COMP=$(echo "$COMPARE_RES" | "$PYTHON_EXEC" -c "import sys, json; print(json.load(sys.stdin).get('fineTunedCompletion', ''))")
 BASE_LAT=$(echo "$COMPARE_RES" | "$PYTHON_EXEC" -c "import sys, json; print(json.load(sys.stdin).get('latencyMs', {}).get('baseModel', 0))")
 FINE_LAT=$(echo "$COMPARE_RES" | "$PYTHON_EXEC" -c "import sys, json; print(json.load(sys.stdin).get('latencyMs', {}).get('fineTuned', 0))")
+
+if [ -z "$FINE_COMP" ] || echo "$COMPARE_RES" | grep -q '"isSimulated":true'; then
+    echo -e "${YELLOW}❌ Live inference comparison failed: $COMPARE_RES${NC}"
+    exit 1
+fi
 
 echo -e "\n${BLUE}================================================================${NC}"
 echo -e "${GREEN}           🎉 VERIFICATION REPORT & PORTFOLIO DEMO              ${NC}"

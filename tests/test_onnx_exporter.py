@@ -98,9 +98,6 @@ class TestOnnxExporter(unittest.TestCase):
         res = export_to_edge_onnx(job_id=self.job_id, output_dir=out_dir, quantize=False, mock_for_test=True)
         self.assertEqual(res["manifest"]["quantization"], "fp32")
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class TestOnnxExporterGemmaManifest(unittest.TestCase):
     """
@@ -174,3 +171,8 @@ class TestOnnxExporterGemmaManifest(unittest.TestCase):
         self.assertEqual(manifest["parameterCount"], "unknown")
         self.assertEqual(manifest["chatTemplate"], "unknown")
         self.assertEqual(manifest["contextLength"], 2048)
+
+
+if __name__ == "__main__":
+    unittest.main()
+

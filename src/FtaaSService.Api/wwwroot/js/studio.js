@@ -363,7 +363,7 @@
   }
 
   // Arena: Run Side-by-Side Comparison
-  async function runComparison() {
+  async function runComparison(selectedJob) {
     const prompt = elements.promptInput.value.trim();
     if (!prompt) {
       showToast('Please enter or select a customer inquiry prompt.', 'error');
@@ -379,15 +379,20 @@
     elements.tunedCompletion.classList.add('placeholder');
     elements.tunedCompletion.textContent = 'Mounting LoRA adapter & evaluating policies...';
 
-    // Find any completed job adapter if available
-    const completedJob = state.jobs.find(j => j.status === 'Succeeded' && j.adapterPath);
+    // Find requested job adapter or any completed job adapter if available
+    const activeJob = (selectedJob && selectedJob.status === 'Succeeded' && selectedJob.adapterPath) ? selectedJob : null;
+    const completedJob = activeJob || state.jobs.find(j => j.status === 'Succeeded' && j.adapterPath);
     const adapterPath = completedJob ? completedJob.adapterPath : 'artifacts/default/model_adapters';
-    const jobId = completedJob ? completedJob.jobId : null;
+    const jobId = completedJob ? (completedJob.jobId || completedJob.id) : null;
 
     if (elements.tunedAdapterLabel) {
-      elements.tunedAdapterLabel.textContent = state.selectedPersona 
-        ? `${state.selectedPersona.name} (${state.selectedPersona.adapterSize || '1.8 MB'})`
-        : 'Enterprise Adapter (1.8 MB)';
+      if (completedJob) {
+        elements.tunedAdapterLabel.textContent = `${completedJob.jobName} (~1.8 MB)`;
+      } else {
+        elements.tunedAdapterLabel.textContent = state.selectedPersona 
+          ? `${state.selectedPersona.name} (${state.selectedPersona.adapterSize || '1.8 MB'})`
+          : 'Enterprise Adapter (1.8 MB)';
+      }
     }
 
     try {
@@ -408,8 +413,16 @@
 
       if (!res.ok) {
         const errData = await res.json().catch(() => null);
-        if (res.status === 409 && (errData?.detail?.error === 'base_model_mismatch' || errData?.error === 'base_model_mismatch')) {
-          const detail = errData.detail || errData;
+        let upstream = errData?.detail;
+        if (typeof upstream === 'string') {
+          try {
+            const parsed = JSON.parse(upstream);
+            upstream = parsed?.detail ?? parsed;
+          } catch { }
+        }
+
+        if (res.status === 409 && upstream?.error === 'base_model_mismatch') {
+          const detail = upstream;
           showToast(`⚠️ Model Mismatch: ${detail.message}`, 'error');
           if (elements.previewNotice) {
             elements.previewNotice.style.display = 'block';
@@ -420,14 +433,21 @@
           }
           return;
         }
-        throw new Error(`Inference API error: ${res.status}`);
+
+        const errMsg = typeof upstream === 'string'
+          ? upstream
+          : (upstream?.detail || upstream?.message || errData?.title || `Inference API error: ${res.status}`);
+        showToast(`Inference error (${res.status}): ${errMsg}`, 'error');
+        return;
       }
 
       const data = await res.json();
       renderComparisonResult(data);
     } catch (err) {
       console.error('Comparison request failed:', err);
-      // Fallback local simulation if backend has any issue
+      // Fallback local simulation if backend network connection has an issue
+      renderSimulatedResult(prompt);
+    }
       renderSimulatedResult(prompt);
     } finally {
       state.isComparing = false;
@@ -989,7 +1009,7 @@
           if (elements.tunedAdapterLabel) {
             elements.tunedAdapterLabel.textContent = `${job.jobName} (~1.8 MB)`;
           }
-          runComparison();
+          runComparison(job);
           showToast(`Mounted adapter "${job.jobName}" into comparison arena!`, 'success');
         });
       }
@@ -1015,7 +1035,7 @@
 
   function setupEventListeners() {
     if (elements.runCompareBtn) {
-      elements.runCompareBtn.addEventListener('click', runComparison);
+      elements.runCompareBtn.addEventListener('click', () => runComparison());
     }
     if (elements.addRowBtn) {
       elements.addRowBtn.addEventListener('click', addDatasetRow);

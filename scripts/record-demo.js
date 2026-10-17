@@ -95,7 +95,7 @@ async function sleep(ms) {
 
   // 1. Comparison Arena - Persona 1: Fintech Support & Compliance
   console.log('Step 1: Testing Fintech Compliance Persona...');
-  const promptPill = await page.$('.prompt-pill');
+  const promptPill = await page.$('.sample-prompt-chip');
   if (promptPill) {
     await promptPill.click();
     await sleep(1500);
@@ -126,7 +126,7 @@ async function sleep(ms) {
     await personaCards[1].click();
     await sleep(1500);
 
-    const saasPrompt = await page.$('.prompt-pill');
+    const saasPrompt = await page.$('.sample-prompt-chip');
     if (saasPrompt) {
       await saasPrompt.click();
       await sleep(1500);

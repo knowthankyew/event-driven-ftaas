@@ -610,7 +610,7 @@ def execute_bisection_sweep(output_file: Path = DEFAULT_OUTPUT_FILE) -> dict:
         tlen for tlen in target_lengths
         if all(clause_results[c["id"]].get("default_b512_t4", {}).get(tlen, False) for c in CLAUSES)
     ]
-    highest_all_pass = max(all_passing_lengths) if all_passing_lengths else 24
+    highest_all_pass = max(all_passing_lengths) if all_passing_lengths else 16
 
     stated_margin = 8
     recommended_cap = max(16, highest_all_pass - stated_margin)

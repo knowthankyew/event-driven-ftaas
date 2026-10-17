@@ -35,6 +35,16 @@ INFERENCE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = INFERENCE_DIR.parent.parent
 DEFAULT_DATA_ROOT = PROJECT_ROOT / "data"
 DATA_ROOT = Path(os.getenv("DATA_ROOT", str(DEFAULT_DATA_ROOT))).resolve()
+def resolve_adapter_path(rel: str) -> Path:
+    if not rel or Path(rel).is_absolute() or ".." in Path(rel).parts:
+        raise HTTPException(status_code=400, detail="adapterPath must reference a relative path under 'artifacts/'.")
+    artifacts_root = (DATA_ROOT / "artifacts").resolve()
+    candidate = (DATA_ROOT / rel).resolve() if rel.startswith("artifacts") else (artifacts_root / rel).resolve()
+    try:
+        candidate.relative_to(artifacts_root)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="adapterPath must reference a directory under 'artifacts/'.")
+    return candidate
 
 DEFAULT_BASE_MODEL = os.getenv("BASE_MODEL_NAME", "microsoft/BitNet-b1.58-2B-4T")
 
@@ -275,17 +285,18 @@ def generate_tokens(
     return completion_text, elapsed_ms
 
 def load_or_get_adapter(adapter_rel_path: str) -> PeftModel:
+    full_adapter_path = resolve_adapter_path(adapter_rel_path)
+
     if adapter_rel_path in model_store.adapter_cache:
         model_store.adapter_cache.move_to_end(adapter_rel_path)
         if model_store.peft_model is not None and hasattr(model_store.peft_model, "set_adapter"):
             model_store.peft_model.set_adapter(adapter_rel_path)
         return model_store.peft_model
 
-    full_adapter_path = DATA_ROOT / adapter_rel_path
     if not full_adapter_path.exists():
         raise HTTPException(
             status_code=404,
-            detail=f"Adapter path '{adapter_rel_path}' not found at '{full_adapter_path}'"
+            detail=f"Adapter path '{adapter_rel_path}' not found."
         )
 
     # Verify adapter integrity: reject zero-byte or truncated files from interrupted writes
@@ -491,7 +502,7 @@ def compare_completions(req: CompareRequest):
             )
 
             # 2. Fine-tuned adapter completion
-            full_adapter_path = str(DATA_ROOT / req.adapterPath)
+            full_adapter_path = str(resolve_adapter_path(req.adapterPath))
             fine_tuned_completion, fine_tuned_latency = generate_bitnet_sync(
                 req.prompt,
                 req.maxTokens,
@@ -592,6 +603,10 @@ def compare_completions(req: CompareRequest):
         metrics.record_request("compare", "error")
         logger.error(f"BitNet comparison tokenizer unavailable: {tue}")
         raise HTTPException(status_code=503, detail="Token verification service is unavailable. Please retry later.", headers={"Retry-After": "5"})
+    except BitNetExecutionError as bee:
+        metrics.record_request("compare", "error")
+        logger.error(f"BitNet comparison execution failed: {bee}")
+        raise HTTPException(status_code=422, detail=str(bee))
     except HTTPException:
         metrics.record_request("compare", "error")
         raise
@@ -627,7 +642,7 @@ def generate(req: GenerateRequest):
                         "Check BITNET_CLI_PATH and BITNET_MODEL_PATH."
                     )
                 )
-            full_adapter = str(DATA_ROOT / req.adapterPath) if req.adapterPath else None
+            full_adapter = str(resolve_adapter_path(req.adapterPath)) if req.adapterPath else None
             completion, latency = generate_bitnet_sync(
                 req.prompt,
                 req.maxTokens,
@@ -710,6 +725,10 @@ def generate(req: GenerateRequest):
         metrics.record_request("generate", "error")
         logger.error(f"BitNet generation tokenizer unavailable: {tue}")
         raise HTTPException(status_code=503, detail="Token verification service is unavailable. Please retry later.", headers={"Retry-After": "5"})
+    except BitNetExecutionError as bee:
+        metrics.record_request("generate", "error")
+        logger.error(f"BitNet generation execution failed: {bee}")
+        raise HTTPException(status_code=422, detail=str(bee))
     except HTTPException:
         metrics.record_request("generate", "error")
         raise

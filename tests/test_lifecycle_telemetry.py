@@ -73,7 +73,10 @@ class TestLifecycleTelemetry(unittest.TestCase):
     def test_w3c_traceparent_extracted_and_linked_to_span(self):
         """Verifies that W3C traceparent headers can be extracted and linked to child lifecycle spans."""
         from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
-        import opentelemetry.trace as trace
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+        import consumer
 
         carrier = {
             "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
@@ -81,14 +84,33 @@ class TestLifecycleTelemetry(unittest.TestCase):
         ctx = TraceContextTextMapPropagator().extract(carrier)
         self.assertIsNotNone(ctx)
 
-        # Call emit_lifecycle_span with parent_context
-        emit_lifecycle_span(
-            span_name="job.consumed",
-            job_id="job-w3c-test",
-            status="Consumed",
-            attributes={"base_model": "HuggingFaceTB/SmolLM2-135M"},
-            parent_context=ctx
-        )
+        exporter = InMemorySpanExporter()
+        provider = TracerProvider()
+        provider.add_span_processor(SimpleSpanProcessor(exporter))
+        test_tracer = provider.get_tracer("test-tracer")
+
+        orig_tracer = consumer.tracer
+        orig_has_otel = consumer.HAS_OTEL
+        try:
+            consumer.tracer = test_tracer
+            consumer.HAS_OTEL = True
+
+            emit_lifecycle_span(
+                span_name="job.consumed",
+                job_id="job-w3c-test",
+                status="Consumed",
+                attributes={"base_model": "HuggingFaceTB/SmolLM2-135M"},
+                parent_context=ctx
+            )
+
+            spans = exporter.get_finished_spans()
+            self.assertEqual(len(spans), 1)
+            span = spans[0]
+            self.assertEqual(span.context.trace_id, 0x4bf92f3577b34da6a3ce929d0e0e4736)
+            self.assertEqual(span.parent.span_id, 0x00f067aa0ba902b7)
+        finally:
+            consumer.tracer = orig_tracer
+            consumer.HAS_OTEL = orig_has_otel
 
     def test_job_failed_lifecycle_span_scrubs_attributes(self):
         """Verifies that job.failed span allows 'error' attribute while scrubbing sensitive payload data."""

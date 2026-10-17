@@ -180,7 +180,7 @@ public sealed class DatasetService : IDatasetService
                     validatedRecords.Add((prompt, completion));
                     recordCount++;
 
-                    if (recordCount >= MaxRecordCount)
+                    if (recordCount > MaxRecordCount)
                     {
                         return new DatasetResult(false, null, null, 0,
                             $"Dataset exceeds maximum permitted ceiling of {MaxRecordCount:N0} records.");

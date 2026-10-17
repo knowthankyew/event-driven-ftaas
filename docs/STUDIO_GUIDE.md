@@ -80,7 +80,7 @@ This is where you observe the business impact of team-specific customization:
    - Click one of the sample prompt chips (e.g. `ACH Deposit Clearance Delay` or `Contract Cancellation Past 30 Days`).
 3. **Click "Compare Models"**:
    - **Left Panel (Generic AI)**: Shows how a generic foundation model responds. Notice it gives polite but vague answers, omits policy thresholds, and forgets mandatory legal disclaimers.
-   - **Right Panel (Company Custom AI)**: Shows how a specialized model responds. Notice it cites exact policy clauses (e.g. *Regulation CC $10,000 threshold* or *Section 8.2 of Enterprise MSA*), adds automated ticket tags (`[ACH-HELD-VERIFY]`), and embeds required disclaimers.
+   - **Right Panel (Company Custom AI)**: Shows how a specialized model responds. Notice it cites exact policy clauses (e.g. *internal ACH policy $10,000 threshold* or *Section 8.2 of Enterprise MSA*), adds automated ticket tags (`[ACH-HELD-VERIFY]`), and embeds required disclaimers.
 4. **Team Policy & Disclaimer Match Inspector**:
    - Shows checkmarks (✓) for each company policy rule detected in the answer.
 

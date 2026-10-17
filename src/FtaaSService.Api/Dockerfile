@@ -23,20 +23,20 @@ WORKDIR /app
 
 RUN apk add --no-cache wget
 
-# Create data directory for SQLite jobs database
-RUN mkdir -p /app/data && chown -R $APP_UID:$APP_UID /app/data
+# Create data directory for SQLite jobs database and artifacts
+RUN mkdir -p /data/storage /data/datasets /data/artifacts && chown -R $APP_UID:$APP_UID /data
 
 COPY --from=build /app/publish .
 
 ENV ASPNETCORE_URLS=http://+:5000
 ENV ASPNETCORE_ENVIRONMENT=Production
-ENV ConnectionStrings__DefaultConnection="Data Source=/app/data/ftaas.db"
+ENV DATA_ROOT=/data
 
 USER $APP_UID
 
 EXPOSE 5000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:5000/health || exit 1
+  CMD wget -qO- http://localhost:5000/healthz || exit 1
 
 ENTRYPOINT ["dotnet", "FtaaSService.Api.dll"]

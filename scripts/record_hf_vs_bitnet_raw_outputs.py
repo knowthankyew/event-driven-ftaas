@@ -357,14 +357,20 @@ def main():
             "-no-cnv",
             "--no-display-prompt"
         ] + extra_flags
-        res = subprocess.run(cmd, capture_output=True, text=True, input="")
-        clean = res.stdout.strip()
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, input="", timeout=60)
+            returncode = res.returncode
+            clean = res.stdout.strip()
+        except subprocess.TimeoutExpired:
+            returncode = -1
+            clean = "[TIMEOUT]"
+
         gen_clean = clean.split("Assistant:")[-1].strip() if "Assistant:" in clean else clean
         eval_run = classify_output(gen_clean, pattern)
 
         bitnet_runs[name] = {
             "command": [redact_path(c) for c in cmd],
-            "returncode": res.returncode,
+            "returncode": returncode,
             "raw_output": gen_clean,
             "flags": extra_flags,
             "prompt_tokens": plen,

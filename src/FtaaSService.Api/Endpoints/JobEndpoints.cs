@@ -90,7 +90,23 @@ public static class JobEndpoints
             }
         }
 
-        // 1. Validate base model against the supported catalog
+        // 1. Validate hyperparameters range
+        if (hyperparameters is null
+            || hyperparameters.Epochs is < 1 or > 20
+            || hyperparameters.BatchSize is < 1 or > 64
+            || hyperparameters.LoraRank is < 1 or > 128
+            || hyperparameters.LoraAlpha is < 1 or > 512
+            || hyperparameters.LearningRate is <= 0 or > 0.1
+            || hyperparameters.LoraDropout is < 0 or >= 1)
+        {
+            return Results.BadRequest(new
+            {
+                error = "invalid_hyperparameters",
+                message = "Hyperparameters are outside safe operational bounds (epochs 1-20, batchSize 1-64, loraRank 1-128, loraAlpha 1-512, lr (0, 0.1], loraDropout [0, 1))."
+            });
+        }
+
+        // 2. Validate base model against the supported catalog
         if (!SupportedModels.All.Contains(baseModel))
         {
             return Results.BadRequest(new
@@ -370,38 +386,48 @@ public static class JobEndpoints
         });
     }
 
+    private static readonly SemaphoreSlim _exportLock = new(2, 2);
+
     private static async Task<(bool success, string output)> TryExecuteEdgeExportScriptAsync(
         string id,
         IConfiguration configuration,
         CancellationToken cancellationToken)
     {
-        var projectRoot = Directory.GetCurrentDirectory();
-        var pythonExe = configuration.GetValue<string>("PYTHON_EXE");
-        if (string.IsNullOrEmpty(pythonExe))
+        if (!await _exportLock.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken))
         {
-            var candidates = new[]
-            {
-                Path.Combine(projectRoot, "src", "FtaaSService.Worker", ".venv", "bin", "python"),
-                Path.Combine(projectRoot, "..", "src", "FtaaSService.Worker", ".venv", "bin", "python"),
-                Path.Combine(projectRoot, "..", "..", "src", "FtaaSService.Worker", ".venv", "bin", "python")
-            };
-            pythonExe = candidates.FirstOrDefault(File.Exists) ?? "python3";
-        }
-
-        var scriptCandidates = new[]
-        {
-            Path.Combine(projectRoot, "scripts", "export_edge_adapter.py"),
-            Path.Combine(projectRoot, "..", "scripts", "export_edge_adapter.py"),
-            Path.Combine(projectRoot, "..", "..", "scripts", "export_edge_adapter.py")
-        };
-        var scriptPath = scriptCandidates.FirstOrDefault(File.Exists);
-        if (scriptPath is null)
-        {
-            return (false, "export_edge_adapter.py script not found on disk.");
+            return (false, "Export service is currently busy. Please try again shortly.");
         }
 
         try
         {
+            var projectRoot = Directory.GetCurrentDirectory();
+            var pythonExe = configuration.GetValue<string>("PYTHON_EXE");
+            if (string.IsNullOrEmpty(pythonExe))
+            {
+                var candidates = new[]
+                {
+                    Path.Combine(projectRoot, "src", "FtaaSService.Worker", ".venv", "bin", "python"),
+                    Path.Combine(projectRoot, "..", "src", "FtaaSService.Worker", ".venv", "bin", "python"),
+                    Path.Combine(projectRoot, "..", "..", "src", "FtaaSService.Worker", ".venv", "bin", "python")
+                };
+                pythonExe = candidates.FirstOrDefault(File.Exists) ?? "python3";
+            }
+
+            var scriptCandidates = new[]
+            {
+                Path.Combine(projectRoot, "scripts", "export_edge_adapter.py"),
+                Path.Combine(projectRoot, "..", "scripts", "export_edge_adapter.py"),
+                Path.Combine(projectRoot, "..", "..", "scripts", "export_edge_adapter.py")
+            };
+            var scriptPath = scriptCandidates.FirstOrDefault(File.Exists);
+            if (scriptPath is null)
+            {
+                return (false, "export_edge_adapter.py script not found on disk.");
+            }
+
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromMinutes(15));
+
             var psi = new ProcessStartInfo
             {
                 FileName = pythonExe,
@@ -415,20 +441,32 @@ public static class JobEndpoints
             using var process = Process.Start(psi);
             if (process is null) return (false, "Could not start Python export process.");
 
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            try
+            {
+                var stdoutTask = process.StandardOutput.ReadToEndAsync(cts.Token);
+                var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
 
-            await process.WaitForExitAsync(cancellationToken);
-            var stdout = await stdoutTask;
-            var stderr = await stderrTask;
+                await process.WaitForExitAsync(cts.Token);
+                var stdout = await stdoutTask;
+                var stderr = await stderrTask;
 
-            return process.ExitCode == 0
-                ? (true, stdout)
-                : (false, string.IsNullOrWhiteSpace(stderr) ? stdout : stderr);
+                return process.ExitCode == 0
+                    ? (true, stdout)
+                    : (false, "Edge export process exited with a non-zero exit code.");
+            }
+            catch (OperationCanceledException)
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+                return (false, "Edge export timed out or was cancelled.");
+            }
         }
         catch (Exception ex)
         {
             return (false, ex.Message);
+        }
+        finally
+        {
+            _exportLock.Release();
         }
     }
 }

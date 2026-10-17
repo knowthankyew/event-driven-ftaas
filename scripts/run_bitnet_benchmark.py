@@ -73,7 +73,7 @@ def main():
     if not doc_path.exists():
         doc_path = DEV_ROOT / "BITNET_PROTOTYPE_RESULTS.md"
     if doc_path.exists():
-        print(f"Recorded results to {doc_path.name}")
+        print(f"Benchmark finished. To update {doc_path.name}, review and paste the benchmark table above into the document.")
 
 
 if __name__ == "__main__":

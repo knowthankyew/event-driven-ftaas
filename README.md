@@ -45,7 +45,7 @@ Then open your browser to **[http://localhost:5100](http://localhost:5100)**.
 5. **📚 Adapter Library**: View trained department models with base model indicators, inspect their lightweight footprint (~1.8 MB for SmolLM2, ~12.2 MB for Gemma 2B), and load them into the arena with one click.
 
 > [!NOTE]
-> **Preview vs. Live Compute**: When launched standalone via `start-studio.sh`, the studio operates in **Interactive Preview Mode** with pre-formatted demonstration outputs so you can evaluate the interface without spinning up Docker containers or downloading multi-gigabyte models. To run live on-device GPU inference, start Docker and the Python services via `./scripts/dev-up.sh`.
+> **Preview vs. Live Compute**: When launched standalone via `start-studio.sh`, the studio operates in **Interactive Preview Mode** with pre-formatted demonstration outputs so you can evaluate the interface without spinning up Docker containers or downloading multi-gigabyte models. To run live on-device GPU inference, start Docker and the Python services via `./scripts/dev-up.sh` and launch the compute worker and inference engine (`python3 src/FtaaSService.Worker/consumer.py` and `python3 src/FtaaSService.Inference/app.py`).
 
 > [!CAUTION]
 > **Data Privacy & Guardrail Scope**: Automated heuristic checks detect delimited SSNs and Luhn-valid credit card numbers across all columns (including unmapped metadata). However, this is a best-effort defense, not an exhaustive DLP certification tool. Always sanitize datasets prior to training.

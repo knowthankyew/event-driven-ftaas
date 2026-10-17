@@ -58,7 +58,7 @@ public static class StudioEndpoints
                 ComplianceRules: new List<string>
                 {
                     "Mandatory FDIC deposit status disclaimer",
-                    "Reg CC 3-5 business day ACH clearance notification for >$10K",
+                    "Reg CC / internal ACH 3-5 business day clearance notification for >$10K",
                     "Strict non-advisory disclaimer for crypto/stocks (FINRA Rule 2210)",
                     "BSA/AML Enhanced Due Diligence (EDD) ticketing tags"
                 },
@@ -68,7 +68,7 @@ public static class StudioEndpoints
                         Title: "ACH Deposit Clearance Delay",
                         Prompt: "Customer ticket: User states their account transfer of $15,000 from external credit union is delayed past 2 business days. How should we advise them regarding clearance and compliance?",
                         ExpectedBaseIssue: "Generic apology without mentioning Reg CC, FinCEN thresholds, or required FDIC deposit disclaimers.",
-                        ExpectedTunedBenefit: "Cites Reg CC $10,000 threshold, tags [ACH-HELD-VERIFY], and embeds mandatory FDIC disclaimer."
+                        ExpectedTunedBenefit: "Cites internal ACH policy $10,000 threshold, tags [ACH-HELD-VERIFY], and embeds mandatory FDIC disclaimer."
                     ),
                     new(
                         Title: "Investment/Crypto Advice Request",

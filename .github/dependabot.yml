@@ -38,15 +38,25 @@ updates:
 
   # Docker Container Images
   - package-ecosystem: "docker"
+    directory: "/src/FtaaSService.Api"
+    schedule:
+      interval: "weekly"
+    assignees:
+      - "knowthankyew"
+
+  - package-ecosystem: "docker"
+    directory: "/src/FtaaSService.Worker"
+    schedule:
+      interval: "weekly"
+    assignees:
+      - "knowthankyew"
+
+  - package-ecosystem: "docker-compose"
     directory: "/"
     schedule:
       interval: "weekly"
     assignees:
       - "knowthankyew"
-    ignore:
-      # Maintain LTS stability
-      - dependency-name: "node"
-        update-types: ["version-update:semver-major"]
 
   # GitHub Actions
   - package-ecosystem: "github-actions"

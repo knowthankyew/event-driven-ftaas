@@ -247,7 +247,10 @@ def build_bitnet_generate_cmd(
         elif p.is_dir() and (p / "adapter.gguf").is_file():
             cmd.extend(["--lora", str(p / "adapter.gguf")])
         else:
-            logger.warning(f"Requested adapter at '{adapter_path}' does not contain a GGUF file; running base BitNet")
+            raise BitNetExecutionError(
+                f"Requested adapter at '{adapter_path}' does not contain a GGUF LoRA file (adapter.gguf); "
+                f"convert the PEFT adapter to GGUF format before BitNet native inference."
+            )
     return wrap_sandboxed_cmd(cmd)
 
 

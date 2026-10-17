@@ -18,9 +18,22 @@ builder.Services.AddHttpClient();
 
 // Add ProblemDetails & CORS
 builder.Services.AddProblemDetails();
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+    options.AddDefaultPolicy(p =>
+    {
+        if (allowedOrigins.Length > 0)
+        {
+            p.WithOrigins(allowedOrigins).AllowAnyMethod().AllowAnyHeader();
+        }
+        else
+        {
+            p.WithOrigins("http://localhost:5100", "http://127.0.0.1:5100", "http://localhost:5000", "http://127.0.0.1:5000")
+             .AllowAnyMethod()
+             .AllowAnyHeader();
+        }
+    });
 });
 
 var app = builder.Build();

@@ -266,6 +266,24 @@ class JobConsumer:
             ch.basic_ack(delivery_tag=method.delivery_tag)
             logger.info(f"==> Job {job_id} successfully completed and acknowledged.")
 
+        except (FileNotFoundError, PermissionError, IsADirectoryError) as ex:
+            # Permanent filesystem errors: fail the job and dead-letter it
+            tb = traceback.format_exc()
+            logger.error(f"Permanent filesystem error processing Job {job_id}: {ex}\n{tb}")
+            if job_id:
+                finished_at = datetime.now(timezone.utc).isoformat()
+                self.publish_status_update(
+                    job_id=job_id,
+                    status="Failed",
+                    error_message=str(ex),
+                    started_at=started_at,
+                    finished_at=finished_at
+                )
+                emit_lifecycle_span("job.failed", job_id, "Failed", attributes={
+                    "error": str(ex)
+                }, parent_context=self.current_context)
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+
         except (ConnectionError, TimeoutError, OSError) as ex:
             # Transient infrastructure errors (network blips, disk locks, MLflow timeouts)
             # — requeue the message so it can be retried on the next delivery

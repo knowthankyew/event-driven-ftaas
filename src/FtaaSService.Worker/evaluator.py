@@ -75,7 +75,11 @@ def evaluate_model(
             new_tokens = out_tokens[0][gen_inputs["input_ids"].shape[1]:]
             completion = tokenizer.decode(new_tokens, skip_special_tokens=True)
 
-            if "SENTIMENT:" in completion or "METRICS:" in completion:
+            expected_tags = [w for w in ["SENTIMENT:", "METRICS:"] if w in expected]
+            if expected_tags:
+                if any(tag in completion for tag in expected_tags):
+                    correct_format += 1
+            elif completion.strip():
                 correct_format += 1
 
     avg_loss = round(total_loss / len(records), 4)

@@ -126,7 +126,7 @@ def evaluate_clause_set(clauses, tok, model, name="clauses"):
                 native_ids = parsed
 
         native_count = len(native_ids) if native_ids else bitnet_engine.count_embed_tokens(clause_text)
-        exact_match = (native_ids == hf_ids) if (native_ids and hf_ids) else (native_count == hf_tok_count)
+        exact_match = (native_ids == hf_ids) if native_ids else None
 
         # C. Native bitnet.cpp embedding
         start_t = time.perf_counter()
@@ -154,7 +154,7 @@ def evaluate_clause_set(clauses, tok, model, name="clauses"):
             "hf_token_count": hf_tok_count,
             "native_token_count": native_count,
             "hf_token_ids": hf_ids,
-            "native_token_ids": native_ids if native_ids else hf_ids,
+            "native_token_ids": native_ids,
             "token_ids_exact_match": exact_match,
             "bitnet_latency_ms": round(bitnet_lat, 2),
             "bitnet_dim": len(bitnet_vec),
@@ -192,7 +192,7 @@ def evaluate_clause_set(clauses, tok, model, name="clauses"):
         "pearson_pvalue": p_r,
         "r_squared": round(r_squared, 4),
         "variance_explained_pct": round(r_squared * 100.0, 1),
-        "all_tokens_match": all(r["token_ids_exact_match"] for r in clause_results),
+        "all_tokens_match": all(r["token_ids_exact_match"] is True for r in clause_results),
         "mean_latency_ms": round(float(np.mean([r["bitnet_latency_ms"] for r in clause_results])), 2)
     }
 

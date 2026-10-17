@@ -40,8 +40,8 @@ public static class MetricsEndpoints
             }
 
             var statuses = new[] { "Pending", "Queued", "Training", "Succeeded", "Failed" };
-            sb.AppendLine("# HELP ftaas_jobs_total Total fine-tuning jobs recorded by status.");
-            sb.AppendLine("# TYPE ftaas_jobs_total counter");
+            sb.AppendLine("# HELP ftaas_jobs_total Current number of fine-tuning jobs recorded by status.");
+            sb.AppendLine("# TYPE ftaas_jobs_total gauge");
             foreach (var status in statuses)
             {
                 jobCounts.TryGetValue(status, out var count);

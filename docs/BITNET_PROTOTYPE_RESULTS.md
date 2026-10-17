@@ -118,13 +118,13 @@ $$h = W_0 \cdot x + \frac{\alpha}{r} (B \cdot A) \cdot x$$
    - **Multi-Tenant Edge Serving**: Base BitNet weights stay in memory as 1.1 GB ternary integers; request-time forward passes execute ternary SIMD additions on CPU in parallel with tiny float LoRA adapter projections.
 4. **Runtime Separation (Training vs Inference)**:
    - **`bitnet.cpp` (Inference)**: C++ AVX2 lookup-table runtime optimized exclusively for forward-pass token decode. Memory footprint is strictly bounded to the 1.10 GiB model weights.
-   - **PyTorch `BitLinear` + PEFT (Training)**: Forward/backward autograd graph execution requires ~4.5–6.0 GB of standard host system RAM (DRAM) to store activation tensors and float32 adapter gradients, but requires **0.0 GB of dedicated GPU accelerator VRAM**.
+   - **PyTorch `BitLinear` + PEFT (Training)**: Forward/backward autograd graph execution stores activation tensors and float32 adapter gradients, running under Apple Silicon Metal (MPS) device acceleration or CPU without requiring dedicated high-end server clusters.
 
 ---
 
 ## 7. Empirical LoRA Fine-Tuning Benchmark Results
 
-LoRA fine-tuning was executed end-to-end on `microsoft/BitNet-b1.58-2B-4T` targeting `datasets/sample-financial-sentiment.jsonl` (20 financial sentiment and regulatory records):
+LoRA fine-tuning was executed end-to-end on `microsoft/BitNet-b1.58-2B-4T` targeting `data/datasets/sample-financial-sentiment.jsonl` (20 financial sentiment and regulatory records):
 
 ```
 +-----------------------------------------------------------------------------------------+

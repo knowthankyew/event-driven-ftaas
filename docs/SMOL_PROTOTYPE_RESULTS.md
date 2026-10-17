@@ -1,7 +1,7 @@
 # SmolLM2-135M Prototype Evaluation & Edge Deployment Results
 
 > **Target Model**: [`HuggingFaceTB/SmolLM2-135M`](https://huggingface.co/HuggingFaceTB/SmolLM2-135M) / [`HuggingFaceTB/SmolLM2-135M-Instruct`](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct)  
-> **Architecture**: Ultra-Compact Transformer (30 Layers, Hidden Dim 576, 3 Intermediate Dim, 9 Attention Heads, 3 KV Heads)  
+> **Architecture**: Ultra-Compact Transformer (30 Layers, Hidden Dim 576, 1,536 Intermediate Dim, 9 Attention Heads, 3 KV Heads)  
 > **Toolchain Engine**: PyTorch PEFT (LoRA) + Hugging Face Transformers + ONNX Runtime (WebGPU / WASM)  
 > **Host Environment**: macOS (Darwin x86_64, Intel Core i9-9880H @ 2.3 GHz 8-Core, 16 GB RAM) / Apple Silicon (MPS)  
 > **Primary Authority**: [`KNOWTHANKYEW_PORTFOLIO_MASTER_BRIEF.md`](https://gist.github.com/knowthankyew/53ccf4d5a81e916f895c74e18b231e16)  
@@ -13,7 +13,7 @@
 
 This document records the empirical benchmarking, fine-tuning convergence, and edge deployment evaluation of **SmolLM2-135M**, the baseline ultra-compact foundation model in the Event-Driven FTaaS platform.
 
-SmolLM2-135M serves as the platform's primary edge tier, designed for sub-second fine-tuning cycles, zero-cost local developer iteration, and client-side browser inference via WebAssembly and WebGPU. With an unquantized memory footprint of approximately **270 MB**, SmolLM2 executes efficiently across commodity laptops, smartphones, point-of-sale terminals, and browser tabs with zero server infrastructure overhead.
+SmolLM2-135M serves as the platform's primary edge tier, designed for rapid 2-minute fine-tuning cycles, zero-cost local developer iteration, and client-side browser inference via WebAssembly and WebGPU. With an unquantized memory footprint of approximately **270 MB**, SmolLM2 executes efficiently across commodity laptops, smartphones, point-of-sale terminals, and browser tabs with zero server infrastructure overhead.
 
 ```
 +-----------------------------------------------------------------------------------------+

@@ -354,10 +354,15 @@ def train_job(
         # 10. Automated Validation Evaluation & Model Registry
         try:
             from evaluator import evaluate_model, register_model_in_registry
-            val_dataset_path = DATA_ROOT / "datasets" / "sample-financial-sentiment-val.jsonl"
-            eval_metrics = evaluate_model(peft_model, tokenizer, val_dataset_path, base_model=base_model_name)
-            mlflow.log_metric("eval/loss", eval_metrics["eval_loss"])
-            mlflow.log_metric("eval/format_accuracy", eval_metrics["format_accuracy"])
+            ds_p = Path(dataset_path)
+            val_candidate = ds_p.parent / f"{ds_p.stem}-val{ds_p.suffix}"
+            if val_candidate.exists():
+                eval_metrics = evaluate_model(peft_model, tokenizer, val_candidate, base_model=base_model_name)
+                mlflow.log_metric("eval/loss", eval_metrics["eval_loss"])
+                if "format_accuracy" in eval_metrics:
+                    mlflow.log_metric("eval/format_accuracy", eval_metrics["format_accuracy"])
+            else:
+                logger.info(f"No companion validation split found for {ds_p.name}; skipping eval split metrics.")
 
             registered_version = register_model_in_registry(
                 run_id=run_id,

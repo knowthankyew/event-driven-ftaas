@@ -87,11 +87,16 @@ public sealed class JobStatusListener : BackgroundService
 
                         await channel.BasicAckAsync(ea.DeliveryTag, multiple: false);
                     }
+                    catch (JsonException ex)
+                    {
+                        _logger.LogError(ex, "Malformed JobUpdated event: payload cannot be deserialized.");
+                        // nack without requeue if message is malformed JSON
+                        await channel.BasicNackAsync(ea.DeliveryTag, multiple: false, requeue: false);
+                    }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Failed processing JobUpdated event.");
-                        // nack without requeue if message is malformed
-                        await channel.BasicNackAsync(ea.DeliveryTag, multiple: false, requeue: false);
+                        _logger.LogWarning(ex, "Transient failure processing JobUpdated event; requeueing.");
+                        await channel.BasicNackAsync(ea.DeliveryTag, multiple: false, requeue: true);
                     }
                 };
 
