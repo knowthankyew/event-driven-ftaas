@@ -5,21 +5,21 @@ peft>=0.21.2
 accelerate>=1.15.0
 datasets>=5.1.0
 onnx>=1.23.2
-onnxruntime>=1.30.0
+onnxruntime>=1.31.0
 
 # Compatibility Pins
 numpy<3.0.0
 scipy<1.19.0
 
 # MLOps & Experiment Tracking
-mlflow>=3.17.0
+mlflow>=3.17.1
 
 # Messaging & Serving Utilities
 pika>=1.4.4
-pydantic>=2.13.5
-fastapi>=0.142.4
+pydantic>=2.14.1
+fastapi>=0.143.1
 uvicorn>=0.54.0
 
 # Observability & Telemetry
-opentelemetry-api>=1.44.0
-opentelemetry-sdk>=1.44.0
+opentelemetry-api>=1.45.1
+opentelemetry-sdk>=1.45.1
