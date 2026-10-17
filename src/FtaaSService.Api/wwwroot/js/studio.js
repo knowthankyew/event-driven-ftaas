@@ -144,7 +144,7 @@
       if (res.ok) {
         state.supportedModels = await res.json();
         if (Array.isArray(state.supportedModels) && state.supportedModels.length > 0) {
-          // If active model is not set or not in catalog, default to first (BitNet)
+          // If active model is not set or not in catalog, default to first (Gemma 2 2B IT)
           if (!state.activeBaseModel || !state.supportedModels.some(m => m.modelId === state.activeBaseModel)) {
             state.activeBaseModel = state.supportedModels[0].modelId;
           }
@@ -868,9 +868,33 @@
       let compIdx = 1;
       let startRow = 0;
 
+      function parseCsvRow(row) {
+        const fields = [];
+        let field = '';
+        let inQuotes = false;
+        for (let j = 0; j < row.length; j++) {
+          const c = row[j];
+          if (c === '"') {
+            if (inQuotes && row[j + 1] === '"') {
+              field += '"';
+              j++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (c === ',' && !inQuotes) {
+            fields.push(field.trim());
+            field = '';
+          } else {
+            field += c;
+          }
+        }
+        fields.push(field.trim());
+        return fields;
+      }
+
       // Check for header row
       if (lines.length > 0) {
-        const headerParts = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
+        const headerParts = parseCsvRow(lines[0]).map(h => h.toLowerCase().replace(/['"]/g, ''));
         const pIdx = headerParts.findIndex(h => h === 'prompt' || h === 'question' || h === 'inquiry');
         const cIdx = headerParts.findIndex(h => h === 'completion' || h === 'response' || h === 'answer');
         if (pIdx !== -1 && cIdx !== -1) {
@@ -882,12 +906,10 @@
 
       for (let i = startRow; i < lines.length; i++) {
         const line = lines[i];
-        const parts = line.split(',');
+        const parts = parseCsvRow(line);
         if (parts.length > Math.max(promptIdx, compIdx)) {
-          const prompt = parts[promptIdx].trim().replace(/^["']|["']$/g, '');
-          const comp = (compIdx === parts.length - 1)
-            ? parts.slice(compIdx).join(',').trim().replace(/^["']|["']$/g, '')
-            : parts[compIdx].trim().replace(/^["']|["']$/g, '');
+          const prompt = parts[promptIdx].replace(/^["']|["']$/g, '');
+          const comp = parts[compIdx].replace(/^["']|["']$/g, '');
           parsed.push({ prompt, completion: comp });
         }
         // Scan full raw line across all CSV columns (including unmapped notes/metadata)

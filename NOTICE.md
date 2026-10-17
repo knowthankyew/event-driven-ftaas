@@ -13,7 +13,7 @@ Event-Driven FTaaS provides distributed fine-tuning and inference services acros
 All lifecycle spans emitted across the API and worker layers enforce a strict allowlist (`SAFE_ALLOWLIST_KEYS`). Dataset samples, prompts, completions, and model weights are strictly forbidden from telemetry attributes.
 
 ## 3. Software Bill of Materials (SBOM)
-Complete CycloneDX Software Bills of Materials (`bom.json`) for both .NET dependencies and Python virtual environments are generated on build in CI via OWASP `@cyclonedx/cdxgen` and attached to release artifacts.
+Complete CycloneDX Software Bills of Materials (`bom.json`) for both .NET dependencies and Python virtual environments are generated on build in CI via OWASP `@cyclonedx/cdxgen` and uploaded as workflow artifacts.
 
 ## 4. Third-Party Foundation Models Attribution
 This platform enables fine-tuning and inference orchestration with third-party foundation models:

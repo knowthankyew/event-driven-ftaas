@@ -10,7 +10,7 @@ namespace FtaaSService.Api.Endpoints;
 
 public static class MetricsEndpoints
 {
-    private static readonly DateTimeOffset ProcessStartTime = DateTimeOffset.UtcNow;
+    private static readonly DateTimeOffset ProcessStartTime = Process.GetCurrentProcess().StartTime.ToUniversalTime();
 
     public static void MapMetricsEndpoints(this IEndpointRouteBuilder app)
     {

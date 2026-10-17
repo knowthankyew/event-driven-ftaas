@@ -1053,7 +1053,7 @@ main.app-main {
   font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all 0.2s ease;
 }
 
 .model-chip-btn:hover {

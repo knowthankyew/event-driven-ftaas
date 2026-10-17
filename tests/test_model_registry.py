@@ -17,11 +17,15 @@ from model_registry import (
     SMOLLM2,
     GEMMA_2_2B_IT,
     BITNET_2B_4T,
+    DEFAULT_MODEL_ID,
     SUPPORTED_MODEL_IDS,
 )
 
 
 class TestModelRegistrySpecs(unittest.TestCase):
+
+    def test_default_model_id_is_gemma(self):
+        self.assertEqual(DEFAULT_MODEL_ID, GEMMA_2_2B_IT)
 
     def test_smollm2_spec_is_registered(self):
         spec = get_model_spec(SMOLLM2)

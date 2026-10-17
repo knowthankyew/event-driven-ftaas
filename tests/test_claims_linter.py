@@ -130,12 +130,13 @@ class TestClaimsLinter(unittest.TestCase):
             cid = c["id"]
             if cid in verifier_by_id:
                 ver_s = verifier_by_id[cid]
-                if ver_s.get("verified_on") is not None and c.get("verified_on") is not None:
+                if ver_s.get("verified_on") is not None:
+                    self.assertIsNotNone(c.get("verified_on"), f"Expected corpus verified_on for {cid}")
                     self.assertTrue(
                         ver_s["verified_on"].startswith(c["verified_on"]),
                         f"verified_on mismatch for {cid}: corpus={c['verified_on']}, verifier={ver_s['verified_on']}"
                     )
-                elif ver_s.get("verified_on") is None:
+                else:
                     self.assertIsNone(c.get("verified_on"), f"Expected verified_on None for {cid}")
 
     def test_empirical_retrieval_benchmark(self):

@@ -99,6 +99,7 @@ _REGISTRY: dict = {
 SMOLLM2 = "HuggingFaceTB/SmolLM2-135M"
 GEMMA_2_2B_IT = "google/gemma-2-2b-it"
 BITNET_2B_4T = "microsoft/BitNet-b1.58-2B-4T"
+DEFAULT_MODEL_ID = GEMMA_2_2B_IT
 SUPPORTED_MODEL_IDS: frozenset = frozenset(_REGISTRY.keys())
 
 

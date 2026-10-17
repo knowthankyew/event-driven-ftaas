@@ -109,8 +109,8 @@ class TestAdapterIntegrity(unittest.TestCase):
 
     def test_generate_rejects_base_model_mismatch_for_pytorch_runtime(self):
         """Validates that Route 2 of generate checks base_model mismatch and returns 409."""
-        app.model_store.base_model = MagicMock()
-        app.model_store.tokenizer = MagicMock()
+        self.enterContext(patch.object(app.model_store, "base_model", MagicMock()))
+        self.enterContext(patch.object(app.model_store, "tokenizer", MagicMock()))
         req = app.GenerateRequest(
             baseModel="google/gemma-2-2b-it",
             prompt="Test prompt"

@@ -20,9 +20,8 @@ if ! command -v dotnet >/dev/null 2>&1; then
 fi
 
 DOTNET_VER=$(dotnet --version 2>/dev/null || echo "Unknown")
-DOTNET_MAJOR=$(echo "$DOTNET_VER" | cut -d. -f1)
 
-if [ "$DOTNET_MAJOR" != "10" ]; then
+if ! dotnet --list-sdks 2>/dev/null | grep -q "^10\."; then
     echo "❌ Missing Prerequisite: .NET 10 SDK is required, but detected v$DOTNET_VER."
     echo ""
     echo "👉 To run FTaaS Studio, please install the free .NET 10 SDK from:"
