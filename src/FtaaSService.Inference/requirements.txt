@@ -1,6 +1,6 @@
-fastapi>=0.142.4
+fastapi>=0.143.1
 uvicorn>=0.54.0
 torch>=2.14.1
 transformers>=5.19.0,<5.20
 peft>=0.21.2
-pydantic>=2.13.5
+pydantic>=2.14.1
