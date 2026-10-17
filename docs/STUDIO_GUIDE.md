@@ -117,6 +117,12 @@ Use this tab to create or modify custom rules for your team:
      - **SmolLM2 135M** *(Ultra-Compact • Fast / Zero-Cost)*: Fine-tunes in ~2 minutes with ~1.8 MB adapter footprint. Perfect for rapid prototyping, edge devices, and compact prompt context (2,048 tokens).
      - **BitNet b1.58 2B-4T** *(Experimental • 1.58-bit Ternary CPU)*: 1.58-bit ternary foundation model operating on commodity CPUs without GPU VRAM (4,096-token architectural context, bounded by experimental safety guardrails: 16-token generation cap and 240-token embedding cap).
    - *Hardware & Licensing Guardrail*: Selecting Gemma 2B dynamically displays an amber guidance box detailing the 8 GB VRAM recommendation and reminding operators to accept Google's model license on Hugging Face and provide an `HF_TOKEN`. Selecting BitNet displays guidance noting the experimental generation cap and CPU-only ternary runtime.
+   - *Document Capacity & T-Shirt Sizing (Rule of thumb: 1,000 tokens ≈ 750 words / ~3 single-spaced pages)*:
+     | Model Tier | T-Shirt Size | Ingestion Capacity | Real-World Document Equivalent |
+     | :--- | :--- | :--- | :--- |
+     | **SmolLM2-135M** | **Medium (M)** | ~1,500 words (`2,048 tokens`) | ~3–4 pages: Customer support tickets, focused FAQs, standard policy snippets |
+     | **Gemma 2 2B IT** | **Large (XL)** | ~6,000 words (`8,192 tokens`) | ~12–15 pages: Full contracts, dense multi-statute acts, complex compliance manuals |
+     | **BitNet b1.58** *(Bounded)* | **Micro (XXS)** | ~180 words (`240 embed / 16 gen`) | Index card: Search queries, keywords, single-sentence classification tags |
 4. **Deploy Team Adapter**:
    - Give your model a name (e.g., `support-team-v1`).
    - Click **"Train & Deploy Team Adapter"**.
