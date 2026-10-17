@@ -216,7 +216,8 @@ public static class JobEndpoints
         [FromQuery] int? limit,
         CancellationToken cancellationToken)
     {
-        var jobs = await jobRepository.ListAsync(limit ?? 50, cancellationToken);
+        var clampedLimit = Math.Clamp(limit ?? 50, 1, 200);
+        var jobs = await jobRepository.ListAsync(clampedLimit, cancellationToken);
         var response = jobs.Select(MapToDetailResponse);
         return Results.Ok(response);
     }
@@ -428,6 +429,7 @@ public static class JobEndpoints
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromMinutes(15));
 
+            var dataRoot = configuration.GetValue<string>("DATA_ROOT") ?? Path.Combine(projectRoot, "data");
             var psi = new ProcessStartInfo
             {
                 FileName = pythonExe,
@@ -437,6 +439,7 @@ public static class JobEndpoints
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+            psi.Environment["DATA_ROOT"] = Path.GetFullPath(dataRoot);
 
             using var process = Process.Start(psi);
             if (process is null) return (false, "Could not start Python export process.");

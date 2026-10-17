@@ -10,12 +10,15 @@ public static class HealthEndpoints
 {
     public static void MapHealthEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/healthz", async (
-            [FromServices] IJobRepository jobRepository,
-            [FromServices] IEventPublisher eventPublisher,
-            [FromServices] IOptions<RabbitMqConfig> rabbitOptions,
-            CancellationToken cancellationToken) =>
-        {
+        app.MapGet("/healthz", GetHealthAsync);
+    }
+
+    public static async Task<IResult> GetHealthAsync(
+        [FromServices] IJobRepository jobRepository,
+        [FromServices] IEventPublisher eventPublisher,
+        [FromServices] IOptions<RabbitMqConfig> rabbitOptions,
+        CancellationToken cancellationToken)
+    {
             var checks = new Dictionary<string, string>();
             bool healthy = true;
 
@@ -87,6 +90,5 @@ public static class HealthEndpoints
             };
 
             return healthy ? Results.Ok(result) : Results.Json(result, statusCode: StatusCodes.Status503ServiceUnavailable);
-        });
     }
 }

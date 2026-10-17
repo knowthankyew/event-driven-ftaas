@@ -355,14 +355,15 @@ def train_job(
         try:
             from evaluator import evaluate_model, register_model_in_registry
             ds_p = Path(dataset_path)
-            val_candidate = ds_p.parent / f"{ds_p.stem}-val{ds_p.suffix}"
+            resolved_ds = ds_p if ds_p.is_absolute() else (DATA_ROOT / ds_p).resolve()
+            val_candidate = resolved_ds.parent / f"{resolved_ds.stem}-val{resolved_ds.suffix}"
             if val_candidate.exists():
                 eval_metrics = evaluate_model(peft_model, tokenizer, val_candidate, base_model=base_model_name)
                 mlflow.log_metric("eval/loss", eval_metrics["eval_loss"])
                 if "format_accuracy" in eval_metrics:
                     mlflow.log_metric("eval/format_accuracy", eval_metrics["format_accuracy"])
             else:
-                logger.info(f"No companion validation split found for {ds_p.name}; skipping eval split metrics.")
+                logger.info(f"No companion validation split found for {resolved_ds.name}; skipping eval split metrics.")
 
             registered_version = register_model_in_registry(
                 run_id=run_id,
@@ -370,7 +371,8 @@ def train_job(
                 base_model=base_model_name,
                 dataset_hash=dataset_hash
             )
-            mlflow.set_tag("model_version", registered_version)
+            if registered_version is not None:
+                mlflow.set_tag("model_version", registered_version)
         except Exception as eval_ex:
             logger.warning(f"Evaluation or Model Registry step encountered notice: {eval_ex}")
 

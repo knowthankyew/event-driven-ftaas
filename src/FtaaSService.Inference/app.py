@@ -545,11 +545,20 @@ def compare_completions(req: CompareRequest):
                 }
             )
 
-        # 1. Generate with raw Base Model
-        if model_store.peft_model is not None and hasattr(model_store.peft_model, "disable_adapter"):
-            with model_store.peft_model.disable_adapter():
+        # 1. Validate and load Fine-Tuned LoRA Adapter before running base generation
+        if not req.adapterPath:
+            raise HTTPException(
+                status_code=400,
+                detail="adapterPath is required for side-by-side comparison"
+            )
+
+        peft_model = load_or_get_adapter(req.adapterPath)
+
+        # 2. Generate with raw Base Model
+        if peft_model is not None and hasattr(peft_model, "disable_adapter"):
+            with peft_model.disable_adapter():
                 base_completion, base_latency = generate_tokens(
-                    model_store.peft_model,
+                    peft_model,
                     model_store.tokenizer,
                     req.prompt,
                     req.maxTokens,
@@ -566,14 +575,7 @@ def compare_completions(req: CompareRequest):
                 base_model_id=DEFAULT_BASE_MODEL
             )
 
-        # 2. Generate with Fine-Tuned LoRA Adapter
-        if not req.adapterPath:
-            raise HTTPException(
-                status_code=400,
-                detail="adapterPath is required for side-by-side comparison"
-            )
-
-        peft_model = load_or_get_adapter(req.adapterPath)
+        # 3. Generate with Fine-Tuned LoRA Adapter
         fine_tuned_completion, fine_tuned_latency = generate_tokens(
             peft_model,
             model_store.tokenizer,
@@ -606,7 +608,10 @@ def compare_completions(req: CompareRequest):
     except BitNetExecutionError as bee:
         metrics.record_request("compare", "error")
         logger.error(f"BitNet comparison execution failed: {bee}")
-        raise HTTPException(status_code=422, detail=str(bee))
+        raise HTTPException(
+            status_code=422,
+            detail="BitNet adapter execution failed. Ensure a valid GGUF LoRA adapter exists for this job."
+        )
     except HTTPException:
         metrics.record_request("compare", "error")
         raise
@@ -728,7 +733,10 @@ def generate(req: GenerateRequest):
     except BitNetExecutionError as bee:
         metrics.record_request("generate", "error")
         logger.error(f"BitNet generation execution failed: {bee}")
-        raise HTTPException(status_code=422, detail=str(bee))
+        raise HTTPException(
+            status_code=422,
+            detail="BitNet adapter execution failed. Ensure a valid GGUF LoRA adapter exists for this job."
+        )
     except HTTPException:
         metrics.record_request("generate", "error")
         raise

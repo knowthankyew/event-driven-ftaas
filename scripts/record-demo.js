@@ -69,15 +69,22 @@ async function sleep(ms) {
   if (!fs.existsSync(tempVideoDir)) fs.mkdirSync(tempVideoDir, { recursive: true });
 
   console.log('Launching browser for automated demo recording...');
-  const browserPath = fs.existsSync('/Applications/Brave Browser.app/Contents/MacOS/Brave Browser')
-    ? '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'
-    : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  let executablePath = undefined;
+  if (fs.existsSync('/Applications/Brave Browser.app/Contents/MacOS/Brave Browser')) {
+    executablePath = '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser';
+  } else if (fs.existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')) {
+    executablePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  }
 
-  const browser = await chromium.launch({
-    executablePath: browserPath,
+  const launchOptions = {
     headless: true,
     args: ['--no-sandbox', '--disable-gpu', '--window-size=1366,860']
-  });
+  };
+  if (executablePath) {
+    launchOptions.executablePath = executablePath;
+  }
+
+  const browser = await chromium.launch(launchOptions);
 
   const context = await browser.newContext({
     viewport: { width: 1366, height: 860 },

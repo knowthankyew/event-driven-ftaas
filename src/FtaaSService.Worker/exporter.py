@@ -81,7 +81,7 @@ def export_to_edge_onnx(
     edge_output_dir.mkdir(parents=True, exist_ok=True)
 
     model_onnx_path = edge_output_dir / "model.onnx"
-    quantization_type = "int8" if quantize else "fp32"
+    quantization_type = "fp32"
 
     # 3. Export / Package ONNX model
     if mock_for_test:
@@ -139,6 +139,7 @@ def export_to_edge_onnx(
                 quantized_path = edge_output_dir / "model_int8.onnx"
                 quantize_dynamic(str(model_onnx_path), str(quantized_path), weight_type=QuantType.QInt8)
                 shutil.move(str(quantized_path), str(model_onnx_path))
+                quantization_type = "int8"
                 logger.info(f"Quantization complete: {model_onnx_path.stat().st_size / 1024 / 1024:.1f} MB")
         except Exception as ex:
             logger.error(f"Full PyTorch-to-ONNX tracing failed for Job {job_id}: {ex}")
@@ -163,11 +164,11 @@ def export_to_edge_onnx(
         _param_count = _manifest_spec.parameter_count_display
         _context_length = _manifest_spec.context_length
         _chat_template = _manifest_spec.chat_template.value
-        # Ground runtime providers: <= 500M models (like SmolLM2) support in-browser webgpu/wasm.
-        # Larger models (>= 1B like Gemma 2B) require desktop/server execution providers.
+        # Ground runtime providers: models with supports_browser_runtime=True support in-browser webgpu/wasm.
+        # Larger models (or models without browser runtime) require desktop/server execution providers.
         _execution_providers = (
             ["webgpu", "wasm"]
-            if _manifest_spec.min_gpu_vram_gb < 2.0
+            if getattr(_manifest_spec, "supports_browser_runtime", False)
             else ["cuda", "cpu", "directml"]
         )
     except ValueError:

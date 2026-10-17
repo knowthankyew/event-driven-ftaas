@@ -45,7 +45,8 @@ public static class InferenceEndpoints
 
         var inferenceUrl = configuration.GetValue<string>("INFERENCE_SERVICE_URL") ?? "http://localhost:8000";
         var client = httpClientFactory.CreateClient();
-        client.Timeout = TimeSpan.FromSeconds(60);
+        var proxyTimeoutSeconds = configuration.GetValue<int?>("INFERENCE_PROXY_TIMEOUT_SECONDS") ?? 120;
+        client.Timeout = TimeSpan.FromSeconds(Math.Max(30, proxyTimeoutSeconds));
 
         var payload = new
         {

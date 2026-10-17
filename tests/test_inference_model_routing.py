@@ -63,21 +63,31 @@ class TestInferencePromptFormatting(unittest.TestCase):
         self.assertIn(prompt, result)
 
 
+from fastapi import HTTPException
+from unittest.mock import MagicMock, patch
+
 class TestBasemodelMismatchDetection(unittest.TestCase):
     """
-    Validates the base model mismatch detection logic that load_or_get_adapter()
-    performs by reading adapter_config.json. Tested without spinning up the FastAPI app.
+    Validates base model mismatch detection directly via app.load_or_get_adapter().
     """
 
     def setUp(self):
+        import app
         self.temp_dir = tempfile.TemporaryDirectory()
         self.data_root = Path(self.temp_dir.name)
+        self.orig_data_root = app.DATA_ROOT
+        app.DATA_ROOT = self.data_root
+        app.model_store.adapter_cache.clear()
 
     def tearDown(self):
+        import app
+        app.DATA_ROOT = self.orig_data_root
+        app.model_store.adapter_cache.clear()
         self.temp_dir.cleanup()
 
-    def _make_adapter_dir(self, base_model_name: str) -> Path:
-        adapter_dir = self.data_root / "artifacts" / "test-job-001" / "model_adapters"
+    def _make_adapter(self, base_model_name: str, job_id: str = "test-job-001") -> str:
+        adapter_rel = f"artifacts/{job_id}/model_adapters"
+        adapter_dir = self.data_root / adapter_rel
         adapter_dir.mkdir(parents=True, exist_ok=True)
         (adapter_dir / "adapter_config.json").write_text(json.dumps({
             "base_model_name_or_path": base_model_name,
@@ -85,67 +95,73 @@ class TestBasemodelMismatchDetection(unittest.TestCase):
             "r": 8,
         }))
         (adapter_dir / "adapter_model.safetensors").write_bytes(b"A" * (150 * 1024))
-        return adapter_dir
-
-    def _simulate_mismatch_check(self, adapter_dir: Path, loaded_base_model: str) -> dict:
-        """
-        Simulates exactly what load_or_get_adapter() does for the mismatch check:
-        reads adapter_config.json, compares base_model_name_or_path to loaded model.
-        Returns {"mismatch": bool, "adapter_base": str, "loaded_base": str}.
-        """
-        config_file = adapter_dir / "adapter_config.json"
-        with open(config_file, "r", encoding="utf-8") as f:
-            cfg = json.load(f)
-        adapter_base = cfg.get("base_model_name_or_path", "")
-        mismatch = bool(adapter_base) and adapter_base != loaded_base_model
-        return {"mismatch": mismatch, "adapter_base": adapter_base, "loaded_base": loaded_base_model}
+        return adapter_rel
 
     def test_matching_base_model_no_mismatch(self):
         """SmolLM2 adapter against SmolLM2-loaded service → no mismatch."""
-        adapter_dir = self._make_adapter_dir("HuggingFaceTB/SmolLM2-135M")
-        result = self._simulate_mismatch_check(adapter_dir, "HuggingFaceTB/SmolLM2-135M")
-        self.assertFalse(result["mismatch"])
+        import app
+        adapter_rel = self._make_adapter("HuggingFaceTB/SmolLM2-135M", "job-smol-match")
+        with patch.object(app, "DEFAULT_BASE_MODEL", "HuggingFaceTB/SmolLM2-135M"):
+            with patch("app.PeftModel.from_pretrained", return_value=MagicMock()):
+                app.load_or_get_adapter(adapter_rel)
 
     def test_gemma_adapter_against_smollm2_service_is_mismatch(self):
-        """Gemma adapter against SmolLM2-loaded service → mismatch detected."""
-        adapter_dir = self._make_adapter_dir("google/gemma-2-2b-it")
-        result = self._simulate_mismatch_check(adapter_dir, "HuggingFaceTB/SmolLM2-135M")
-        self.assertTrue(result["mismatch"])
-        self.assertEqual(result["adapter_base"], "google/gemma-2-2b-it")
+        """Gemma adapter against SmolLM2-loaded service → mismatch detected (409)."""
+        import app
+        adapter_rel = self._make_adapter("google/gemma-2-2b-it", "job-gemma-mismatch")
+        with patch.object(app, "DEFAULT_BASE_MODEL", "HuggingFaceTB/SmolLM2-135M"):
+            with self.assertRaises(HTTPException) as ctx:
+                app.load_or_get_adapter(adapter_rel)
+            self.assertEqual(ctx.exception.status_code, 409)
+            self.assertEqual(ctx.exception.detail["error"], "base_model_mismatch")
+            self.assertEqual(ctx.exception.detail["adapterBaseModel"], "google/gemma-2-2b-it")
 
     def test_smollm2_adapter_against_gemma_service_is_mismatch(self):
-        """SmolLM2 adapter against Gemma-loaded service → mismatch detected."""
-        adapter_dir = self._make_adapter_dir("HuggingFaceTB/SmolLM2-135M")
-        result = self._simulate_mismatch_check(adapter_dir, "google/gemma-2-2b-it")
-        self.assertTrue(result["mismatch"])
+        """SmolLM2 adapter against Gemma-loaded service → mismatch detected (409)."""
+        import app
+        adapter_rel = self._make_adapter("HuggingFaceTB/SmolLM2-135M", "job-smol-mismatch")
+        with patch.object(app, "DEFAULT_BASE_MODEL", "google/gemma-2-2b-it"):
+            with self.assertRaises(HTTPException) as ctx:
+                app.load_or_get_adapter(adapter_rel)
+            self.assertEqual(ctx.exception.status_code, 409)
 
     def test_gemma_adapter_against_gemma_service_no_mismatch(self):
         """Gemma adapter against Gemma-loaded service → no mismatch."""
-        adapter_dir = self._make_adapter_dir("google/gemma-2-2b-it")
-        result = self._simulate_mismatch_check(adapter_dir, "google/gemma-2-2b-it")
-        self.assertFalse(result["mismatch"])
+        import app
+        adapter_rel = self._make_adapter("google/gemma-2-2b-it", "job-gemma-match")
+        with patch.object(app, "DEFAULT_BASE_MODEL", "google/gemma-2-2b-it"):
+            with patch("app.PeftModel.from_pretrained", return_value=MagicMock()):
+                app.load_or_get_adapter(adapter_rel)
 
     def test_bitnet_adapter_against_smollm2_service_is_mismatch(self):
-        """BitNet adapter against SmolLM2-loaded service → mismatch detected."""
-        adapter_dir = self._make_adapter_dir("microsoft/BitNet-b1.58-2B-4T")
-        result = self._simulate_mismatch_check(adapter_dir, "HuggingFaceTB/SmolLM2-135M")
-        self.assertTrue(result["mismatch"])
-        self.assertEqual(result["adapter_base"], "microsoft/BitNet-b1.58-2B-4T")
+        """BitNet adapter against SmolLM2-loaded service → mismatch detected (409)."""
+        import app
+        adapter_rel = self._make_adapter("microsoft/BitNet-b1.58-2B-4T", "job-bitnet-mismatch")
+        with patch.object(app, "DEFAULT_BASE_MODEL", "HuggingFaceTB/SmolLM2-135M"):
+            with self.assertRaises(HTTPException) as ctx:
+                app.load_or_get_adapter(adapter_rel)
+            self.assertEqual(ctx.exception.status_code, 409)
+            self.assertEqual(ctx.exception.detail["adapterBaseModel"], "microsoft/BitNet-b1.58-2B-4T")
 
     def test_bitnet_adapter_against_bitnet_service_no_mismatch(self):
         """BitNet adapter against BitNet-loaded service → no mismatch."""
-        adapter_dir = self._make_adapter_dir("microsoft/BitNet-b1.58-2B-4T")
-        result = self._simulate_mismatch_check(adapter_dir, "microsoft/BitNet-b1.58-2B-4T")
-        self.assertFalse(result["mismatch"])
+        import app
+        adapter_rel = self._make_adapter("microsoft/BitNet-b1.58-2B-4T", "job-bitnet-match")
+        with patch.object(app, "DEFAULT_BASE_MODEL", "microsoft/BitNet-b1.58-2B-4T"):
+            with patch("app.PeftModel.from_pretrained", return_value=MagicMock()):
+                app.load_or_get_adapter(adapter_rel)
 
     def test_missing_base_model_field_does_not_trigger_mismatch(self):
         """An adapter_config.json without base_model_name_or_path skips the mismatch check."""
-        adapter_dir = self.data_root / "artifacts" / "no-base" / "model_adapters"
+        import app
+        adapter_rel = "artifacts/no-base/model_adapters"
+        adapter_dir = self.data_root / adapter_rel
         adapter_dir.mkdir(parents=True, exist_ok=True)
-        # Write config with no base_model_name_or_path field
         (adapter_dir / "adapter_config.json").write_text(json.dumps({"peft_type": "LORA"}))
-        result = self._simulate_mismatch_check(adapter_dir, "HuggingFaceTB/SmolLM2-135M")
-        self.assertFalse(result["mismatch"])
+        (adapter_dir / "adapter_model.safetensors").write_bytes(b"A" * (150 * 1024))
+        with patch.object(app, "DEFAULT_BASE_MODEL", "HuggingFaceTB/SmolLM2-135M"):
+            with patch("app.PeftModel.from_pretrained", return_value=MagicMock()):
+                app.load_or_get_adapter(adapter_rel)
 
 
 class TestHealthzChatTemplate(unittest.TestCase):
@@ -162,14 +178,11 @@ class TestHealthzChatTemplate(unittest.TestCase):
         self.assertEqual(spec.chat_template.value, "gemma")
 
     def test_unknown_model_healthz_uses_unknown_fallback(self):
-        """An unknown model ID should fall back to 'unknown' without crashing."""
-        from model_registry import get_model_spec
-        chat_template = "unknown"
-        try:
-            spec = get_model_spec("not/a-real-model")
-            chat_template = spec.chat_template.value
-        except Exception:
-            pass  # Expected — fallback logic mirrors what healthz does
+        """An unknown model ID should fall back to 'unknown' in healthz()."""
+        import app
+        with patch.object(app, "DEFAULT_BASE_MODEL", "not/a-real-model"):
+            res = app.healthz()
+            self.assertEqual(res["chatTemplate"], "unknown")
 class TestGenerateTokensRouting(unittest.TestCase):
     """Validates that generate_tokens and compare_completions route prompt templates and handle baseModel correctly."""
 

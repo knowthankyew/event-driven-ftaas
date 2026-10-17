@@ -109,7 +109,13 @@ public sealed class DatasetService : IDatasetService
 
                     if (isCsv)
                     {
-                        var cols = line.Split(',');
+                        var cols = ParseCsvRow(line);
+                        if (cols is null)
+                        {
+                            return new DatasetResult(false, null, null, 0,
+                                $"CSV line {recordCount + 1} has unbalanced quotes (multiline fields are unsupported).");
+                        }
+
                         if (isFirstLine)
                         {
                             isFirstLine = false;
@@ -124,17 +130,15 @@ public sealed class DatasetService : IDatasetService
                             }
                         }
 
-                        if (cols.Length > Math.Max(promptColIdx, compColIdx))
+                        if (cols.Count > Math.Max(promptColIdx, compColIdx))
                         {
                             prompt = cols[promptColIdx].Trim().Trim('"', '\'');
-                            completion = (compColIdx == cols.Length - 1)
-                                ? string.Join(",", cols.Skip(compColIdx)).Trim().Trim('"', '\'')
-                                : cols[compColIdx].Trim().Trim('"', '\'');
+                            completion = cols[compColIdx].Trim().Trim('"', '\'');
                         }
-                        else if (cols.Length >= 2)
+                        else if (cols.Count >= 2)
                         {
                             prompt = cols[0].Trim().Trim('"', '\'');
-                            completion = string.Join(",", cols.Skip(1)).Trim().Trim('"', '\'');
+                            completion = cols[1].Trim().Trim('"', '\'');
                         }
                         else
                         {
@@ -278,5 +282,69 @@ public sealed class DatasetService : IDatasetService
             alternate = !alternate;
         }
         return sum % 10 == 0;
+    }
+
+    private static List<string>? ParseCsvRow(string line)
+    {
+        var fields = new List<string>();
+        var sb = new StringBuilder();
+        bool inQuotes = false;
+        int i = 0;
+
+        while (i < line.Length)
+        {
+            char c = line[i];
+
+            if (inQuotes)
+            {
+                if (c == '"')
+                {
+                    if (i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        sb.Append('"');
+                        i += 2;
+                        continue;
+                    }
+                    else
+                    {
+                        inQuotes = false;
+                        i++;
+                        continue;
+                    }
+                }
+                else
+                {
+                    sb.Append(c);
+                    i++;
+                }
+            }
+            else
+            {
+                if (c == '"')
+                {
+                    inQuotes = true;
+                    i++;
+                }
+                else if (c == ',')
+                {
+                    fields.Add(sb.ToString().Trim());
+                    sb.Clear();
+                    i++;
+                }
+                else
+                {
+                    sb.Append(c);
+                    i++;
+                }
+            }
+        }
+
+        if (inQuotes)
+        {
+            return null;
+        }
+
+        fields.Add(sb.ToString().Trim());
+        return fields;
     }
 }

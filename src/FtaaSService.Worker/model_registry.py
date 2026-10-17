@@ -42,6 +42,7 @@ class ModelSpec:
     min_gpu_vram_gb: float
     requires_hf_auth: bool
     hardware_disclaimer: Optional[str] = None
+    supports_browser_runtime: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -59,6 +60,7 @@ _REGISTRY: dict = {
         min_gpu_vram_gb=0.5,
         requires_hf_auth=False,
         hardware_disclaimer=None,
+        supports_browser_runtime=True,
     ),
     "google/gemma-2-2b-it": ModelSpec(
         model_id="google/gemma-2-2b-it",

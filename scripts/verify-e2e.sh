@@ -55,6 +55,10 @@ if ! curl -s http://localhost:5100/healthz >/dev/null 2>&1; then
         sleep 1
     done
 fi
+if ! curl -s http://localhost:5100/healthz >/dev/null 2>&1; then
+    echo -e "${YELLOW}❌ .NET 10 API failed to become ready on :5100 within deadline.${NC}"
+    exit 1
+fi
 echo -e "${GREEN}✅ .NET 10 Ingestion Gateway is responsive.${NC}"
 
 # 3. Check or start Python Compute Worker & Inference Engine
@@ -75,6 +79,10 @@ if ! curl -s http://localhost:8000/healthz >/dev/null 2>&1; then
         fi
         sleep 1
     done
+fi
+if ! curl -s http://localhost:8000/healthz >/dev/null 2>&1; then
+    echo -e "${YELLOW}❌ Python Inference Engine failed to become ready on :8000 within deadline.${NC}"
+    exit 1
 fi
 echo -e "${GREEN}✅ Compute Worker and Inference Engine are ready.${NC}"
 

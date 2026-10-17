@@ -230,5 +230,38 @@ public class DatasetServiceTests : IDisposable
         Assert.NotNull(result.Sha256Hash);
         Assert.NotNull(result.RelativePath);
     }
+
+    [Fact]
+    public async Task NormalizeAndStoreAsync_HandlesQuotedCsvWithCommasAndEscapedQuotes()
+    {
+        var csv = "prompt,completion\n" +
+                  "\"Hello, world! How are you?\",\"Here is a \"\"special\"\" response, with commas.\"\n";
+        var file = CreateFormFile(csv, "dataset.csv");
+
+        var result = await _service.NormalizeAndStoreAsync("job-csv-quotes", file, null);
+
+        Assert.True(result.IsValid);
+        Assert.Equal(1, result.RecordCount);
+
+        var diskPath = Path.Combine(_testDataDir, result.RelativePath!);
+        var writtenContent = await File.ReadAllTextAsync(diskPath);
+        var record = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(writtenContent.Trim());
+        Assert.NotNull(record);
+        Assert.Equal("Hello, world! How are you?", record["prompt"]);
+        Assert.Equal("Here is a \"special\" response, with commas.", record["completion"]);
+    }
+
+    [Fact]
+    public async Task NormalizeAndStoreAsync_RejectsCsvWithUnbalancedQuotes()
+    {
+        var csv = "prompt,completion\n" +
+                  "\"Unclosed quote prompt,Valid completion\n";
+        var file = CreateFormFile(csv, "dataset.csv");
+
+        var result = await _service.NormalizeAndStoreAsync("job-csv-unbalanced", file, null);
+
+        Assert.False(result.IsValid);
+        Assert.Contains("unbalanced quotes", result.ErrorMessage);
+    }
 }
 

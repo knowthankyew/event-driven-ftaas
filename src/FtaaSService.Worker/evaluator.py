@@ -129,4 +129,4 @@ def register_model_in_registry(
         return str(version.version)
     except Exception as ex:
         logger.warning(f"Model registry registration notice: {ex}")
-        return "1"
+        return None

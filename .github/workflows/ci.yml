@@ -30,8 +30,12 @@ jobs:
 
       - name: Audit NuGet Vulnerabilities
         run: |
-          dotnet list src/FtaaSService.Api/FtaaSService.Api.csproj package --vulnerable --include-transitive
-          dotnet list tests/FtaaSService.Api.Tests/FtaaSService.Api.Tests.csproj package --vulnerable --include-transitive
+          audit_api=$(dotnet list src/FtaaSService.Api/FtaaSService.Api.csproj package --vulnerable --include-transitive | tee /dev/stderr)
+          audit_tests=$(dotnet list tests/FtaaSService.Api.Tests/FtaaSService.Api.Tests.csproj package --vulnerable --include-transitive | tee /dev/stderr)
+          if echo "$audit_api $audit_tests" | grep -Ei "has the following vulnerable packages|severity: (critical|high|moderate|low)"; then
+            echo "Vulnerable NuGet packages detected."
+            exit 1
+          fi
 
       - name: Run .NET Unit Tests
         run: dotnet test tests/FtaaSService.Api.Tests/FtaaSService.Api.Tests.csproj --no-restore
@@ -71,7 +75,7 @@ jobs:
           python scripts/sync_benchmark_docs.py --check
 
       - name: Generate CycloneDX SBOM
-        run: npx --yes @cyclonedx/cdxgen -o bom.json
+        run: npx --yes @cyclonedx/cdxgen@10.9.3 -o bom.json
 
       - name: Upload SBOM Artifact
         uses: actions/upload-artifact@v7
@@ -111,13 +115,19 @@ jobs:
       - name: Start Docker Infrastructure
         run: |
           docker compose up -d broker mlflow
+          healthy=0
           for i in {1..30}; do
             if docker exec ftaas-rabbitmq rabbitmq-diagnostics -q ping >/dev/null 2>&1 && curl -s -f http://localhost:5001/health >/dev/null 2>&1; then
               echo "Broker and MLflow are healthy"
+              healthy=1
               break
             fi
             sleep 2
           done
+          if [ "$healthy" -ne 1 ]; then
+            echo "Broker or MLflow failed health checks after 30 attempts."
+            exit 1
+          fi
 
       - name: Run E2E Verification
         run: |

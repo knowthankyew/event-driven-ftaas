@@ -22,7 +22,11 @@ from config import (
 )
 from trainer import train_job
 
+import math
+import threading
+
 logger = logging.getLogger("FtaaSService.Worker.Consumer")
+MAX_RETRIES = 3
 
 # OpenTelemetry Setup & W3C Trace Context Propagation
 try:
@@ -100,6 +104,25 @@ class JobConsumer:
         )
         return pika.BlockingConnection(parameters)
 
+    def _safe_channel_call(self, callback):
+        if (
+            self.connection is not None
+            and hasattr(self.connection, "add_callback_threadsafe")
+            and not getattr(self.connection, "is_closed", False)
+        ):
+            try:
+                self.connection.add_callback_threadsafe(callback)
+                return
+            except Exception as ex:
+                logger.warning(f"add_callback_threadsafe failed ({ex}); executing directly.")
+        callback()
+
+    def _safe_ack(self, ch, delivery_tag):
+        self._safe_channel_call(lambda: ch.basic_ack(delivery_tag=delivery_tag))
+
+    def _safe_nack(self, ch, delivery_tag, requeue=False):
+        self._safe_channel_call(lambda: ch.basic_nack(delivery_tag=delivery_tag, requeue=requeue))
+
     def publish_status_update(
         self,
         job_id: str,
@@ -118,6 +141,15 @@ class JobConsumer:
         seq = max(time.time_ns(), self.sequence_map.get(job_id, 0) + 1)
         self.sequence_map[job_id] = seq
 
+        safe_loss = None
+        if current_loss is not None:
+            try:
+                fl = float(current_loss)
+                if math.isfinite(fl):
+                    safe_loss = fl
+            except (ValueError, TypeError):
+                safe_loss = None
+
         payload = {
             "jobId": job_id,
             "status": status,
@@ -125,7 +157,7 @@ class JobConsumer:
             "progressPercent": progress_pct,
             "currentStep": current_step,
             "totalSteps": total_steps,
-            "currentLoss": current_loss,
+            "currentLoss": safe_loss,
             "mlflowExperimentId": mlflow_experiment_id,
             "mlflowRunId": mlflow_run_id,
             "adapterPath": adapter_path,
@@ -140,22 +172,33 @@ class JobConsumer:
             headers["traceparent"] = self.current_traceparent
 
         try:
-            self.channel.basic_publish(
-                exchange=EXCHANGE_NAME,
-                routing_key=JOB_UPDATED_ROUTING_KEY,
-                body=json.dumps(payload),
-                properties=pika.BasicProperties(
-                    content_type="application/json",
-                    delivery_mode=2,
-                    correlation_id=job_id,
-                    headers=headers if headers else None
+            body = json.dumps(payload, allow_nan=False)
+            def _publish():
+                self.channel.basic_publish(
+                    exchange=EXCHANGE_NAME,
+                    routing_key=JOB_UPDATED_ROUTING_KEY,
+                    body=body,
+                    properties=pika.BasicProperties(
+                        content_type="application/json",
+                        delivery_mode=2,
+                        correlation_id=job_id,
+                        headers=headers if headers else None
+                    )
                 )
-            )
+            self._safe_channel_call(_publish)
             logger.info(f"Published status [{status}] (seq={seq}, progress={progress_pct}%) for Job {job_id}")
         except Exception as ex:
             logger.error(f"Failed to publish status update for Job {job_id}: {ex}")
 
     def on_message(self, ch, method, properties, body):
+        t = threading.Thread(
+            target=self._process_job_thread,
+            args=(ch, method, properties, body),
+            daemon=True
+        )
+        t.start()
+
+    def _process_job_thread(self, ch, method, properties, body):
         job_id = None
         started_at = datetime.now(timezone.utc).isoformat()
 
@@ -263,7 +306,7 @@ class JobConsumer:
             )
 
             # Acknowledge message
-            ch.basic_ack(delivery_tag=method.delivery_tag)
+            self._safe_ack(ch, method.delivery_tag)
             logger.info(f"==> Job {job_id} successfully completed and acknowledged.")
 
         except (FileNotFoundError, PermissionError, IsADirectoryError) as ex:
@@ -282,14 +325,58 @@ class JobConsumer:
                 emit_lifecycle_span("job.failed", job_id, "Failed", attributes={
                     "error": str(ex)
                 }, parent_context=self.current_context)
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            self._safe_nack(ch, method.delivery_tag, requeue=False)
 
         except (ConnectionError, TimeoutError, OSError) as ex:
             # Transient infrastructure errors (network blips, disk locks, MLflow timeouts)
-            # — requeue the message so it can be retried on the next delivery
             tb = traceback.format_exc()
-            logger.warning(f"Transient error processing Job {job_id} (will requeue): {ex}\n{tb}")
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            retry_count = 0
+            if properties and getattr(properties, "headers", None):
+                raw_count = properties.headers.get("x-retry-count", 0)
+                try:
+                    retry_count = int(raw_count)
+                except (ValueError, TypeError):
+                    retry_count = 0
+
+            if retry_count < MAX_RETRIES:
+                new_retry_count = retry_count + 1
+                logger.warning(
+                    f"Transient error processing Job {job_id} (retry {new_retry_count}/{MAX_RETRIES}): {ex}\n{tb}"
+                )
+                headers = dict(properties.headers or {}) if properties else {}
+                headers["x-retry-count"] = new_retry_count
+                new_props = pika.BasicProperties(
+                    content_type=getattr(properties, "content_type", "application/json"),
+                    delivery_mode=2,
+                    correlation_id=getattr(properties, "correlation_id", job_id),
+                    headers=headers
+                )
+                def _do_republish():
+                    self.channel.basic_publish(
+                        exchange=EXCHANGE_NAME,
+                        routing_key=method.routing_key,
+                        body=body,
+                        properties=new_props
+                    )
+                    ch.basic_ack(delivery_tag=method.delivery_tag)
+                self._safe_channel_call(_do_republish)
+            else:
+                logger.error(
+                    f"Transient error retries exhausted ({retry_count}/{MAX_RETRIES}) for Job {job_id}: {ex}\n{tb}"
+                )
+                if job_id:
+                    finished_at = datetime.now(timezone.utc).isoformat()
+                    self.publish_status_update(
+                        job_id=job_id,
+                        status="Failed",
+                        error_message=f"Transient failure retry limit reached: {ex}",
+                        started_at=started_at,
+                        finished_at=finished_at
+                    )
+                    emit_lifecycle_span("job.failed", job_id, "Failed", attributes={
+                        "error": f"Retry limit reached: {ex}"
+                    }, parent_context=self.current_context)
+                self._safe_nack(ch, method.delivery_tag, requeue=False)
 
         except Exception as ex:
             # Terminal errors (OOM, corrupt dataset, model load failure, bad hyperparameters)
@@ -310,7 +397,7 @@ class JobConsumer:
                     "error": str(ex)
                 }, parent_context=self.current_context)
 
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            self._safe_nack(ch, method.delivery_tag, requeue=False)
             logger.warning(f"Rejected terminal failure for Job {job_id} -> routed to DLQ.")
 
     def run(self):

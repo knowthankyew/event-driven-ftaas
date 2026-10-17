@@ -399,7 +399,7 @@
       const payload = {
         prompt: prompt,
         maxTokens: parseInt(elements.maxTokensInput.value, 10) || 64,
-        temperature: parseFloat(elements.tempInput.value) || 0.2,
+        temperature: Number.isNaN(parseFloat(elements.tempInput.value)) ? 0.2 : parseFloat(elements.tempInput.value),
         jobId: jobId,
         baseModel: state.activeBaseModel || (completedJob ? completedJob.baseModel : undefined),
         adapterPath: adapterPath
@@ -446,8 +446,6 @@
     } catch (err) {
       console.error('Comparison request failed:', err);
       // Fallback local simulation if backend network connection has an issue
-      renderSimulatedResult(prompt);
-    }
       renderSimulatedResult(prompt);
     } finally {
       state.isComparing = false;

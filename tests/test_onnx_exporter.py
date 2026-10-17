@@ -67,7 +67,7 @@ class TestOnnxExporter(unittest.TestCase):
         self.assertEqual(manifest["jobId"], self.job_id)
         self.assertEqual(manifest["baseModel"], "HuggingFaceTB/SmolLM2-135M")
         self.assertEqual(manifest["architecture"], "CausalLM")
-        self.assertEqual(manifest["quantization"], "int8")
+        self.assertEqual(manifest["quantization"], "fp32")
         self.assertEqual(manifest["supportedExecutionProviders"], ["webgpu", "wasm"])
         self.assertTrue(manifest["zeroEgressInvariant"])
         self.assertIn("onnxSha256", manifest)

@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -69,7 +70,7 @@ public class OperationalMetricsAndDlqTests : IDisposable
     {
         await _repository.InitializeAsync();
 
-        // Seed 1 Queued, 1 Running, 2 Succeeded, 1 Failed
+        // Seed 1 Queued, 1 Training, 1 Succeeded, 1 Failed
         var job1 = new FinetuneJob
         {
             Id = "job-m-1", JobName = "m1", Status = JobStatus.Queued,
@@ -105,32 +106,60 @@ public class OperationalMetricsAndDlqTests : IDisposable
 
         var publisher = new FakeEventPublisher { IsConnected = true, DlqCountToReturn = 0 };
 
-        // Test the metric generator logic directly
-        var jobCounts = await _repository.GetJobCountsByStatusAsync();
-        Assert.Equal(1, jobCounts["Queued"]);
-        Assert.Equal(1, jobCounts["Training"]);
-        Assert.Equal(1, jobCounts["Succeeded"]);
-        Assert.Equal(1, jobCounts["Failed"]);
+        var services = new ServiceCollection().AddLogging().BuildServiceProvider();
 
-        var dlqCount = await publisher.GetDlqMessageCountAsync();
-        Assert.Equal(0u, dlqCount);
+        var result = await MetricsEndpoints.GetMetricsAsync(_repository, publisher, _telemetry, CancellationToken.None);
+        var context = new DefaultHttpContext { RequestServices = services };
+        context.Response.Body = new MemoryStream();
+        await result.ExecuteAsync(context);
+        context.Response.Body.Seek(0, SeekOrigin.Begin);
+        using var reader = new StreamReader(context.Response.Body, Encoding.UTF8);
+        var metricsText = await reader.ReadToEndAsync();
 
-        var bufferedSpans = _telemetry.GetBufferedSpans();
-        Assert.Single(bufferedSpans);
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        Assert.Contains("ftaas_uptime_seconds", metricsText);
+        Assert.Contains("ftaas_metrics_source_up{source=\"database\"} 1", metricsText);
+        Assert.Contains("ftaas_metrics_source_up{source=\"dlq\"} 1", metricsText);
+        Assert.Contains("ftaas_jobs_total{status=\"Queued\"} 1", metricsText);
+        Assert.Contains("ftaas_jobs_total{status=\"Training\"} 1", metricsText);
+        Assert.Contains("ftaas_jobs_total{status=\"Succeeded\"} 1", metricsText);
+        Assert.Contains("ftaas_jobs_total{status=\"Failed\"} 1", metricsText);
+        Assert.Contains("ftaas_active_jobs 2", metricsText);
+        Assert.Contains("ftaas_dlq_message_count 0", metricsText);
+        Assert.Contains("ftaas_telemetry_buffered_spans 1", metricsText);
     }
 
     [Fact]
     public async Task DlqMonitoring_FlagsDeadLetteredMessages()
     {
+        await _repository.InitializeAsync();
         var publisherWithDlq = new FakeEventPublisher { IsConnected = true, DlqCountToReturn = 7 };
+        var rabbitOptions = Options.Create(new RabbitMqConfig { HostName = "localhost", Port = 5672 });
+        var services = new ServiceCollection().AddLogging().BuildServiceProvider();
 
-        var count = await publisherWithDlq.GetDlqMessageCountAsync();
-        Assert.Equal(7u, count);
+        // Exercise /healthz handler
+        var healthResult = await HealthEndpoints.GetHealthAsync(_repository, publisherWithDlq, rabbitOptions, CancellationToken.None);
+        var healthContext = new DefaultHttpContext { RequestServices = services };
+        healthContext.Response.Body = new MemoryStream();
+        await healthResult.ExecuteAsync(healthContext);
+        healthContext.Response.Body.Seek(0, SeekOrigin.Begin);
+        using var healthReader = new StreamReader(healthContext.Response.Body, Encoding.UTF8);
+        var healthJson = await healthReader.ReadToEndAsync();
 
-        // Verify DLQ count can be dynamically inspected
-        publisherWithDlq.DlqCountToReturn = 0;
-        var clearedCount = await publisherWithDlq.GetDlqMessageCountAsync();
-        Assert.Equal(0u, clearedCount);
+        Assert.Equal(StatusCodes.Status200OK, healthContext.Response.StatusCode);
+        Assert.Contains("Warning: 7 message(s) in dead-letter queue", healthJson);
+
+        // Exercise /metrics handler
+        var metricsResult = await MetricsEndpoints.GetMetricsAsync(_repository, publisherWithDlq, _telemetry, CancellationToken.None);
+        var metricsContext = new DefaultHttpContext { RequestServices = services };
+        metricsContext.Response.Body = new MemoryStream();
+        await metricsResult.ExecuteAsync(metricsContext);
+        metricsContext.Response.Body.Seek(0, SeekOrigin.Begin);
+        using var metricsReader = new StreamReader(metricsContext.Response.Body, Encoding.UTF8);
+        var metricsOutput = await metricsReader.ReadToEndAsync();
+
+        Assert.Equal(StatusCodes.Status200OK, metricsContext.Response.StatusCode);
+        Assert.Contains("ftaas_dlq_message_count 7", metricsOutput);
     }
 
     private class FakeFailingEventPublisher : IEventPublisher
