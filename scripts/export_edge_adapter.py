@@ -27,7 +27,7 @@ def main():
     parser = argparse.ArgumentParser(description="Export FTaaS LoRA adapter to browser-ready ONNX package.")
     parser.add_argument("--job-id", required=True, help="Job ID of the trained model adapter.")
     parser.add_argument("--output", default=None, help="Optional destination directory for the ONNX package.")
-    parser.add_argument("--quantize", action="store_true", help="Enable q4 quantization flag in manifest.")
+    parser.add_argument("--quantize", action="store_true", help="Apply dynamic INT8 quantization only to graphs larger than 300 MB.")
     parser.add_argument("--mock", action="store_true", help="Perform fast mock export for testing.")
 
     args = parser.parse_args()

@@ -469,6 +469,41 @@
       "format_rule": "{value:.1f}",
       "used_in": ["docs/ROADMAP.md"],
       "description": "BitNet 2B Time-To-First-Token in ms at 4 threads"
+    },
+    "in_force_queries_count": {
+      "source_artifact": "docs/empirical_retrieval_benchmark.json",
+      "json_path": "in_force_answerable_benchmark.queries_count",
+      "format_rule": "{value}",
+      "used_in": ["docs/ROADMAP.md"],
+      "description": "Number of in-force answerable benchmark queries evaluated"
+    },
+    "in_force_bm25_top1_pct": {
+      "source_artifact": "docs/empirical_retrieval_benchmark.json",
+      "json_path": "in_force_answerable_benchmark.summary.bm25.top1_recall_pct",
+      "format_rule": "{value:.1f}%",
+      "used_in": ["docs/ROADMAP.md"],
+      "description": "BM25 Top-1 recall percentage on in-force queries"
+    },
+    "in_force_bm25_top1_hits": {
+      "source_artifact": "docs/empirical_retrieval_benchmark.json",
+      "json_path": "in_force_answerable_benchmark.summary.bm25.top1_hits",
+      "format_rule": "{value}",
+      "used_in": ["docs/ROADMAP.md"],
+      "description": "BM25 Top-1 hit count on in-force queries"
+    },
+    "in_force_hybrid_top1_pct": {
+      "source_artifact": "docs/empirical_retrieval_benchmark.json",
+      "json_path": "in_force_answerable_benchmark.summary.hybrid.top1_recall_pct",
+      "format_rule": "{value:.1f}%",
+      "used_in": ["docs/ROADMAP.md"],
+      "description": "Hybrid pipeline Top-1 recall percentage on in-force queries"
+    },
+    "in_force_hybrid_top1_hits": {
+      "source_artifact": "docs/empirical_retrieval_benchmark.json",
+      "json_path": "in_force_answerable_benchmark.summary.hybrid.top1_hits",
+      "format_rule": "{value}",
+      "used_in": ["docs/ROADMAP.md"],
+      "description": "Hybrid pipeline Top-1 hit count on in-force queries"
     }
   }
 }

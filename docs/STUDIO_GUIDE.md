@@ -107,9 +107,10 @@ Use this tab to create or modify custom rules for your team:
    - *Dataset Guidelines*: LoRA policy adapters typically only need 20 to 500 focused examples for high-quality convergence. The system enforces a **25 MB file size ceiling** and a **50,000 record maximum** to maintain optimal server performance and memory safety.
 3. **Select Your Target Base Model**:
    - Use the **Base Model Selector** dropdown to choose between:
-     - **SmolLM2 135M** *(Default • Fast / Zero-Cost)*: Fine-tunes in ~2 minutes with ~1.8 MB adapter footprint. Perfect for rapid prototyping and edge devices.
-     - **Gemma 2 2B IT** *(Reasoning Tier • Gated)*: Full instruction-tuned reasoning model fine-tuning into a ~12.2 MB adapter. Supports longer context (8,192 tokens).
-   - *Hardware & Licensing Guardrail*: Selecting Gemma 2B dynamically displays an amber guidance box detailing the 8 GB VRAM recommendation and reminding operators to accept Google's model license on Hugging Face and provide an `HF_TOKEN`.
+     - **Gemma 2 2B IT** *(Default • Reasoning Tier • Gated)*: Full instruction-tuned reasoning model fine-tuning into a ~12.2 MB adapter. Supports longer context (8,192 tokens).
+     - **SmolLM2 135M** *(Ultra-Compact • Fast / Zero-Cost)*: Fine-tunes in ~2 minutes with ~1.8 MB adapter footprint. Perfect for rapid prototyping and edge devices.
+     - **BitNet b1.58 2B-4T** *(Experimental • 1.58-bit Ternary CPU)*: 1.58-bit ternary foundation model operating on commodity CPUs without GPU VRAM. Includes experimental guardrails with 16-token generation cap and 240-token embedding cap.
+   - *Hardware & Licensing Guardrail*: Selecting Gemma 2B dynamically displays an amber guidance box detailing the 8 GB VRAM recommendation and reminding operators to accept Google's model license on Hugging Face and provide an `HF_TOKEN`. Selecting BitNet displays guidance noting the experimental generation cap and CPU-only ternary runtime.
 4. **Deploy Team Adapter**:
    - Give your model a name (e.g., `support-team-v1`).
    - Click **"Train & Deploy Team Adapter"**.

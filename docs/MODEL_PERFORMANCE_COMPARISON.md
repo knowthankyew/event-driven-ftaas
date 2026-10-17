@@ -101,12 +101,12 @@ A natural question for practitioners is how BitNet's 23.5 t/s decode compares ag
 
 ## 3. Training Pipeline Verification (Smoke Test)
 
-Live fine-tuning pipeline verification was executed across domain dataset records: Gemma 2 2B and BitNet runs trained on financial sentiment records (`data/datasets/sample-financial-sentiment.jsonl`, 20 records at batch 2 over 3 epochs = 30 steps), while the SmolLM2 baseline trained on support/compliance records (`data/datasets/sample-support-compliance.jsonl`, 100 records = 75 steps):
+Live fine-tuning pipeline verification was executed across domain dataset records: Gemma 2 2B and BitNet runs trained on financial sentiment records (`data/datasets/sample-financial-sentiment.jsonl`, 20 records at batch 2 over 3 epochs = 30 steps), while the SmolLM2 baseline trained on support/compliance records (`data/datasets/sample-support-compliance.jsonl`, 100 records at batch 4 over 3 epochs = 75 steps):
 
 | Attribute | SmolLM2-135M (Baseline) | Gemma 2 2B IT (Live Run) | BitNet b1.58 2B-4T |
 | :--- | :--- | :--- | :--- |
 | Training Dataset | sample-support-compliance (100 records) | sample-financial-sentiment (20 records) | sample-financial-sentiment (20 records) |
-| Training Steps | 75 steps (3 epochs) | 30 steps (3 epochs) | 30 steps (3 epochs) |
+| Training Steps | 75 steps (3 epochs, batch 4) | 30 steps (3 epochs, batch 2) | 30 steps (3 epochs, batch 2) |
 | Target Projection Layers | q_proj, v_proj | q_proj, v_proj, k_proj, o_proj | q_proj, v_proj, k_proj, o_proj |
 | LoRA Rank (r) / Alpha | 8 / 32 | 8 / 32 | 8 / 32 |
 | Exported Adapter Size | 1.84 MB | 12.21 MB | 15.26 MB |

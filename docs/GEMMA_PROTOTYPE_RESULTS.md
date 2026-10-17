@@ -24,7 +24,7 @@ This document tracks benchmarking, resource consumption, and quality comparison 
 
 | Run Date | Base Model | Dataset | Records | Epochs | LoRA (r/α) | Device | Training Loss | Duration | Notes / Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| *Baseline* | `SmolLM2-135M` | `fintech-compliance` | 100 | 3 | 8 / 32 | macOS Metal (MPS) | 1.854 -> 0.312 | 2m 14s | Production Baseline |
+| *Baseline* | `SmolLM2-135M` | `sample-support-compliance` | 100 | 3 | 8 / 32 | macOS Metal (MPS) | 1.854 -> 0.312 | 2m 14s | Production Baseline |
 | 2026-10-03 | `gemma-2-2b-it` | `financial-sentiment` | 20 | 3 | 8 / 32 | macOS Metal (MPS) | 12.181 -> 11.455 | 7m 3s | Live Benchmark Run (Adapter: 12.21 MB) |
 
 ---

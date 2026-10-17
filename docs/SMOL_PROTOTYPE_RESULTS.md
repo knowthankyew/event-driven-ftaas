@@ -50,7 +50,7 @@ How `SmolLM2-135M` compares against the other supported tiers in the Event-Drive
 
 ## 3. Empirical Training & Convergence Benchmark
 
-SmolLM2-135M was evaluated across identical financial sentiment and compliance records (`datasets/sample-financial-sentiment.jsonl`) under the FTaaS asynchronous training pipeline:
+SmolLM2-135M was evaluated across enterprise support and compliance records (`data/datasets/sample-support-compliance.jsonl`, 100 records) under the FTaaS asynchronous training pipeline:
 
 ```
 +-----------------------------------------------------------------------------------------+
@@ -58,10 +58,10 @@ SmolLM2-135M was evaluated across identical financial sentiment and compliance r
 +-------------------------------+---------------------------------------------------------+
 | Fine-Tuning Method            | PEFT LoRA (r=8, alpha=32, dropout=0.05)                 |
 | Target Linear Layers          | q_proj, v_proj                                          |
-| Trainable Parameters          | 442,368 (0.3288% of 134.5M base parameters)             |
+| Trainable Parameters          | 460,800 (0.3426% of 134.5M base parameters)             |
 | Base Model Precision          | Float16 / Float32                                       |
 | Training Precision            | Float16 (MPS) / Float32 (CPU)                           |
-| Batching Strategy             | Batch Size 2 (Per-device: 2, Gradient Accumulation: 1)  |
+| Batching Strategy             | Batch Size 4 (Per-device: 4, Gradient Accumulation: 1)  |
 | Epochs / Total Steps          | 3 Epochs / 75 Optimization Steps                        |
 | Total Wall-Clock Duration     | 2m 14s (134.20 seconds)                                 |
 | Initial Step Loss             | 1.8540                                                  |
@@ -72,7 +72,7 @@ SmolLM2-135M was evaluated across identical financial sentiment and compliance r
 ```
 
 ### Observations on Convergence
-1. **Rapid Gradient Descent**: With only 442K trainable parameters, loss descends smoothly from $1.8540$ to $0.3120$ within 75 steps without divergence or activation explosion.
+1. **Rapid Gradient Descent**: With only 461K trainable parameters, loss descends smoothly from $1.8540$ to $0.3120$ within 75 steps without divergence or activation explosion.
 2. **Minimal Thermal & Memory Footprint**: Process memory during training remains bounded under **1.5 GB RAM**, producing zero thermal throttling on laptop-class hardware.
 3. **Turnaround Speed**: At **2m 14s**, fine-tuning completes **3.1× faster** than Gemma 2B (7m 3s) and **24× faster** than CPU BitNet float32 training (53m 39s), enabling near-instantaneous test-and-iterate workflows.
 

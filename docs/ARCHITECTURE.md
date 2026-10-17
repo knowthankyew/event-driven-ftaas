@@ -399,7 +399,7 @@ Dynamic Inference Server   SageMaker Multi-Model / Triton Inference    Vertex AI
    - Traditional fine-tuning duplicates full model weights (~3GB–14GB per domain).
    - LoRA exports only rank-decomposition matrices (~1.8MB per adapter). 500 domain-specific fine-tuned models require less than 1GB of total storage, and can be served dynamically on a single warm base-model instance without provisioning 500 GPU containers.
 3. **Zero-Trust & Data Privacy (SOC-2 Alignment)**:
-   - Client datasets never leave the private VPC; only pre-signed storage URIs travel to the training worker.
+   - Client datasets never leave the private VPC; only relative dataset storage paths (`datasetPath`) resolved against the local/VPC `DATA_ROOT` (or pre-signed storage URIs in cloud deployments) and content hashes (`datasetHash`) travel in AMQP messages to the training worker. Raw dataset payloads are never embedded in event payloads.
    - Cryptographic SHA-256 hashes guarantee dataset provenance and immutable reproducibility.
 
 ---
