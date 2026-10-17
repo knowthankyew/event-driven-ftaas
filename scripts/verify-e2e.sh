@@ -168,7 +168,23 @@ echo -e "${GREEN}           🎉 VERIFICATION REPORT & PORTFOLIO DEMO           
 echo -e "${BLUE}================================================================${NC}"
 echo -e "📌 ${CYAN}Job ID:${NC}             $JOB_ID"
 echo -e "🧠 ${CYAN}Base Model:${NC}         HuggingFaceTB/SmolLM2-135M (LoRA r=8, alpha=32)"
-echo -e "⏱️ ${CYAN}Training Duration:${NC}  ${ELAPSED}s on Apple Silicon Metal (MPS)"
+DEVICE_DESC=$("$PYTHON_EXEC" -c "
+try:
+    import torch
+    if torch.backends.mps.is_available():
+        print('Apple Silicon Metal (MPS)')
+    elif torch.cuda.is_available():
+        print(f'CUDA ({torch.cuda.get_device_name(0)})')
+    else:
+        print('CPU')
+except Exception:
+    print('')
+")
+if [ -n "$DEVICE_DESC" ]; then
+    echo -e "⏱️ ${CYAN}Training Duration:${NC}  ${ELAPSED}s on ${DEVICE_DESC}"
+else
+    echo -e "⏱️ ${CYAN}Training Duration:${NC}  ${ELAPSED}s"
+fi
 echo -e "📦 ${CYAN}LoRA Adapter Path:${NC}  data/$ADAPTER_PATH"
 echo -e "📊 ${CYAN}MLflow Run URL:${NC}     http://localhost:5001/#/experiments/1/runs/$RUN_ID"
 echo -e "${BLUE}----------------------------------------------------------------${NC}"

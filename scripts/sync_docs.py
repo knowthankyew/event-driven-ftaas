@@ -274,13 +274,18 @@ def lint_script_conclusions(scripts_dir: Path) -> tuple[bool, list[str]]:
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 if "conclusion" in node.name.lower() or "build_conclusion" in node.name.lower():
+                    # Identify docstring node if present so it can be skipped during literal check
+                    docstring_node = (
+                        node.body[0].value
+                        if (node.body and isinstance(node.body[0], ast.Expr))
+                        else None
+                    )
                     # Walk inside function AST
                     for child in ast.walk(node):
                         # Standalone constant string
                         if isinstance(child, ast.Constant) and isinstance(child.value, str):
-                            # Check if part of a JoinStr or standalone
                             # Ignore docstring
-                            if isinstance(node.body[0], ast.Expr) and child == node.body[0].value:
+                            if child is docstring_node or child == docstring_node:
                                 continue
                             if re.search(r"\d", child.value):
                                 errors.append(

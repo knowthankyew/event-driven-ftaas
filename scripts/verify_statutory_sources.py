@@ -171,7 +171,7 @@ PRIMARY_SOURCES = [
         "human_url": "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title15-section8403",
         "citation": "15 U.S.C. 8403(1) Clear and conspicuous disclosure of negative option terms",
         "chunk_type": "paraphrase",
-        "source_facts": ["clear and conspicuous", "terms"],
+        "source_facts": ["clearly and conspicuously", "material terms"],
         "legal_notes": None
     },
     {
@@ -369,13 +369,13 @@ PRIMARY_SOURCES = [
     # 5. UK Digital Markets, Competition and Consumers Act 2024 (DMCC Part 4, Chapter 2) - Enacted, Not In Force
     {
         "id": "uk_dmcc_precontract_info",
-        "statute": "UK DMCC Act 2024 s. 255",
+        "statute": "UK DMCC Act 2024 s. 256",
         "jurisdiction": "UK",
         "status": "enacted_not_in_force",
         "effective_from": "Enacted 2024-05-24; commencement scheduled January 2027",
-        "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/255/data.xml",
-        "human_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/255",
-        "citation": "UK DMCC Act 2024 s. 255 Pre-contract information for subscription contracts (Enacted, not yet commenced)",
+        "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/256/data.xml",
+        "human_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/256",
+        "citation": "UK DMCC Act 2024 s. 256 Pre-contract information for subscription contracts (Enacted, not yet commenced)",
         "chunk_type": "paraphrase",
         "source_facts": ["pre-contract information", "subscription contract", "trader"],
         "legal_notes": "Enacted May 24, 2024. UK DBT announced January 2027 commencement for subscription regime.",
@@ -392,13 +392,13 @@ PRIMARY_SOURCES = [
     },
     {
         "id": "uk_dmcc_cooling_off",
-        "statute": "UK DMCC Act 2024 s. 256",
+        "statute": "UK DMCC Act 2024 s. 257",
         "jurisdiction": "UK",
         "status": "enacted_not_in_force",
         "effective_from": "Enacted 2024-05-24; commencement scheduled January 2027",
-        "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/256/data.xml",
-        "human_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/256",
-        "citation": "UK DMCC Act 2024 s. 256 14-day cooling-off rights to cancel subscription contracts (Enacted, not yet commenced)",
+        "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/257/data.xml",
+        "human_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/257",
+        "citation": "UK DMCC Act 2024 s. 257 14-day cooling-off rights to cancel subscription contracts (Enacted, not yet commenced)",
         "chunk_type": "paraphrase",
         "source_facts": ["cooling-off", "14 days", "cancel"],
         "legal_notes": "Enacted May 24, 2024. UK DBT announced January 2027 commencement for subscription regime.",
@@ -415,13 +415,13 @@ PRIMARY_SOURCES = [
     },
     {
         "id": "uk_dmcc_renewal_notice",
-        "statute": "UK DMCC Act 2024 s. 257",
+        "statute": "UK DMCC Act 2024 s. 258",
         "jurisdiction": "UK",
         "status": "enacted_not_in_force",
         "effective_from": "Enacted 2024-05-24; commencement scheduled January 2027",
-        "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/257/data.xml",
-        "human_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/257",
-        "citation": "UK DMCC Act 2024 s. 257 Pre-renewal reminder notices (Enacted, not yet commenced)",
+        "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/258/data.xml",
+        "human_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/258",
+        "citation": "UK DMCC Act 2024 s. 258 Pre-renewal reminder notices (Enacted, not yet commenced)",
         "chunk_type": "paraphrase",
         "source_facts": ["reminder notice", "renewal", "subscription contract"],
         "legal_notes": "Enacted May 24, 2024. UK DBT announced January 2027 commencement for subscription regime.",
@@ -438,13 +438,13 @@ PRIMARY_SOURCES = [
     },
     {
         "id": "uk_dmcc_exit_steps",
-        "statute": "UK DMCC Act 2024 s. 258",
+        "statute": "UK DMCC Act 2024 s. 260",
         "jurisdiction": "UK",
         "status": "enacted_not_in_force",
         "effective_from": "Enacted 2024-05-24; commencement scheduled January 2027",
-        "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/258/data.xml",
-        "human_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/258",
-        "citation": "UK DMCC Act 2024 s. 258 Single straightforward exit communication (Enacted, not yet commenced)",
+        "source_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/260/data.xml",
+        "human_url": "https://www.legislation.gov.uk/ukpga/2024/13/section/260",
+        "citation": "UK DMCC Act 2024 s. 260 Single straightforward exit communication (Enacted, not yet commenced)",
         "chunk_type": "paraphrase",
         "source_facts": ["straightforward", "exit", "cancel"],
         "legal_notes": "Enacted May 24, 2024. UK DBT announced January 2027 commencement for subscription regime.",
@@ -870,7 +870,9 @@ def verify_all_sources(
     }
 
     # Clean up stale snapshots whose stem is not among verified sources
-    if snapshot_dir and snapshot_dir.is_dir():
+    full_run = sources is None
+    any_unreachable = any(r["state"] == "unreachable" for r in records)
+    if snapshot_dir and snapshot_dir.is_dir() and full_run and not any_unreachable:
         verified_shas = {
             r["extracted_text_sha256"]
             for r in records

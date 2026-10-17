@@ -61,6 +61,7 @@ MAX_CONCURRENT_GENERATE = int(os.getenv("FTAAS_MAX_CONCURRENT_GENERATE", "1"))
 MAX_CONCURRENT_EMBED = int(os.getenv("FTAAS_MAX_CONCURRENT_EMBED", "2"))
 _generate_semaphore = threading.Semaphore(MAX_CONCURRENT_GENERATE)
 _embed_semaphore = threading.Semaphore(MAX_CONCURRENT_EMBED)
+_peft_lock = threading.Lock()
 
 from model_registry import get_model_spec, format_inference_prompt
 from bitnet_engine import (
@@ -493,6 +494,11 @@ def compare_completions(req: CompareRequest):
                     detail="adapterPath is required for side-by-side comparison"
                 )
 
+            full_adapter_path = str(resolve_adapter_path(req.adapterPath))
+            p = Path(full_adapter_path)
+            if not (p.is_file() or (p / "adapter.gguf").is_file()):
+                raise BitNetExecutionError(f"No GGUF adapter at '{req.adapterPath}'")
+
             # 1. Base model completion via C++ engine
             base_completion, base_latency = generate_bitnet_sync(
                 req.prompt,
@@ -502,7 +508,6 @@ def compare_completions(req: CompareRequest):
             )
 
             # 2. Fine-tuned adapter completion
-            full_adapter_path = str(resolve_adapter_path(req.adapterPath))
             fine_tuned_completion, fine_tuned_latency = generate_bitnet_sync(
                 req.prompt,
                 req.maxTokens,
@@ -552,38 +557,39 @@ def compare_completions(req: CompareRequest):
                 detail="adapterPath is required for side-by-side comparison"
             )
 
-        peft_model = load_or_get_adapter(req.adapterPath)
+        with _peft_lock:
+            peft_model = load_or_get_adapter(req.adapterPath)
 
-        # 2. Generate with raw Base Model
-        if peft_model is not None and hasattr(peft_model, "disable_adapter"):
-            with peft_model.disable_adapter():
+            # 2. Generate with raw Base Model
+            if peft_model is not None and hasattr(peft_model, "disable_adapter"):
+                with peft_model.disable_adapter():
+                    base_completion, base_latency = generate_tokens(
+                        peft_model,
+                        model_store.tokenizer,
+                        req.prompt,
+                        req.maxTokens,
+                        req.temperature,
+                        base_model_id=DEFAULT_BASE_MODEL
+                    )
+            else:
                 base_completion, base_latency = generate_tokens(
-                    peft_model,
+                    model_store.base_model,
                     model_store.tokenizer,
                     req.prompt,
                     req.maxTokens,
                     req.temperature,
                     base_model_id=DEFAULT_BASE_MODEL
                 )
-        else:
-            base_completion, base_latency = generate_tokens(
-                model_store.base_model,
+
+            # 3. Generate with Fine-Tuned LoRA Adapter
+            fine_tuned_completion, fine_tuned_latency = generate_tokens(
+                peft_model,
                 model_store.tokenizer,
                 req.prompt,
                 req.maxTokens,
                 req.temperature,
                 base_model_id=DEFAULT_BASE_MODEL
             )
-
-        # 3. Generate with Fine-Tuned LoRA Adapter
-        fine_tuned_completion, fine_tuned_latency = generate_tokens(
-            peft_model,
-            model_store.tokenizer,
-            req.prompt,
-            req.maxTokens,
-            req.temperature,
-            base_model_id=DEFAULT_BASE_MODEL
-        )
 
         metrics.record_request("compare", "success", max(base_latency, fine_tuned_latency))
         return {
@@ -684,36 +690,37 @@ def generate(req: GenerateRequest):
                 }
             )
 
-        if req.adapterPath:
-            model = load_or_get_adapter(req.adapterPath)
-            completion, latency = generate_tokens(
-                model,
-                model_store.tokenizer,
-                req.prompt,
-                req.maxTokens,
-                req.temperature,
-                base_model_id=DEFAULT_BASE_MODEL
-            )
-        else:
-            if model_store.peft_model is not None and hasattr(model_store.peft_model, "disable_adapter"):
-                with model_store.peft_model.disable_adapter():
-                    completion, latency = generate_tokens(
-                        model_store.peft_model,
-                        model_store.tokenizer,
-                        req.prompt,
-                        req.maxTokens,
-                        req.temperature,
-                        base_model_id=DEFAULT_BASE_MODEL
-                    )
-            else:
+        with _peft_lock:
+            if req.adapterPath:
+                model = load_or_get_adapter(req.adapterPath)
                 completion, latency = generate_tokens(
-                    model_store.base_model,
+                    model,
                     model_store.tokenizer,
                     req.prompt,
                     req.maxTokens,
                     req.temperature,
                     base_model_id=DEFAULT_BASE_MODEL
                 )
+            else:
+                if model_store.peft_model is not None and hasattr(model_store.peft_model, "disable_adapter"):
+                    with model_store.peft_model.disable_adapter():
+                        completion, latency = generate_tokens(
+                            model_store.peft_model,
+                            model_store.tokenizer,
+                            req.prompt,
+                            req.maxTokens,
+                            req.temperature,
+                            base_model_id=DEFAULT_BASE_MODEL
+                        )
+                else:
+                    completion, latency = generate_tokens(
+                        model_store.base_model,
+                        model_store.tokenizer,
+                        req.prompt,
+                        req.maxTokens,
+                        req.temperature,
+                        base_model_id=DEFAULT_BASE_MODEL
+                    )
 
         metrics.record_request("generate", "success", latency)
         return {

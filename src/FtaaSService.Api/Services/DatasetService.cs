@@ -30,6 +30,7 @@ public sealed class DatasetService : IDatasetService
         try
         {
             Stream inputStream;
+            string? sourceResolvedPath = null;
             if (uploadedFile is not null && uploadedFile.Length > 0)
             {
                 if (uploadedFile.Length > MaxFileSizeBytes)
@@ -43,6 +44,7 @@ public sealed class DatasetService : IDatasetService
             {
                 var datasetsRoot = Path.GetFullPath(Path.Combine(_dataRoot, "datasets")) + Path.DirectorySeparatorChar;
                 var resolved = Path.GetFullPath(Path.Combine(_dataRoot, existingPath));
+                sourceResolvedPath = resolved;
                 if (Path.IsPathRooted(existingPath) ||
                     !resolved.StartsWith(datasetsRoot, StringComparison.Ordinal))
                 {
@@ -213,6 +215,28 @@ public sealed class DatasetService : IDatasetService
                 outStream.Position = 0;
                 var hashBytes = await sha256.ComputeHashAsync(outStream, cancellationToken);
                 var hashHex = Convert.ToHexStringLower(hashBytes);
+
+                if (!string.IsNullOrWhiteSpace(sourceResolvedPath))
+                {
+                    var existingDir = Path.GetDirectoryName(sourceResolvedPath) ?? "";
+                    var existingFileNameWithoutExt = Path.GetFileNameWithoutExtension(sourceResolvedPath);
+                    var existingExt = Path.GetExtension(sourceResolvedPath);
+                    var companionValCandidate = Path.Combine(existingDir, $"{existingFileNameWithoutExt}-val{existingExt}");
+                    if (File.Exists(companionValCandidate))
+                    {
+                        var valTargetDiskPath = Path.Combine(_dataRoot, "datasets", $"{jobId}-val.jsonl");
+                        try
+                        {
+                            File.Copy(companionValCandidate, valTargetDiskPath, overwrite: true);
+                            _logger.LogInformation("Job {JobId}: Copied companion validation dataset from {Source} to {Dest}",
+                                jobId, companionValCandidate, valTargetDiskPath);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Job {JobId}: Failed copying companion validation dataset: {Message}", jobId, ex.Message);
+                        }
+                    }
+                }
 
                 _logger.LogInformation("Job {JobId}: Successfully normalized {RecordCount} records (SHA: {Hash}) to {Path}",
                     jobId, recordCount, hashHex, relativePath);

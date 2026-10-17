@@ -1,7 +1,4 @@
-"""Regression tests for sync_docs.py defects found in review of 8548daa.
-
-Each test fails on 8548daa's sync_docs.py and passes with sync_docs_fixes.patch.
-"""
+"""Regression tests for sync_docs.py hardening and claims verification."""
 import contextlib
 import io
 import json
@@ -96,6 +93,7 @@ class TestMainOutput(unittest.TestCase):
     def _run_main(self, ast_result):
         out, err = io.StringIO(), io.StringIO()
         with mock.patch.object(sys, "argv", ["sync_docs.py", "--check"]), \
+             mock.patch.object(sync_docs, "independent_recompute_metrics", return_value=(True, [])), \
              mock.patch.object(sync_docs, "lint_script_conclusions", return_value=ast_result), \
              mock.patch.object(sync_docs, "sync_document", return_value=(True, [])), \
              contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):

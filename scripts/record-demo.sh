@@ -33,13 +33,19 @@ trap cleanup EXIT
 
 # Wait for server readiness
 echo "Waiting for Studio to be ready..."
-for i in {1..30}; do
+READY=0
+for i in {1..120}; do
     if curl -s http://localhost:5100 > /dev/null; then
         echo "Studio is ready!"
+        READY=1
         break
     fi
     sleep 1
 done
+if [ "$READY" -ne 1 ]; then
+    echo "Error: Studio did not become ready on http://localhost:5100" >&2
+    exit 1
+fi
 
 # Run Playwright recording script
 node scripts/record-demo.js

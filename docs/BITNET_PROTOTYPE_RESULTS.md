@@ -87,7 +87,7 @@ Benchmarked using `llama-bench` targeting `models/BitNet-b1.58-2B-4T/ggml-model-
 ### Key Scaling Observations
 1. **Linear Scaling on Physical Cores**: Scaling from 1 thread to 2 threads yields a **1.76×** speedup in decode throughput (8.13 t/s $\to$ 14.34 t/s). Scaling to 4 threads reaches **19.96 t/s** (2.45× over single-core).
 2. **Multi-Core Scaling & Bottlenecks**: Scaling from 4 to 8 threads across all 8 physical cores yields **23.54 t/s** (+18% throughput improvement). This sub-linear scaling gain may reflect a shared hardware bottleneck such as memory bandwidth across cores, though memory bus utilization was not explicitly profiled.
-3. **Prompt Prefill Speed**: Single-prompt prefill bursts at **100.3 to 107.2 tokens/second** on 4 threads during direct `llama-cli` interactive passes.
+3. **Prompt Prefill Speed**: Single-prompt prefill bursts at **100.3 to 107.2 tokens/second** on 8 threads during direct `llama-cli` interactive passes.
 
 ---
 

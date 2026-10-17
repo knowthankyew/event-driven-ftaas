@@ -74,7 +74,7 @@ SmolLM2-135M was evaluated across enterprise support and compliance records (`da
 ### Observations on Convergence
 1. **Rapid Gradient Descent**: With only 461K trainable parameters, loss descends smoothly from $1.8540$ to $0.3120$ within 75 steps without divergence or activation explosion.
 2. **Minimal Thermal & Memory Footprint**: Process memory during training remains bounded under **1.5 GB RAM**, producing zero thermal throttling on laptop-class hardware.
-3. **Turnaround Speed**: At **2m 14s**, fine-tuning completes **3.1× faster** than Gemma 2B (7m 3s) and **24× faster** than CPU BitNet float32 training (53m 39s), enabling near-instantaneous test-and-iterate workflows.
+3. **Turnaround Speed**: At **2m 14s**, fine-tuning completes **3.1× faster** than Gemma 2B (7m 3s) and **24× faster** than BitNet MPS float32 training (53m 39s), enabling near-instantaneous test-and-iterate workflows.
 
 ---
 

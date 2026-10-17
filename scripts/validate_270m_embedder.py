@@ -255,12 +255,20 @@ def main():
         b_norm = np.linalg.norm(bvec)
         bitnet_vecs[k] = np.array(bvec, dtype=np.float32) / (b_norm if b_norm > 0 else 1.0)
 
+    fruit_physics_minilm = float(np.dot(minilm_vecs["fruit"], minilm_vecs["physics"]))
+    fruit_physics_harrier = float(np.dot(harrier_vecs["fruit"], harrier_vecs["physics"]))
+    fruit_physics_bitnet = float(np.dot(bitnet_vecs["fruit"], bitnet_vecs["physics"]))
+
     baseline_comparisons = {
         "fruit_vs_physics_dissimilar": {
-            "minilm_cosine": float(np.dot(minilm_vecs["fruit"], minilm_vecs["physics"])),
-            "harrier_teacher_cosine": float(np.dot(harrier_vecs["fruit"], harrier_vecs["physics"])),
-            "bitnet_270m_cosine": float(np.dot(bitnet_vecs["fruit"], bitnet_vecs["physics"])),
-            "explanation": "MiniLM centers dissimilar concepts near 0 (-0.094), while Gemma backbones exhibit baseline offset (~0.35-0.45) due to large 262k vocabulary structure."
+            "minilm_cosine": fruit_physics_minilm,
+            "harrier_teacher_cosine": fruit_physics_harrier,
+            "bitnet_270m_cosine": fruit_physics_bitnet,
+            "explanation": (
+                f"MiniLM centers dissimilar concepts near zero ({fruit_physics_minilm:+.3f}), "
+                f"while Gemma backbones exhibit baseline offset (Harrier={fruit_physics_harrier:+.3f}, "
+                f"BitNet={fruit_physics_bitnet:+.3f}) due to large 262k vocabulary structure."
+            )
         },
         "banking_vs_rosca_domain_separation": {
             "minilm_cosine": float(np.dot(minilm_vecs["banking_reg_cc"], minilm_vecs["ftc_rosca"])),
@@ -271,15 +279,15 @@ def main():
 
     # Calibrated conclusion
     conclusion = (
-        f"Pairwise similarity correlation against the official unquantized teacher (Harrier 270M) across 190 off-diagonal pairs "
+        f"Pairwise similarity correlation against the official unquantized teacher (Harrier 270M) across {len(pairs_full)} off-diagonal pairs "
         f"demonstrates moderate, statistically significant relational rank correlation: rho={full_eval['spearman_rho']} "
-        f"(R^2={full_eval['r_squared']}, explaining {full_eval['variance_explained_pct']}% of variance, spearman p={full_eval['spearman_pvalue']:.2e}) on full legal clauses (36-75 tokens), "
+        f"(R^2={full_eval['r_squared']}, explaining {full_eval['variance_explained_pct']}% of variance, spearman p={full_eval['spearman_pvalue']:.2e}) on full legal clauses, "
         f"and rho={short_eval['spearman_rho']}, r={short_eval['pearson_r']} (R^2={short_eval['r_squared']}, "
-        f"explaining {short_eval['variance_explained_pct']}% of variance, spearman p={short_eval['spearman_pvalue']:.2e}) on short clauses (< 30 tokens). "
+        f"explaining {short_eval['variance_explained_pct']}% of variance, spearman p={short_eval['spearman_pvalue']:.2e}) on short clauses. "
         f"While statistically significant (spearman p={full_eval['spearman_pvalue']:.2e}, pearson p={full_eval['pearson_pvalue']:.2e}), explaining {full_eval['variance_explained_pct']}% to {short_eval['variance_explained_pct']}% of semantic variance indicates that 1-bit dense embeddings "
         f"retain coarse topical clustering but lose significant discriminative signal relative to the FP16 teacher. "
-        f"The lower rank correlation on short sequences (< 30 tokens, rho={short_eval['spearman_rho']} vs rho={full_eval['spearman_rho']}) demonstrates that "
-        f"concise statutory clauses lose discriminative signal when quantized to ternary weights (as corroborated by the 0% Top-1 short-chunk retrieval rate documented in docs/empirical_retrieval_benchmark.json)."
+        f"The lower rank correlation on short sequences (rho={short_eval['spearman_rho']} vs rho={full_eval['spearman_rho']}) demonstrates that "
+        f"concise statutory clauses lose discriminative signal when quantized to ternary weights (as corroborated by short-chunk retrieval results documented in docs/empirical_retrieval_benchmark.json)."
     )
 
     output_path = os.path.abspath(os.path.join(repo_root, "docs/empirical_270m_embedder_validation.json"))

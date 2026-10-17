@@ -281,8 +281,9 @@ class TestAppRoutingWithBitNet(unittest.TestCase):
     """Validates FastAPI app routing for BitNet in /generate, /compare, and /healthz."""
 
     @patch("app.is_bitnet_available", return_value=True)
+    @patch("pathlib.Path.is_file", return_value=True)
     @patch("app.generate_bitnet_sync")
-    def test_compare_completions_routes_to_bitnet_successfully(self, mock_gen, _mock_avail):
+    def test_compare_completions_routes_to_bitnet_successfully(self, mock_gen, _mock_file, _mock_avail):
         mock_gen.side_effect = [
             ("Raw base output from BitNet C++", 1250.0),
             ("Fine-tuned adapter output from BitNet", 1180.0)

@@ -26,6 +26,11 @@ import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 import gguf
 
+_INFERENCE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src", "FtaaSService.Inference"))
+if _INFERENCE_DIR not in sys.path:
+    sys.path.insert(0, _INFERENCE_DIR)
+import bitnet_engine  # noqa: E402
+
 # --- 1. Prompts for Bisection and Length Testing ---
 
 statute_text_598 = """12 CFR Part 229 - Availability of Funds and Collection of Checks (Regulation CC)
@@ -402,8 +407,11 @@ def main():
     delta_29 = logits_info.get("prompt_29_tokens", {}).get("logit_delta")
     delta_30 = logits_info.get("prompt_30_tokens", {}).get("logit_delta")
 
-    b1_run = bitnet_runs.get("single_tok_prefill_b1", {})
-    b1_result_desc = f"Single-token prefill (b=1) evaluates with classification '{b1_run.get('classification', 'unknown')}'." if b1_run else ""
+    b1_runs = {k: v for k, v in bitnet_runs.items() if "batch_1_ub_1" in k}
+    b1_result_desc = (
+        "Single-token prefill (b=1) classifications: "
+        + ", ".join(f"{k}={v['classification']}" for k, v in b1_runs.items()) + "."
+    ) if b1_runs else ""
 
     hf_eval_runs = [v for k, v in hf_results.items() if isinstance(v, dict) and "factual_correctness" in v]
     hf_all_correct = all(v["factual_correctness"] for v in hf_eval_runs) if hf_eval_runs else False
@@ -425,11 +433,28 @@ def main():
             f"Under default prefill (b=512), factual extraction succeeds up to {max_passing_default} tokens (total corrupted runs={corrupted_count})."
         )
 
-    if long_runs:
-        conclusion_parts.append(
-            f"Under micro-batching (b=16), prompt context beyond 34 tokens degenerates into repetition or premature EOS without factual retrieval "
-            f"(long context correct={long_correct_count}/{len(long_runs)})."
-        )
+    b16_runs = {k: v for k, v in bitnet_runs.items() if "batch_16_ub_16" in k}
+    b16_passing = [v["prompt_tokens"] for v in b16_runs.values() if v.get("factual_correctness")]
+    b16_failing = [v["prompt_tokens"] for v in b16_runs.values() if not v.get("factual_correctness")]
+    max_b16_pass = max(b16_passing) if b16_passing else None
+    min_b16_fail = min(b16_failing) if b16_failing else None
+
+    if b16_runs:
+        if max_b16_pass is not None and min_b16_fail is not None:
+            conclusion_parts.append(
+                f"Under micro-batching (b=16), prompt context succeeds up to {max_b16_pass} tokens and fails at >= {min_b16_fail} tokens "
+                f"(degenerating into repetition or premature EOS without factual retrieval; long context correct={long_correct_count}/{len(long_runs)})."
+            )
+        elif min_b16_fail is not None:
+            conclusion_parts.append(
+                f"Under micro-batching (b=16), prompt context at >= {min_b16_fail} tokens degenerates into repetition or premature EOS without factual retrieval "
+                f"(long context correct={long_correct_count}/{len(long_runs)})."
+            )
+        else:
+            conclusion_parts.append(
+                f"Under micro-batching (b=16), prompt context evaluated across {len(b16_runs)} runs "
+                f"(long context correct={long_correct_count}/{len(long_runs)})."
+            )
 
     conclusion_parts.append(
         "KV cache precision flags (-ctk f32 -ctv f32) and Flash Attention toggles (-fa on/off) do not alter the failure boundary."
@@ -438,9 +463,11 @@ def main():
     if hf_eval_runs:
         suppression_desc = ""
         if delta_29 is not None and delta_30 is not None:
-            suppression_desc = f", with corrupt token (ID 112890 '备份') suppressed by {delta_29} to {delta_30} logits"
+            corrupt_id = logits_info.get("prompt_29_tokens", {}).get("corrupt_token_id")
+            tok_str = f" (ID {corrupt_id})" if corrupt_id is not None else ""
+            suppression_desc = f", with corrupt token{tok_str} suppressed by {delta_29} to {delta_30} logits"
         conclusion_parts.append(
-            f"Hugging Face PyTorch reference achieves {'100%' if hf_all_correct else 'partial'} factual correctness across evaluated samplers{suppression_desc}."
+            f"Hugging Face PyTorch reference achieves {'full' if hf_all_correct else 'partial'} factual correctness across evaluated samplers{suppression_desc}."
         )
 
     if b1_result_desc:

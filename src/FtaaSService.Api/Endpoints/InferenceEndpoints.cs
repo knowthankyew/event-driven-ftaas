@@ -76,9 +76,16 @@ public static class InferenceEndpoints
         }
         catch (HttpRequestException)
         {
-            // Graceful preview fallback for non-tech users & studio demo mode when GPU/FastAPI service is offline
-            var fallback = GenerateStudioPreview(request.Prompt, request.JobId, baseModel, adapterPath);
-            return Results.Ok(fallback);
+            if (configuration.GetValue<bool>("STUDIO_PREVIEW_FALLBACK"))
+            {
+                var fallback = GenerateStudioPreview(request.Prompt, request.JobId, baseModel, adapterPath);
+                return Results.Ok(fallback);
+            }
+            return Results.Problem(
+                statusCode: StatusCodes.Status502BadGateway,
+                title: "Inference Engine Unreachable",
+                detail: "Inference engine service is offline or unreachable."
+            );
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

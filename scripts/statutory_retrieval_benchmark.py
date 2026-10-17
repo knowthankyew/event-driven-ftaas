@@ -448,6 +448,7 @@ def run_benchmark(
         "hybrid": hybrid_scores,
         "hybrid_minilm": hybrid_minilm_scores
     }
+    full_score_maps = {m: v for m, v in full_score_maps.items() if m not in skipped_methods}
 
     # 4. Evaluate full corpus (35 queries)
     print("Evaluating full corpus retrieval...")
@@ -482,12 +483,18 @@ def run_benchmark(
     # 7. Evaluate external queries (32 queries)
     print("Evaluating external queries...")
     ext_bitnet_q_embeds = []
-    for q in external_queries:
-        v, _ = bitnet_engine.embed_bitnet_sync(f"query: {q['query']}")
-        arr = np.array(v, dtype=np.float32)
-        norm = np.linalg.norm(arr)
-        ext_bitnet_q_embeds.append(arr / (norm if norm > 0 else 1.0))
-    ext_bitnet_q_embeds = np.array(ext_bitnet_q_embeds)
+    if bitnet_embed_available:
+        for q in external_queries:
+            try:
+                v, _ = bitnet_engine.embed_bitnet_sync(f"query: {q['query']}")
+                arr = np.array(v, dtype=np.float32)
+                norm = np.linalg.norm(arr)
+                ext_bitnet_q_embeds.append(arr / (norm if norm > 0 else 1.0))
+            except Exception:
+                ext_bitnet_q_embeds.append(np.zeros(640, dtype=np.float32))
+        ext_bitnet_q_embeds = np.array(ext_bitnet_q_embeds)
+    else:
+        ext_bitnet_q_embeds = np.zeros((len(external_queries), 640), dtype=np.float32)
 
     ext_minilm_q_embeds = None
     if model_minilm is not None:
@@ -539,25 +546,47 @@ def run_benchmark(
         "hybrid": ext_hybrid_scores,
         "hybrid_minilm": ext_hybrid_minilm_scores
     }
+    ext_score_maps = {m: v for m, v in ext_score_maps.items() if m not in skipped_methods}
     external_summary, external_details = evaluate_retrieval(corpus, external_queries, ext_score_maps)
 
     # 8. Controlled diagnostics for BitNet embedder weakness
     print("Running controlled BitNet diagnostic experiments...")
-    # Exp 1: Prefix vs No Prefix
-    bn_unprefixed_scores = [np.dot(bitnet_corpus_embeds, bitnet_q_embeds_unprefixed[i]).tolist() for i in range(len(queries))]
-    unprefixed_sum, _ = evaluate_retrieval(corpus, queries, {"bitnet_no_prefix": bn_unprefixed_scores})
+    if bitnet_embed_available:
+        # Exp 1: Prefix vs No Prefix
+        bn_unprefixed_scores = [np.dot(bitnet_corpus_embeds, bitnet_q_embeds_unprefixed[i]).tolist() for i in range(len(queries))]
+        unprefixed_sum, _ = evaluate_retrieval(corpus, queries, {"bitnet_no_prefix": bn_unprefixed_scores})
 
-    # Exp 2: Short Chunks
-    bn_short_scores = [np.dot(bitnet_short_corpus_embeds, bitnet_q_embeds_prefixed[i]).tolist() for i in range(len(queries))]
-    short_sum, _ = evaluate_retrieval(corpus, queries, {"bitnet_short_chunks": bn_short_scores})
+        # Exp 2: Short Chunks
+        bn_short_scores = [np.dot(bitnet_short_corpus_embeds, bitnet_q_embeds_prefixed[i]).tolist() for i in range(len(queries))]
+        short_sum, _ = evaluate_retrieval(corpus, queries, {"bitnet_short_chunks": bn_short_scores})
 
-    # Exp 3: Self-Retrieval validation
-    self_hits = 0
-    for idx, c in enumerate(corpus):
-        sims = np.dot(bitnet_corpus_embeds, bitnet_corpus_embeds[idx])
-        top_idx = int(np.argmax(sims))
-        if top_idx == idx:
-            self_hits += 1
+        # Exp 3: Self-Retrieval validation
+        self_hits = 0
+        for idx, c in enumerate(corpus):
+            sims = np.dot(bitnet_corpus_embeds, bitnet_corpus_embeds[idx])
+            top_idx = int(np.argmax(sims))
+            if top_idx == idx:
+                self_hits += 1
+
+        self_retrieval_val = {
+            "total_chunks": len(corpus),
+            "passes": self_hits,
+            "accuracy_pct": round_half_up((self_hits / len(corpus)) * 100.0, 1)
+        }
+        short_top1_pct = short_sum.get("bitnet_short_chunks", {}).get("top1_recall_pct", 0.0)
+        bitnet_diagnostics_val = {
+            "with_query_prefix_top1_hits": full_summary.get("bitnet_embedding", {}).get("top1_hits", 0),
+            "without_query_prefix_top1_hits": unprefixed_sum.get("bitnet_no_prefix", {}).get("top1_hits", 0),
+            "short_chunks_top1_hits": short_sum.get("bitnet_short_chunks", {}).get("top1_hits", 0),
+            "self_retrieval_top1_hits": self_hits,
+            "diagnosis_finding": (
+                f"Self-retrieval achieves {round_half_up((self_hits / len(corpus)) * 100.0, 1)}%, but query-to-chunk matching remains weak under all prefix configurations; "
+                f"short chunks achieve {short_top1_pct}% top-1."
+            )
+        }
+    else:
+        self_retrieval_val = None
+        bitnet_diagnostics_val = None
 
     # 9. Provenance metadata
     git_commit = "unknown"
@@ -589,21 +618,8 @@ def run_benchmark(
             "tie_breaking_rule": "score descending, then corpus id alphabetically ascending",
             "rounding_rule": "Decimal quantize with ROUND_HALF_UP",
             "skipped_methods": skipped_methods,
-            "self_retrieval_validation": {
-                "total_chunks": len(corpus),
-                "passes": self_hits,
-                "accuracy_pct": round_half_up((self_hits / len(corpus)) * 100.0, 1)
-            },
-            "bitnet_diagnostics": {
-                "with_query_prefix_top1_hits": full_summary.get("bitnet_embedding", {}).get("top1_hits", 0),
-                "without_query_prefix_top1_hits": unprefixed_sum.get("bitnet_no_prefix", {}).get("top1_hits", 0),
-                "short_chunks_top1_hits": short_sum.get("bitnet_short_chunks", {}).get("top1_hits", 0),
-                "self_retrieval_top1_hits": self_hits,
-                "diagnosis_finding": (
-                    f"Self-retrieval achieves {round_half_up((self_hits / len(corpus)) * 100.0, 1)}%, but query-to-chunk matching remains weak under all prefix configurations; "
-                    f"short chunks achieve {short_sum.get('bitnet_short_chunks', {}).get('top1_recall_pct', 0.0)}% top-1."
-                )
-            }
+            "self_retrieval_validation": self_retrieval_val,
+            "bitnet_diagnostics": bitnet_diagnostics_val
         },
         "full_corpus_benchmark": {
             "queries_count": len(queries),

@@ -127,7 +127,7 @@ def main():
         trainable_pct = (trainable_params / all_params) * 100.0
         trainable_str = f"{trainable_params:,} ({trainable_pct:.4f}% of {all_params / 1e9:.2f}B base parameters)"
     else:
-        trainable_str = "3,993,600 (0.1652% of 2.41B base parameters)"
+        trainable_str = "not reported"
 
     # 1. Update MODEL_PERFORMANCE_COMPARISON.md
     comp_path = DEV_ROOT / "docs" / "MODEL_PERFORMANCE_COMPARISON.md"
@@ -139,6 +139,7 @@ def main():
         new_table_col = (
             f"| Attribute | SmolLM2-135M (Baseline) | Gemma 2 2B IT (Live Run) | BitNet b1.58 2B-4T |\n"
             f"| :--- | :--- | :--- | :--- |\n"
+            f"| Training Dataset | sample-support-compliance (100 records) | sample-financial-sentiment (20 records) | sample-financial-sentiment (20 records) |\n"
             f"| Training Steps | 75 steps (3 epochs, batch 4) | 30 steps (3 epochs, batch 2) | {total_steps} steps (3 epochs) |\n"
             f"| Target Projection Layers | q_proj, v_proj | q_proj, v_proj, k_proj, o_proj | q_proj, v_proj, k_proj, o_proj |\n"
             f"| LoRA Rank (r) / Alpha | 8 / 32 | 8 / 32 | 8 / 32 |\n"
@@ -202,8 +203,8 @@ def main():
             proto_content += results_section
         else:
             proto_content = re.sub(
-                r"## 7\. Empirical LoRA Fine-Tuning Benchmark Results.*",
-                results_section.lstrip("\n---\n\n"),
+                r"## 7\. Empirical LoRA Fine-Tuning Benchmark Results.*?(?=\n### Technical Observations|\n## |\Z)",
+                lambda _m: results_section.lstrip("\n---\n\n").rstrip("\n") + "\n\n",
                 proto_content,
                 flags=re.DOTALL
             )

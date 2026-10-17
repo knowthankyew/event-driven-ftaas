@@ -260,6 +260,8 @@
       const card = document.createElement('div');
       card.className = 'persona-card';
       card.dataset.id = p.id;
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
       card.innerHTML = `
         <div class="persona-header">
           <div class="persona-name">${p.name}</div>
@@ -269,6 +271,12 @@
         <div class="persona-desc">${p.description}</div>
       `;
       card.addEventListener('click', () => selectPersona(p.id));
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          selectPersona(p.id);
+        }
+      });
       elements.personaGrid.appendChild(card);
     });
   }
@@ -291,7 +299,7 @@
 
     // Pre-fill Dataset in Studio if empty
     if (state.datasetRows.length === 0 && persona.seedPairs) {
-      state.datasetRows = [...persona.seedPairs];
+      state.datasetRows = persona.seedPairs.map(r => ({ ...r }));
       renderDatasetRows();
     }
     if (elements.jobNameInput && !elements.jobNameInput.value) {
@@ -381,7 +389,7 @@
 
     // Find requested job adapter or any completed job adapter if available
     const activeJob = (selectedJob && selectedJob.status === 'Succeeded' && selectedJob.adapterPath) ? selectedJob : null;
-    const completedJob = activeJob || state.jobs.find(j => j.status === 'Succeeded' && j.adapterPath);
+    const completedJob = activeJob || state.jobs.find(j => j.status === 'Succeeded' && j.adapterPath && j.baseModel === state.activeBaseModel);
     const adapterPath = completedJob ? completedJob.adapterPath : 'artifacts/default/model_adapters';
     const jobId = completedJob ? (completedJob.jobId || completedJob.id) : null;
 
@@ -401,7 +409,7 @@
         maxTokens: parseInt(elements.maxTokensInput.value, 10) || 64,
         temperature: Number.isNaN(parseFloat(elements.tempInput.value)) ? 0.2 : parseFloat(elements.tempInput.value),
         jobId: jobId,
-        baseModel: state.activeBaseModel || (completedJob ? completedJob.baseModel : undefined),
+        baseModel: (completedJob && completedJob.baseModel) || state.activeBaseModel,
         adapterPath: adapterPath
       };
 
@@ -715,7 +723,7 @@
 
   function loadTemplateRows() {
     if (state.selectedPersona && state.selectedPersona.seedPairs) {
-      state.datasetRows = [...state.selectedPersona.seedPairs];
+      state.datasetRows = state.selectedPersona.seedPairs.map(r => ({ ...r }));
       renderDatasetRows();
       showToast(`Loaded ${state.datasetRows.length} policy examples from "${state.selectedPersona.name}".`, 'success');
     }
@@ -891,8 +899,10 @@
       state.datasetRows = parsed;
       renderDatasetRows();
       const piiRow = parsed.find(r => scanForPII(r.prompt) || scanForPII(r.completion));
-      if (piiRow || piiFoundInUnmappedColumn) {
-        showToast(`Security Alert: "${fileName}" contains customer PII (in data or unmapped columns). Training is blocked until sanitized.`, 'error');
+      if (piiRow) {
+        showToast(`Security Alert: "${fileName}" contains customer PII in mapped training columns. Training is blocked until sanitized.`, 'error');
+      } else if (piiFoundInUnmappedColumn) {
+        showToast(`Imported ${parsed.length} examples from "${fileName}". Note: Unmapped columns containing PII were automatically dropped.`, 'info');
       } else {
         showToast(`Imported ${parsed.length} examples from "${fileName}" (unmapped metadata columns safely excluded).`, 'success');
       }
@@ -1004,6 +1014,9 @@
       if (testBtn) {
         testBtn.addEventListener('click', () => {
           switchTab('arena');
+          if (job.baseModel) {
+            selectActiveBaseModel(job.baseModel);
+          }
           if (elements.tunedAdapterLabel) {
             elements.tunedAdapterLabel.textContent = `${job.jobName} (~1.8 MB)`;
           }

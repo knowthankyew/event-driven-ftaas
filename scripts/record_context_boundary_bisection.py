@@ -350,10 +350,10 @@ def compute_sha256(file_path: Path) -> str:
     return h.hexdigest()
 
 
-TOKEN_CACHE: Dict[str, Tuple[int, List[int]]] = {}
+TOKEN_CACHE: Dict[str, Tuple[int, List[int], bool]] = {}
 
 
-def count_tokens(prompt: str) -> Tuple[int, List[int]]:
+def count_tokens(prompt: str) -> Tuple[int, List[int], bool]:
     """Tokenize prompt using llama-tokenize to get exact count and token IDs."""
     if prompt in TOKEN_CACHE:
         return TOKEN_CACHE[prompt]
@@ -361,7 +361,9 @@ def count_tokens(prompt: str) -> Tuple[int, List[int]]:
     if not TOKENIZE_PATH.is_file():
         # Fallback approximation
         words = prompt.split()
-        return len(words), []
+        res = (len(words), [], True)
+        TOKEN_CACHE[prompt] = res
+        return res
 
     cmd = [
         str(TOKENIZE_PATH),
@@ -382,11 +384,11 @@ def count_tokens(prompt: str) -> Tuple[int, List[int]]:
                 count = int(m2.group(1))
 
         token_ids = [int(x) for x in re.findall(r"^\s*(\d+)\s+->", proc.stdout, re.MULTILINE)]
-        res = (count, token_ids)
+        res = (count, token_ids, False)
         TOKEN_CACHE[prompt] = res
         return res
     except Exception:
-        fallback = (len(prompt.split()), [])
+        fallback = (len(prompt.split()), [], True)
         TOKEN_CACHE[prompt] = fallback
         return fallback
 
@@ -430,7 +432,7 @@ def extract_first_token_id(out_text: str) -> Optional[int]:
     clean = out_text.strip()
     if not clean or clean == "[end of text]":
         return 128001
-    cnt, ids = count_tokens(clean)
+    cnt, ids, _ = count_tokens(clean)
     if ids and len(ids) > 1 and ids[0] == 128000:
         return ids[1]
     elif ids:
@@ -530,7 +532,8 @@ def execute_bisection_sweep(output_file: Path = DEFAULT_OUTPUT_FILE) -> dict:
         for tlen in target_lengths:
             ptext = c["variants"].get(tlen, "")
             formatted_prompt = f"User: {ptext}<|eot_id|>\nAssistant: "
-            exact_tokens, token_ids = count_tokens(formatted_prompt)
+            exact_tokens, token_ids, is_approx = count_tokens(formatted_prompt)
+            token_offset = exact_tokens - tlen
 
             # Standard configs
             configs_to_run = [
@@ -564,6 +567,8 @@ def execute_bisection_sweep(output_file: Path = DEFAULT_OUTPUT_FILE) -> dict:
                     "clause_id": cid,
                     "target_length": tlen,
                     "exact_tokens": exact_tokens,
+                    "token_offset": token_offset,
+                    "is_approximate": is_approx,
                     "prompt_token_ids": token_ids,
                     "prompt_text": formatted_prompt,
                     "config": cfg_name,
@@ -606,6 +611,20 @@ def execute_bisection_sweep(output_file: Path = DEFAULT_OUTPUT_FILE) -> dict:
             "pass_rate_pct": round(pct, 1)
         }
 
+    # Pass rate grouped by measured exact_tokens under default config
+    pass_rate_by_exact_tokens = {}
+    unique_exact_tokens = sorted(list({r["exact_tokens"] for r in runs_data if r["config"] == "default_b512_t4"}))
+    for tok in unique_exact_tokens:
+        matching = [r for r in runs_data if r["exact_tokens"] == tok and r["config"] == "default_b512_t4"]
+        n_match = len(matching)
+        n_corr = sum(1 for r in matching if r["is_correct"])
+        pct = (n_corr / n_match) * 100.0 if n_match > 0 else 0.0
+        pass_rate_by_exact_tokens[str(tok)] = {
+            "total": n_match,
+            "correct": n_corr,
+            "pass_rate_pct": round(pct, 1)
+        }
+
     # Minimum failing length per prompt
     min_failing_per_clause = {}
     for c in CLAUSES:
@@ -613,15 +632,21 @@ def execute_bisection_sweep(output_file: Path = DEFAULT_OUTPUT_FILE) -> dict:
         failing_lens = [tlen for tlen in target_lengths if not clause_results[cid].get("default_b512_t4", {}).get(tlen, False)]
         min_failing_per_clause[cid] = min(failing_lens) if failing_lens else None
 
-    # Highest length where ALL clauses pass
-    all_passing_lengths = [
-        tlen for tlen in target_lengths
-        if all(clause_results[c["id"]].get("default_b512_t4", {}).get(tlen, False) for c in CLAUSES)
-    ]
-    highest_all_pass = max(all_passing_lengths) if all_passing_lengths else 16
+    # Highest length where ALL clauses pass (contiguous prefix only)
+    highest_all_pass = None
+    for tlen in sorted(target_lengths):
+        if all(clause_results[c["id"]].get("default_b512_t4", {}).get(tlen, False) for c in CLAUSES):
+            highest_all_pass = tlen
+        else:
+            break
 
     stated_margin = 8
-    recommended_cap = max(16, highest_all_pass - stated_margin)
+    if highest_all_pass is None:
+        print("[ERROR] No length passed for all clauses; refusing to derive a cap.", file=sys.stderr)
+        sys.exit(1)
+    raw_cap = highest_all_pass - stated_margin
+    recommended_cap = max(16, raw_cap)
+    cap_floor_applied = (recommended_cap != raw_cap)
 
     conclusion_str = build_bisection_conclusion(
         highest_all_pass=highest_all_pass,
@@ -669,11 +694,13 @@ def execute_bisection_sweep(output_file: Path = DEFAULT_OUTPUT_FILE) -> dict:
             "highest_all_passing_length": highest_all_pass,
             "stated_margin": stated_margin,
             "recommended_safe_generate_cap": recommended_cap,
+            "cap_floor_applied": cap_floor_applied,
             "b1_behavior": b1_behavior,
             "hf_reference_subset": hf_reference_subset,
             "conclusion": conclusion_str
         },
         "pass_rate_by_length": pass_rate_by_length,
+        "pass_rate_by_exact_tokens": pass_rate_by_exact_tokens,
         "min_failing_length_per_clause": min_failing_per_clause,
         "runs": runs_data
     }

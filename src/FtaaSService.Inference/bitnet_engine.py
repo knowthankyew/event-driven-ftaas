@@ -511,7 +511,7 @@ async def generate_bitnet(
     if proc.returncode != 0:
         err_msg = stderr.decode("utf-8", errors="replace").strip()
         logger.error(f"BitNet inference process failed (exit {proc.returncode}): {err_msg}")
-        raise RuntimeError(f"BitNet inference exited with code {proc.returncode}: {err_msg}")
+        raise BitNetExecutionError(f"BitNet inference exited with code {proc.returncode}: {err_msg}")
 
     raw_output = stdout.decode("utf-8", errors="replace")
     if use_completion:
@@ -624,7 +624,7 @@ def generate_bitnet_sync(
 
     if res.returncode != 0:
         logger.error(f"BitNet inference process failed (exit {res.returncode}): {res.stderr}")
-        raise RuntimeError(f"BitNet inference exited with code {res.returncode}: {res.stderr}")
+        raise BitNetExecutionError(f"BitNet inference exited with code {res.returncode}: {res.stderr}")
 
     if use_completion:
         completion_text = clean_completion_output(res.stdout)

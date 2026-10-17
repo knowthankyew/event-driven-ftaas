@@ -344,50 +344,68 @@ public static class JobEndpoints
         var manifestPath = Path.Combine(edgeDir, "edge_model_manifest.json");
         var modelOnnxPath = Path.Combine(edgeDir, "model.onnx");
 
-        // 1. If real ONNX export already exists, return manifest directly
-        if (File.Exists(manifestPath) && File.Exists(modelOnnxPath) && new FileInfo(modelOnnxPath).Length > 1024)
+        var jobLock = _jobExportLocks.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
+        if (!await jobLock.WaitAsync(TimeSpan.FromSeconds(60), cancellationToken))
         {
-            var existingContent = await File.ReadAllTextAsync(manifestPath, cancellationToken);
-            var existingManifest = JsonSerializer.Deserialize<JsonElement>(existingContent);
+            return Results.Problem(
+                statusCode: StatusCodes.Status503ServiceUnavailable,
+                title: "Export Service Busy",
+                detail: $"An export operation is already in progress for job '{id}'."
+            );
+        }
+
+        try
+        {
+            // 1. If real ONNX export already exists, return manifest directly
+            if (File.Exists(manifestPath) && File.Exists(modelOnnxPath) && new FileInfo(modelOnnxPath).Length > 1024)
+            {
+                var existingContent = await File.ReadAllTextAsync(manifestPath, cancellationToken);
+                var existingManifest = JsonSerializer.Deserialize<JsonElement>(existingContent);
+                return Results.Ok(new
+                {
+                    jobId = id,
+                    status = "Exported",
+                    manifest = existingManifest
+                });
+            }
+
+            // 2. Attempt real ONNX export using worker script
+            var (success, output) = await TryExecuteEdgeExportScriptAsync(id, configuration, cancellationToken);
+
+            if (!success || !File.Exists(manifestPath))
+            {
+                return Results.Problem(
+                    statusCode: 500,
+                    title: "Edge Export Failed",
+                    detail: string.IsNullOrWhiteSpace(output) 
+                        ? $"Failed to generate ONNX edge export for job '{id}'." 
+                        : output
+                );
+            }
+
+            telemetry.RecordSpan("job.edge_export_requested", id, job.Status.ToString(), 0, new Dictionary<string, object>
+            {
+                ["base_model"] = job.BaseModel,
+                ["action"] = "edge_export"
+            });
+
+            var content = await File.ReadAllTextAsync(manifestPath, cancellationToken);
+            var manifest = JsonSerializer.Deserialize<JsonElement>(content);
             return Results.Ok(new
             {
                 jobId = id,
                 status = "Exported",
-                manifest = existingManifest
+                manifest = manifest
             });
         }
-
-        // 2. Attempt real ONNX export using worker script
-        var (success, output) = await TryExecuteEdgeExportScriptAsync(id, configuration, cancellationToken);
-
-        if (!success || !File.Exists(manifestPath))
+        finally
         {
-            return Results.Problem(
-                statusCode: 500,
-                title: "Edge Export Failed",
-                detail: string.IsNullOrWhiteSpace(output) 
-                    ? $"Failed to generate ONNX edge export for job '{id}'." 
-                    : output
-            );
+            jobLock.Release();
         }
-
-        telemetry.RecordSpan("job.edge_export_requested", id, job.Status.ToString(), 0, new Dictionary<string, object>
-        {
-            ["base_model"] = job.BaseModel,
-            ["action"] = "edge_export"
-        });
-
-        var content = await File.ReadAllTextAsync(manifestPath, cancellationToken);
-        var manifest = JsonSerializer.Deserialize<JsonElement>(content);
-        return Results.Ok(new
-        {
-            jobId = id,
-            status = "Exported",
-            manifest = manifest
-        });
     }
 
     private static readonly SemaphoreSlim _exportLock = new(2, 2);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> _jobExportLocks = new();
 
     private static async Task<(bool success, string output)> TryExecuteEdgeExportScriptAsync(
         string id,

@@ -34,6 +34,11 @@ from typing import Any, Dict, List, Optional, Tuple
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs" / "empirical_speed_memory.json"
 
+_INFERENCE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src", "FtaaSService.Inference"))
+if _INFERENCE_DIR not in sys.path:
+    sys.path.insert(0, _INFERENCE_DIR)
+import bitnet_engine  # noqa: E402
+
 DEFAULT_GEN_CLI = Path.home() / "Github" / "BitNet" / "build" / "bin" / "llama-completion"
 DEFAULT_EMBED_CLI = Path.home() / "Github" / "BitNet" / "build" / "bin" / "llama-embedding"
 DEFAULT_GEN_MODEL = Path.home() / "Github" / "BitNet" / "models" / "BitNet-b1.58-2B-4T" / "ggml-model-i2_s.gguf"
@@ -244,10 +249,12 @@ def measure_peak_rss(
         peak_footprint_mb = round(peak_footprint_bytes / (1024 * 1024), 2) if peak_footprint_bytes else None
 
         cmd_redacted = [redact_path(c) for c in inner_cmd]
+        prompt_exact_tokens = bitnet_engine.count_generation_tokens(prompt_text)
 
         return {
             "model_type": "270m_embedder" if is_embedding else "2b_generator",
             "prompt_target_tokens": prompt_tokens_target,
+            "prompt_exact_tokens": prompt_exact_tokens,
             "prompt_text_length_chars": len(prompt_text),
             "command": cmd_redacted,
             "exit_code": proc.returncode,
@@ -394,16 +401,17 @@ def execute_speed_memory_benchmark(output_file: Path = DEFAULT_OUTPUT_FILE) -> D
         "baseline_type": "published_reference",
         "precision": "fp16",
         "model_weights_mb": 5240.0,
-        "peak_rss_mb": 5600.0,
+        "peak_rss_mb": 5400.0,
         "reference_hardware": "AVX2 CPU (x86_64, 4 threads)",
         "reference_prefill_tok_per_sec": 14.2,
         "reference_decode_tok_per_sec": 8.4,
-        "source_citation": "docs/MODEL_PERFORMANCE_COMPARISON.md Section 2"
+        "source_citation": "Google Gemma 2 Technical Report (arXiv:2408.00118) FP16 2B memory footprint & docs/MODEL_PERFORMANCE_COMPARISON.md"
     }
 
-    # Extract summary metrics for conclusion
-    gen_rss_values = [r["max_rss_mb"] for r in rss_measurements if r["model_type"] == "2b_generator" and r.get("max_rss_mb")]
-    emb_rss_values = [r["max_rss_mb"] for r in rss_measurements if r["model_type"] == "270m_embedder" and r.get("max_rss_mb")]
+    # Extract summary metrics for conclusion (exclude failed runs)
+    ok = [r for r in rss_measurements if r.get("exit_code") == 0 and r.get("max_rss_mb")]
+    gen_rss_values = [r["max_rss_mb"] for r in ok if r["model_type"] == "2b_generator"]
+    emb_rss_values = [r["max_rss_mb"] for r in ok if r["model_type"] == "270m_embedder"]
 
     peak_2b_rss = max(gen_rss_values) if gen_rss_values else None
     peak_emb_rss = max(emb_rss_values) if emb_rss_values else None
