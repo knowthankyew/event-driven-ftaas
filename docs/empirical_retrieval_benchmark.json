@@ -7,7 +7,7 @@
       "corpus_sha256": "5245eb62f5a6b8112836f4c431265aa45d2ee97f94cca20846007c0d2e8edd6e",
       "queries_sha256": "830e386d20382774e19211409560f68e5b8dbea5cd0f062f95f3da6a3d5f5ce5",
       "external_queries_sha256": "51c0fc27d0dad07effcd5e1a45bb4607035a48ea0771f407070c09ccc8bd3f18",
-      "script_sha256": "474e7e20afa55447967818609805597ce94450b1d2e6633a09b80de8ed0c6ec8",
+      "script_sha256": "b7da4bdb115e2dd5718aecfc25e36f4f86cfff9ba907d1de14fc271b5fac83f8",
       "bitnet_embed_model_sha256": "8ee5ae971b103cd55758934be54e5c9f7cc2b58b15890615acce8e649988c751",
       "bitnet_embed_model_path": "<HOST_DIR>/Github/BitNet/models/bitnet-embedding-270m/bitnet-embeddings-270m-bf16-i2_s.gguf",
       "minilm_model_id": "sentence-transformers/all-MiniLM-L6-v2"
@@ -28,7 +28,10 @@
       "short_chunks_top1_hits": 21,
       "self_retrieval_top1_hits": 40,
       "diagnosis_finding": "Self-retrieval achieves 100%, but query-to-chunk matching remains weak under all prefix configurations; short chunks collapse to 0% top-1."
-    }
+    },
+    "failed_prefixed_query_ids": [],
+    "failed_unprefixed_query_ids": [],
+    "failed_external_query_ids": []
   },
   "full_corpus_benchmark": {
     "queries_count": 35,
@@ -5411,9 +5414,10 @@
         "id": "q_018",
         "query": "When must companies send an annual renewal notice before charging a yearly fee?",
         "relevant_ids": [
+          "ca_ab_2863_annual_notice",
           "uk_dmcc_renewal_notice"
         ],
-        "answerable_in_force": false,
+        "answerable_in_force": true,
         "rankings": {
           "bm25": {
             "top1_id": "ca_ab_2863_free_trial",
@@ -19779,7 +19783,7 @@
     ]
   },
   "vacated_rule_validation": {
-    "vacated_queries_count": 3,
+    "vacated_queries_count": 2,
     "checks": [
       {
         "id": "q_020",
@@ -19790,17 +19794,6 @@
         "bm25_top3_hit": true,
         "hybrid_top3_hit": true,
         "top1_id": "ftc_negative_option_equal",
-        "vacated_banner_present": true
-      },
-      {
-        "id": "q_021",
-        "query": "Are companies allowed to force you through multiple retention offers before letting you cancel?",
-        "relevant_ids": [
-          "ftc_negative_option_save"
-        ],
-        "bm25_top3_hit": true,
-        "hybrid_top3_hit": true,
-        "top1_id": "ftc_negative_option_save",
         "vacated_banner_present": true
       },
       {

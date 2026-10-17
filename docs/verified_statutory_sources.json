@@ -10,7 +10,8 @@
     },
     "status_breakdown": {
       "in_force": 33,
-      "vacated_by_court_order": 3,
+      "vacated_by_court_order": 2,
+      "proposed_not_adopted": 1,
       "enacted_not_in_force": 4
     },
     "verification_tool": "scripts/verify_statutory_sources.py",
@@ -574,11 +575,11 @@
       "id": "ftc_negative_option_save",
       "statute": "Proposed 16 CFR \u00a7 425.6 (NPRM 88 FR 24716; not adopted in final rule)",
       "jurisdiction": "US_FEDERAL",
-      "status": "vacated_by_court_order",
+      "status": "proposed_not_adopted",
       "effective_from": "Non-adopted proposal (88 FR 24716; omitted from Final Rule 89 FR 83334)",
       "source_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
       "human_url": "https://www.ftc.gov/legal-library/browse/rules/negative-option-rule",
-      "citation": "Proposed 16 CFR 425.6 Save attempts restriction (Non-adopted proposal; vacated 8th Cir.)",
+      "citation": "Proposed 16 CFR 425.6 Save attempts restriction (Non-adopted proposal)",
       "chunk_type": "paraphrase",
       "source_facts": [
         "save",
@@ -596,13 +597,7 @@
         "class": "ContentMismatchError",
         "message": "Missing required source facts: ['save', 'cancel']"
       },
-      "legal_notes": "Vacated nationwide by Eighth Circuit on July 8, 2025 (Custom Communications, Inc. v. FTC, No. 24-3137).",
-      "status_evidence": {
-        "url": "https://ecf.ca8.uscourts.gov/opndir/25/07/243137P.pdf",
-        "retrieved_at": "2026-10-08T11:54:00Z",
-        "evidence_sha256": "4b684206584cba36b94e3575916323630f9a2b5358046bcf3a1eecce70d069b2",
-        "note": "Per curiam opinion in Custom Communications, Inc. v. FTC, No. 24-3137 (8th Cir. July 8, 2025) vacating rule amendments."
-      }
+      "legal_notes": "Proposed in NPRM (88 FR 24716); omitted from Final Rule (89 FR 83334); not adopted."
     },
     {
       "id": "ftc_negative_option_misrep",

@@ -105,10 +105,12 @@
     if (!container) return;
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    toast.innerHTML = `
-      <span>${type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}</span>
-      <span>${message}</span>
-    `;
+    const iconSpan = document.createElement('span');
+    iconSpan.textContent = type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ';
+    const msgSpan = document.createElement('span');
+    msgSpan.textContent = message;
+    toast.appendChild(iconSpan);
+    toast.appendChild(msgSpan);
     container.appendChild(toast);
     setTimeout(() => {
       toast.style.opacity = '0';

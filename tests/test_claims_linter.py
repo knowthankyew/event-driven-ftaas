@@ -91,12 +91,13 @@ class TestClaimsLinter(unittest.TestCase):
 
         status_counts = data["metadata"]["status_breakdown"]
         self.assertEqual(status_counts["in_force"], 33)
-        self.assertEqual(status_counts["vacated_by_court_order"], 3)
+        self.assertEqual(status_counts["vacated_by_court_order"], 2)
+        self.assertEqual(status_counts["proposed_not_adopted"], 1)
         self.assertEqual(status_counts["enacted_not_in_force"], 4)
 
         # Check vacatur citations
         vacated = [s for s in sources if s["status"] == "vacated_by_court_order"]
-        self.assertEqual(len(vacated), 3)
+        self.assertEqual(len(vacated), 2)
         for s in vacated:
             self.assertIn("Custom Communications", s["legal_notes"])
             self.assertIn("24-3137", s["legal_notes"])
@@ -117,6 +118,25 @@ class TestClaimsLinter(unittest.TestCase):
                 self.assertTrue(s.get("content_sha256"))
                 self.assertTrue(s.get("extracted_text_sha256"))
                 self.assertIsNotNone(s.get("verified_on"))
+
+    def test_corpus_verified_on_matches_verifier_artifact(self):
+        """Ensure verified_on timestamps match between corpus.jsonl and verified_statutory_sources.json."""
+        verifier_data = json.loads((DOCS_DIR / "verified_statutory_sources.json").read_text(encoding="utf-8"))
+        verifier_by_id = {s["id"]: s for s in verifier_data["sources"]}
+
+        corpus_lines = (DOCS_DIR / "benchmark" / "corpus.jsonl").read_text(encoding="utf-8").strip().splitlines()
+        for line in corpus_lines:
+            c = json.loads(line)
+            cid = c["id"]
+            if cid in verifier_by_id:
+                ver_s = verifier_by_id[cid]
+                if ver_s.get("verified_on") is not None and c.get("verified_on") is not None:
+                    self.assertTrue(
+                        ver_s["verified_on"].startswith(c["verified_on"]),
+                        f"verified_on mismatch for {cid}: corpus={c['verified_on']}, verifier={ver_s['verified_on']}"
+                    )
+                elif ver_s.get("verified_on") is None:
+                    self.assertIsNone(c.get("verified_on"), f"Expected verified_on None for {cid}")
 
     def test_empirical_retrieval_benchmark(self):
         """Verify empirical_retrieval_benchmark.json matches corpus count, self-retrieval, and baseline metrics."""
@@ -149,7 +169,7 @@ class TestClaimsLinter(unittest.TestCase):
 
         # Vacated rules validation
         vacated_val = data["vacated_rule_validation"]
-        self.assertEqual(vacated_val["vacated_queries_count"], 3)
+        self.assertEqual(vacated_val["vacated_queries_count"], 2)
         vacated_hits = [c for c in vacated_val["checks"] if c["top1_id"].startswith("ftc_negative_option_")]
         self.assertTrue(len(vacated_hits) > 0)
         for c in vacated_hits:
@@ -215,7 +235,7 @@ class TestClaimsLinter(unittest.TestCase):
             tf.flush()
             ok, errors = sync_document(Path(tf.name), registry_path, write=False, repo_root=REPO_ROOT)
             self.assertFalse(ok, "Expected linter to fail on mutated claim")
-            self.assertTrue(any("bm25_top1_pct" in e for e in errors), f"Expected claim error, got: {errors}")
+            self.assertTrue(any("bm25_top1_pct" in e and "99.9%" in e for e in errors), f"Expected claim drift error containing mutated value, got: {errors}")
 
     def test_negative_control_mutated_json_fails_validation(self):
         """Mutate verification state in JSON and assert state machine check fails."""
@@ -344,8 +364,8 @@ class TestClaimsLinter(unittest.TestCase):
         # Check measurements
         self.assertGreater(summary["bitnet_2b_peak_rss_mb"], 0.0)
         self.assertGreater(summary["bitnet_270m_peak_rss_mb"], 0.0)
-        self.assertEqual(summary["gemma2_fp16_reference_rss_mb"], 5400.0)
-        self.assertEqual(data["baseline_comparison"]["gemma_2_2b_fp16"]["baseline_type"], "local_measurement")
+        self.assertEqual(summary["gemma2_fp16_reference_rss_mb"], 5600.0)
+        self.assertEqual(data["baseline_comparison"]["gemma_2_2b_fp16"]["baseline_type"], "published_reference")
 
         # Check throughput runs exist
         tp_runs = data["throughput_measurements"]

@@ -15,7 +15,8 @@
       "bisection_statute": 30,
       "short_prompt": 29,
       "safe_bound_prompt": 23
-    }
+    },
+    "prompts_hash": "c575a27ce77e994e40e20ef892d821b7dec810c26e6b8719c83001a79d74c1e5"
   },
   "rope_configuration": {
     "hf_config": {
@@ -35,6 +36,14 @@
     "rope_parameters_match": true
   },
   "huggingface_pytorch_reference": {
+    "prompt_token_counts": {
+      "long_statute": 598,
+      "intermediate_statute": 79,
+      "bisection_statute": 30,
+      "short_prompt": 29,
+      "safe_bound_prompt": 23
+    },
+    "prompts_hash": "c575a27ce77e994e40e20ef892d821b7dec810c26e6b8719c83001a79d74c1e5",
     "greedy_temp_0": {
       "generated_tokens": [
         791,

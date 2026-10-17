@@ -248,8 +248,11 @@ def measure_peak_rss(
         max_rss_mb = round(max_rss_bytes / (1024 * 1024), 2) if max_rss_bytes else None
         peak_footprint_mb = round(peak_footprint_bytes / (1024 * 1024), 2) if peak_footprint_bytes else None
 
-        cmd_redacted = [redact_path(c) for c in inner_cmd]
-        prompt_exact_tokens = bitnet_engine.count_generation_tokens(prompt_text)
+        prompt_exact_tokens = (
+            bitnet_engine.count_embed_tokens(prompt_text)
+            if is_embedding
+            else bitnet_engine.count_generation_tokens(prompt_text)
+        )
 
         return {
             "model_type": "270m_embedder" if is_embedding else "2b_generator",
@@ -394,17 +397,17 @@ def execute_speed_memory_benchmark(output_file: Path = DEFAULT_OUTPUT_FILE) -> D
             throughput_measurements.append(r_tp)
             print(f"    -> decode: {r_tp.get('decode_tok_per_sec')} tok/s | prefill: {r_tp.get('prefill_tok_per_sec')} tok/s | TTFT: {r_tp.get('time_to_first_token_ms')} ms")
 
-    # Baseline comparison: Local PyTorch CPU FP16 measurement from MODEL_PERFORMANCE_COMPARISON.md Section 2
+    # Baseline comparison: Documented reference baseline from docs/MODEL_PERFORMANCE_COMPARISON.md Section 2
     published_baseline = {
         "model_name": "google/gemma-2-2b (FP16)",
-        "baseline_type": "local_measurement",
+        "baseline_type": "published_reference",
         "precision": "fp16",
         "model_weights_mb": 5240.0,
-        "peak_rss_mb": 5400.0,
+        "peak_rss_mb": 5600.0,
         "reference_hardware": "AVX2 CPU (x86_64, 4 threads)",
         "reference_prefill_tok_per_sec": 14.2,
         "reference_decode_tok_per_sec": 8.4,
-        "source_citation": "Local host measurement under PyTorch CPU FP16 on macOS x86_64 Intel Core i9-9880H (4 threads); documented in docs/MODEL_PERFORMANCE_COMPARISON.md Section 2"
+        "source_citation": "Documented reference baseline from docs/MODEL_PERFORMANCE_COMPARISON.md Section 2 (PyTorch CPU FP16 on macOS x86_64 Intel Core i9-9880H, 4 threads)"
     }
 
     # Extract summary metrics for conclusion (exclude failed runs)
@@ -415,8 +418,8 @@ def execute_speed_memory_benchmark(output_file: Path = DEFAULT_OUTPUT_FILE) -> D
     peak_2b_rss = max(gen_rss_values) if gen_rss_values else None
     peak_emb_rss = max(emb_rss_values) if emb_rss_values else None
 
-    t4_runs = [r for r in throughput_measurements if r["threads"] == 4 and r.get("decode_tok_per_sec")]
-    t4_sample = t4_runs[0] if t4_runs else None
+    t4_runs = [r for r in throughput_measurements if r.get("threads") == 4 and r.get("decode_tok_per_sec") and r.get("exit_code", 0) == 0]
+    t4_sample = max(t4_runs, key=lambda r: r.get("target_gen_tokens", 0)) if t4_runs else None
 
     if peak_2b_rss is None or peak_emb_rss is None or t4_sample is None:
         print("[ERROR] Missing required speed/memory measurements; cannot write empirical results.", file=sys.stderr)

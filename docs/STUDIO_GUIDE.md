@@ -25,10 +25,16 @@ To launch the studio, you only need one software component installed on your com
 
 ## 🚀 How to Launch in 1 Step
 
-Open your Terminal (macOS Terminal, iTerm, or PowerShell) in this repository directory and run:
+Open your Terminal in this repository directory and run:
 
+**macOS / Linux / Git Bash / WSL:**
 ```bash
 ./scripts/start-studio.sh
+```
+
+**Windows (PowerShell / Command Prompt):**
+```powershell
+dotnet run --project src/FtaaSService.Api
 ```
 
 ### What happens next?

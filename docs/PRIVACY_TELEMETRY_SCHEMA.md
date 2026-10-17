@@ -6,7 +6,7 @@
 ## 1. Design Principles
 
 Every application in the portfolio conforms to the **Consumer-Safe, Zero-Fork Enterprise Overlay** standard:
-1. **Consumer Default (Safe & Burnable):** Runs with zero network egress (`deny`), in-memory telemetry (`memory_only`), zero cloud retention, and complete memory wipe upon triggering "Burn Local Data".
+1. **Consumer Default (Safe & Burnable):** Promises zero outbound telemetry export (`deny`), in-memory telemetry (`memory_only`), zero cloud retention, and complete memory wipe upon triggering "Burn Local Data". Internal application and service traffic essential for local operations (such as API-to-Inference proxy calls, RabbitMQ broker messaging, and local MLflow tracking) remains permitted, while all external telemetry egress is strictly denied.
 2. **Enterprise Overlay (Opt-In Observability):** An enterprise operator can attach standard OpenTelemetry collectors (`otlp`) and configure audit retention without modifying source code or maintaining a separate fork.
 3. **Strict Allowlist Invariant:** To prevent short clause leaks or sensitive snippets from slipping through under unanticipated key names (e.g., `matchedText`, `snippet`, `excerpt`, `clause_text`), attribute sanitizers operate on a **strict allowlist**, not a denylist. Only explicitly registered metadata keys (`rule_id`, `rule_ids`, `clause_count`, `flagged_count`, `duration_ms`, `job_id`, `status`, `jurisdiction`, `device`, `adapter_size_bytes`, `dataset_hash`) are permitted. All unrecognized or arbitrary keys are automatically redacted as `[REDACTED_NOT_IN_ALLOWLIST]`.
 

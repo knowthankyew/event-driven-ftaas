@@ -233,14 +233,21 @@ async function sleep(ms) {
   }
 
   console.log('Finalizing recording...');
+  const video = page.video();
   await page.close();
   await context.close();
   await browser.close();
 
   // Convert recorded video to demo.mp4
-  const videoFiles = fs.readdirSync(tempVideoDir).filter(f => f.endsWith('.webm'));
-  if (videoFiles.length > 0) {
-    const latestVideo = path.join(tempVideoDir, videoFiles[videoFiles.length - 1]);
+  const recordedVideoPath = video ? await video.path() : null;
+  const latestVideo = (recordedVideoPath && fs.existsSync(recordedVideoPath))
+    ? recordedVideoPath
+    : (() => {
+        const videoFiles = fs.readdirSync(tempVideoDir).filter(f => f.endsWith('.webm'));
+        return videoFiles.length > 0 ? path.join(tempVideoDir, videoFiles[videoFiles.length - 1]) : null;
+      })();
+
+  if (latestVideo) {
     const destMp4 = path.join(repoRoot, 'demo.mp4');
     const ffmpegPath = resolveFfmpeg(repoRoot) || 'ffmpeg';
 

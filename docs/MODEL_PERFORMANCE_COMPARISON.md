@@ -70,7 +70,7 @@ Measured natively on host hardware (Intel Core i9-9880H 8-core CPU @ 2.3 GHz, 16
 | Metric | SmolLM2-135M | Gemma 2 2B IT (FP16 Baseline) | BitNet b1.58 2B-4T (`i2_s`) | Differential Notes |
 | :--- | :--- | :--- | :--- | :--- |
 | **Active Parameters** | 134.5M | 2.61B | 2.41B | BitNet has 18× more capacity than SmolLM2 |
-| **Prefill Speed (Prompt t/s)** | ~180.0 t/s (CPU) | ~14.2 t/s (CPU FP16) | **100.3 – 107.2 t/s (CPU)** | 7.5× faster prefill than Gemma FP16 on CPU |
+| **Prefill Speed (Prompt t/s)** | ~180.0 t/s (CPU) | ~14.2 t/s (CPU FP16) | **100.3 – 107.2 t/s (CPU)** | 7.1–7.5× faster prefill in interactive `llama-cli` runs vs Gemma FP16 (distinguished from `llama-bench` pp64 at 8 threads with -b 1: 23.44 t/s) |
 | **Decode Speed (Single Thread)**| ~52.0 t/s (CPU) | ~3.8 t/s (CPU FP16) | **8.13 t/s (CPU)** | 2.1× faster single-thread decode |
 | **Decode Speed (4 Threads)** | ~85.0 t/s (CPU) | ~8.4 t/s (CPU FP16) | **19.96 t/s (CPU)** | 2.4× faster multi-thread decode |
 | **Decode Speed (8 Threads)** | ~98.0 t/s (CPU) | ~11.1 t/s (CPU FP16) | **23.54 t/s (CPU)** | 2.1× faster 8-thread decode |

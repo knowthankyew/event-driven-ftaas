@@ -15,13 +15,13 @@
       "ram_gb": 16.0,
       "python_version": "3.12.1"
     },
-    "conclusion": "Empirical profiling establishes a peak resident set size of 1369.79 MB for BitNet-b1.58-2B-4T (i2_s) and 1523.52 MB for the 270M embedder. Compared against the published Gemma 2 2B FP16 baseline footprint of 5400.0 MB, 1.58-bit quantization reduces memory overhead by a factor of 3.94x. Under 4-thread CPU execution, BitNet achieves 19.49 tokens/second decode throughput, 114.47 tokens/second prefill throughput, and a time-to-first-token of 244.6 ms."
+    "conclusion": "Empirical profiling establishes a peak resident set size of 1369.79 MB for BitNet-b1.58-2B-4T (i2_s) and 1523.52 MB for the 270M embedder. Compared against the published Gemma 2 2B FP16 baseline footprint of 5600.0 MB, 1.58-bit quantization reduces memory overhead by a factor of 4.09x. Under 4-thread CPU execution, BitNet achieves 19.49 tokens/second decode throughput, 114.47 tokens/second prefill throughput, and a time-to-first-token of 244.6 ms."
   },
   "summary": {
     "bitnet_2b_peak_rss_mb": 1369.79,
     "bitnet_270m_peak_rss_mb": 1523.52,
-    "gemma2_fp16_reference_rss_mb": 5400.0,
-    "compression_ratio_vs_fp16": 3.94,
+    "gemma2_fp16_reference_rss_mb": 5600.0,
+    "compression_ratio_vs_fp16": 4.09,
     "threads_4_decode_tok_per_sec": 19.49,
     "threads_4_prefill_tok_per_sec": 114.47,
     "threads_4_ttft_ms": 244.6
@@ -971,14 +971,14 @@
   "baseline_comparison": {
     "gemma_2_2b_fp16": {
       "model_name": "google/gemma-2-2b (FP16)",
-      "baseline_type": "local_measurement",
+      "baseline_type": "published_reference",
       "precision": "fp16",
       "model_weights_mb": 5240.0,
-      "peak_rss_mb": 5400.0,
+      "peak_rss_mb": 5600.0,
       "reference_hardware": "AVX2 CPU (x86_64, 4 threads)",
       "reference_prefill_tok_per_sec": 14.2,
       "reference_decode_tok_per_sec": 8.4,
-      "source_citation": "Local host measurement under PyTorch CPU FP16 on macOS x86_64 Intel Core i9-9880H (4 threads); documented in docs/MODEL_PERFORMANCE_COMPARISON.md Section 2"
+      "source_citation": "Documented reference baseline from docs/MODEL_PERFORMANCE_COMPARISON.md Section 2 (PyTorch CPU FP16 on macOS x86_64 Intel Core i9-9880H, 4 threads)"
     }
   }
 }

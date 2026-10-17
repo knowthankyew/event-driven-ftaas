@@ -232,6 +232,27 @@ def independent_recompute_metrics(benchmark_path: Path) -> tuple[bool, list[str]
                 # Per-record invariants (assumes rr = 1/rank): a hit flag must agree with its own rr.
                 if t1 != (abs(rr - 1.0) < 1e-4) or t3 != (rr >= 1.0 / 3.0 - 1e-4) or (t1 and not t3):
                     errors.append(f"[{sec_name}] Method '{m}' query {q.get('id', '?')!r}: flags (top1={t1}, top3={t3}) disagree with rr={rr}")
+
+                # Derive expected first relevant rank from ranked_ids and relevant_ids when present
+                if "ranked_ids" in r and "relevant_ids" in q:
+                    rel_set = set(q.get("relevant_ids", []))
+                    ranked_ids = r.get("ranked_ids", [])
+                    derived_rank = None
+                    for rank_idx, doc_id in enumerate(ranked_ids, 1):
+                        if doc_id in rel_set:
+                            derived_rank = rank_idx
+                            break
+                    exp_t1 = (derived_rank == 1)
+                    exp_t3 = (derived_rank is not None and derived_rank <= 3)
+                    exp_rr = (1.0 / derived_rank) if derived_rank else 0.0
+                    if t1 != exp_t1 or t3 != exp_t3 or abs(rr - exp_rr) > 5e-4:
+                        print(
+                            f"[WARN] [{sec_name}] Method '{m}' query {q.get('id', '?')!r}: stored flags "
+                            f"(top1={t1}, top3={t3}, rr={rr}) disagree with derived rank {derived_rank} "
+                            f"(expected top1={exp_t1}, top3={exp_t3}, rr={exp_rr:.4f})",
+                            file=sys.stderr,
+                        )
+
                 top1_hits += t1
                 top3_hits += t3
                 reciprocal_ranks.append(rr)
@@ -315,12 +336,15 @@ def lint_script_conclusions(scripts_dir: Path) -> tuple[bool, list[str]]:
     return len(errors) == 0, errors
 
 
-def lint_prose_and_words(content: str, doc_name: str = "document") -> tuple[bool, list[str]]:
+def lint_prose_and_words(
+    content: str, doc_name: str = "document", registry_path: Path | None = None
+) -> tuple[bool, list[str]]:
     """
     Word lint:
     - Prohibit 'bulletproof', 'conclusive', 'definitive' anywhere.
     - Guarded words ('verified', 'authentic', 'proves', 'zero hallucination', '100%')
       allowed only when tied to a registered claim marker <!-- claim:... --> or <!-- claim_term:... -->.
+    - Validate claim_term markers against registered claim_terms in claims_registry.json.
     """
     errors = []
 
@@ -329,6 +353,32 @@ def lint_prose_and_words(content: str, doc_name: str = "document") -> tuple[bool
         m = pat.search(content)
         if m:
             errors.append(f"Word lint failure in {doc_name}: prohibited adjective '{m.group(0)}' found.")
+
+    # Load claim_terms from claims registry
+    if registry_path is None:
+        registry_path = DEFAULT_REGISTRY_PATH
+    claim_terms = {}
+    if registry_path and registry_path.is_file():
+        try:
+            with open(registry_path, "r", encoding="utf-8") as f:
+                claim_terms = json.load(f).get("claim_terms", {})
+        except Exception as e:
+            errors.append(f"Failed to load claim_terms from {registry_path.name}: {e}")
+
+    # Validate claim_term markers
+    claim_term_pat = re.compile(r"<!--\s*claim_term:([a-zA-Z0-9_\-]+)\s*-->(.*?)<!--\s*/claim_term\s*-->", re.DOTALL)
+    for m in claim_term_pat.finditer(content):
+        term_id = m.group(1)
+        wrapped_text = m.group(2).strip()
+        if term_id not in claim_terms:
+            errors.append(f"Word lint failure in {doc_name}: unknown claim_term ID '{term_id}'.")
+        else:
+            expected_term = claim_terms[term_id].get("term", "")
+            if wrapped_text.lower() != expected_term.lower():
+                errors.append(
+                    f"Word lint failure in {doc_name}: claim_term '{term_id}' wrapped text {wrapped_text!r} "
+                    f"does not match registered term {expected_term!r}."
+                )
 
     # Mask claim markers before checking guarded words
     # Replace all <!-- claim:... -->...<!-- /claim --> and <!-- claim_term:... -->...<!-- /claim_term --> with blanks
@@ -472,7 +522,9 @@ def sync_document(
         errors.extend(emp_errors)
 
     # Word lint
-    word_ok, word_errors = lint_prose_and_words(doc_path.read_text(encoding="utf-8"), doc_path.name)
+    word_ok, word_errors = lint_prose_and_words(
+        doc_path.read_text(encoding="utf-8"), doc_path.name, registry_path=registry_path
+    )
     if not word_ok:
         errors.extend(word_errors)
 

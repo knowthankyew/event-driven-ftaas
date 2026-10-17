@@ -48,6 +48,12 @@ public static class InferenceEndpoints
         var proxyTimeoutSeconds = configuration.GetValue<int?>("INFERENCE_PROXY_TIMEOUT_SECONDS") ?? 120;
         client.Timeout = TimeSpan.FromSeconds(Math.Max(30, proxyTimeoutSeconds));
 
+        var apiKey = configuration.GetValue<string>("FTAAS_API_KEY");
+        if (!string.IsNullOrWhiteSpace(apiKey))
+        {
+            client.DefaultRequestHeaders.Add("X-API-Key", apiKey);
+        }
+
         var payload = new
         {
             jobId = request.JobId,

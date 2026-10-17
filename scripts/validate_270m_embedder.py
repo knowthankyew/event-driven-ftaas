@@ -131,15 +131,13 @@ def evaluate_clause_set(clauses, tok, model, name="clauses"):
         b_vec_norm = np.array(bitnet_vec, dtype=np.float32) / (b_norm if b_norm > 0 else 1.0)
         bitnet_embeddings.append(b_vec_norm)
 
-        # D. Hugging Face teacher embedding (mean pooling across last hidden state)
+        # D. Hugging Face teacher embedding (L2-normalized last-non-padding-token pooling)
         with torch.no_grad():
             hf_inputs = tok(clause_text, return_tensors="pt")
             teacher_out = model(**hf_inputs)
-            mask = hf_inputs.attention_mask.unsqueeze(-1).expand(teacher_out.last_hidden_state.size()).float()
-            sum_embeddings = torch.sum(teacher_out.last_hidden_state * mask, 1)
-            sum_mask = torch.clamp(mask.sum(1), min=1e-9)
-            mean_pooled = sum_embeddings / sum_mask
-            teacher_vec = torch.nn.functional.normalize(mean_pooled, p=2, dim=1)[0].numpy()
+            last_token_idx = int(hf_inputs.attention_mask[0].sum().item()) - 1
+            last_token_repr = teacher_out.last_hidden_state[0, last_token_idx].unsqueeze(0)
+            teacher_vec = torch.nn.functional.normalize(last_token_repr, p=2, dim=-1)[0].float().numpy()
             harrier_embeddings.append(teacher_vec)
 
         clause_results.append({
@@ -247,10 +245,9 @@ def main():
         with torch.no_grad():
             inputs = tok(v, return_tensors="pt")
             out = model(**inputs)
-            mask = inputs.attention_mask.unsqueeze(-1).expand(out.last_hidden_state.size()).float()
-            sum_emb = torch.sum(out.last_hidden_state * mask, 1)
-            sum_m = torch.clamp(mask.sum(1), min=1e-9)
-            harrier_vecs[k] = torch.nn.functional.normalize(sum_emb / sum_m, p=2, dim=1)[0].numpy()
+            idx = int(inputs.attention_mask[0].sum().item()) - 1
+            last_token_repr = out.last_hidden_state[0, idx].unsqueeze(0)
+            harrier_vecs[k] = torch.nn.functional.normalize(last_token_repr, p=2, dim=-1)[0].float().numpy()
 
         bvec, _ = bitnet_engine.embed_bitnet_sync(v)
         b_norm = np.linalg.norm(bvec)
@@ -278,17 +275,60 @@ def main():
         }
     }
 
-    # Calibrated conclusion
+    # Calibrated conclusion derived dynamically from thresholds
+    teacher_name = "Harrier 270M"
+    teacher_precision = "float32"
+    quant_label = "1-bit"
+
+    # Derive significance wording from p-value thresholds
+    is_significant = (full_eval['spearman_pvalue'] < 0.05 and full_eval['pearson_pvalue'] < 0.05)
+    significance_str = "statistically significant" if is_significant else "not statistically significant"
+
+    # Derive correlation strength from spearman_rho thresholds
+    rho_val = full_eval['spearman_rho']
+    if rho_val >= 0.7:
+        strength_str = "strong"
+    elif rho_val >= 0.4:
+        strength_str = "moderate"
+    elif rho_val >= 0.2:
+        strength_str = "weak"
+    else:
+        strength_str = "negligible"
+
+    # Derive signal retention wording based on variance explained
+    var_min = min(full_eval['variance_explained_pct'], short_eval['variance_explained_pct'])
+    var_max = max(full_eval['variance_explained_pct'], short_eval['variance_explained_pct'])
+    if var_max < 50.0:
+        retention_str = (
+            f"explaining {var_min}% to {var_max}% of semantic variance indicates that {quant_label} dense embeddings "
+            f"retain coarse topical clustering but lose significant discriminative signal relative to the {teacher_precision} teacher"
+        )
+    else:
+        retention_str = (
+            f"explaining {var_min}% to {var_max}% of semantic variance indicates that {quant_label} dense embeddings "
+            f"retain substantial discriminative signal relative to the {teacher_precision} teacher"
+        )
+
+    # Generate short sequence comparison only when short_eval rho is less than full_eval rho
+    if short_eval['spearman_rho'] < full_eval['spearman_rho']:
+        short_comp_str = (
+            f"The lower rank correlation on short sequences (rho={short_eval['spearman_rho']} vs rho={full_eval['spearman_rho']}) demonstrates that "
+            f"concise statutory clauses lose discriminative signal when quantized to ternary weights (as corroborated by short-chunk retrieval results documented in docs/empirical_retrieval_benchmark.json)."
+        )
+    else:
+        short_comp_str = (
+            f"The rank correlation on short sequences (rho={short_eval['spearman_rho']} vs rho={full_eval['spearman_rho']}) indicates that "
+            f"concise statutory clauses maintain relational alignment when quantized to ternary weights."
+        )
+
     conclusion = (
-        f"Pairwise similarity correlation against the official unquantized teacher (Harrier 270M) across {full_eval['num_pairs']} off-diagonal pairs "
-        f"demonstrates moderate, statistically significant relational rank correlation: rho={full_eval['spearman_rho']} "
+        f"Pairwise similarity correlation against the official unquantized teacher ({teacher_name}) across {full_eval['num_pairs']} off-diagonal pairs "
+        f"demonstrates {strength_str}, {significance_str} relational rank correlation: rho={full_eval['spearman_rho']} "
         f"(R^2={full_eval['r_squared']}, explaining {full_eval['variance_explained_pct']}% of variance, spearman p={full_eval['spearman_pvalue']:.2e}) on full legal clauses, "
         f"and rho={short_eval['spearman_rho']}, r={short_eval['pearson_r']} (R^2={short_eval['r_squared']}, "
         f"explaining {short_eval['variance_explained_pct']}% of variance, spearman p={short_eval['spearman_pvalue']:.2e}) on short clauses. "
-        f"While statistically significant (spearman p={full_eval['spearman_pvalue']:.2e}, pearson p={full_eval['pearson_pvalue']:.2e}), explaining {full_eval['variance_explained_pct']}% to {short_eval['variance_explained_pct']}% of semantic variance indicates that 1-bit dense embeddings "
-        f"retain coarse topical clustering but lose significant discriminative signal relative to the FP16 teacher. "
-        f"The lower rank correlation on short sequences (rho={short_eval['spearman_rho']} vs rho={full_eval['spearman_rho']}) demonstrates that "
-        f"concise statutory clauses lose discriminative signal when quantized to ternary weights (as corroborated by short-chunk retrieval results documented in docs/empirical_retrieval_benchmark.json)."
+        f"While {significance_str} (spearman p={full_eval['spearman_pvalue']:.2e}, pearson p={full_eval['pearson_pvalue']:.2e}), {retention_str}. "
+        f"{short_comp_str}"
     )
 
     output_path = os.path.abspath(os.path.join(repo_root, "docs/empirical_270m_embedder_validation.json"))
@@ -301,6 +341,8 @@ def main():
             "torch_version": torch.__version__,
             "bitnet_embed_model": redact_path(bitnet_engine.BITNET_EMBED_MODEL_PATH),
             "reference_teacher_model": ref_model_id,
+            "pooling_type": "last_token",
+            "native_pooling_type": "last_token",
             "conclusion": conclusion
         },
         "full_legal_clauses_validation": {

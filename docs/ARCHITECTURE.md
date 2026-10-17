@@ -315,7 +315,7 @@ stateDiagram-v2
 ### Phase 1: Local Infrastructure & Developer Experience Foundation
 - `docker-compose.yml`:
   - **RabbitMQ**: AMQP message broker with management UI (port 5672 / 15672) and healthcheck.
-  - **MLflow Server**: Tracking server with SQLite backend and local artifact mount (port 5000) and healthcheck.
+  - **MLflow Server**: Tracking server with SQLite backend and local artifact mount (host port 5001 mapped to container port 5000) and healthcheck.
 - `scripts/dev-up.sh`: Automated orchestrator that starts Docker, waits for container healthchecks, creates requisite directory structure, and seeds sample JSONL datasets.
 - Correlation logging and local folder layout setup.
 

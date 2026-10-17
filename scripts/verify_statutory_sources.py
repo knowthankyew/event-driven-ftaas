@@ -17,6 +17,8 @@ State transitions:
 import argparse
 import gzip
 import hashlib
+import html
+from html.parser import HTMLParser
 import json
 import os
 import re
@@ -659,6 +661,66 @@ def default_http_get_fetcher(url: str, timeout: float = 10.0) -> Tuple[int, byte
         return status_code, raw_bytes, final_url, headers_dict
 
 
+class HTMLTextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self._pieces = []
+        self._ignore_stack = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() in ("script", "style", "noscript"):
+            self._ignore_stack += 1
+
+    def handle_endtag(self, tag):
+        if tag.lower() in ("script", "style", "noscript") and self._ignore_stack > 0:
+            self._ignore_stack -= 1
+
+    def handle_data(self, data):
+        if self._ignore_stack == 0:
+            self._pieces.append(data)
+
+    def handle_entityref(self, name):
+        if self._ignore_stack == 0:
+            self._pieces.append(html.unescape(f"&{name};"))
+
+    def handle_charref(self, name):
+        if self._ignore_stack == 0:
+            self._pieces.append(html.unescape(f"&#{name};"))
+
+    def get_text(self) -> str:
+        return "".join(self._pieces)
+
+
+def strip_html_and_decode(text: str) -> str:
+    """Parse HTML with real HTML parser, remove script/style, and decode entities."""
+    if "<" in text and ">" in text:
+        try:
+            parser = HTMLTextExtractor()
+            parser.feed(text)
+            parser.close()
+            parsed = parser.get_text()
+        except Exception:
+            cleaned = re.sub(r"<script.*?</script>", " ", text, flags=re.DOTALL | re.IGNORECASE)
+            cleaned = re.sub(r"<style.*?</style>", " ", cleaned, flags=re.DOTALL | re.IGNORECASE)
+            cleaned = re.sub(r"<[^>]+>", " ", cleaned)
+            parsed = html.unescape(cleaned)
+    else:
+        parsed = html.unescape(text)
+    return parsed
+
+
+def extract_html_text(text: str) -> str:
+    """Clean HTML tags, decode entities, and normalize whitespace."""
+    cleaned = strip_html_and_decode(text)
+    return " ".join(cleaned.split())
+
+
+def normalize_text(text: str) -> str:
+    """Parse HTML/entities, normalize whitespace, and lowercase for containment checks."""
+    cleaned = strip_html_and_decode(text)
+    return re.sub(r"\s+", " ", cleaned).strip().lower()
+
+
 def extract_text_from_bytes(raw_bytes: bytes, headers: Optional[dict] = None) -> str:
     """Decompress and extract text from HTML or XML response bytes."""
     data = raw_bytes
@@ -680,17 +742,7 @@ def extract_text_from_bytes(raw_bytes: bytes, headers: Optional[dict] = None) ->
         except Exception:
             pass
 
-    # Clean HTML tags and normalize whitespace
-    cleaned = re.sub(r"<script.*?</script>", " ", text, flags=re.DOTALL | re.IGNORECASE)
-    cleaned = re.sub(r"<style.*?</style>", " ", cleaned, flags=re.DOTALL | re.IGNORECASE)
-    cleaned = re.sub(r"<[^>]+>", " ", cleaned)
-    cleaned = " ".join(cleaned.split())
-    return cleaned
-
-
-def normalize_text(text: str) -> str:
-    """Normalize whitespace and lowercase for containment checks."""
-    return re.sub(r"\s+", " ", text).strip().lower()
+    return extract_html_text(text)
 
 
 def verify_single_source(

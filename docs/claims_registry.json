@@ -1,5 +1,11 @@
 {
   "version": "2.0.0",
+  "claim_terms": {
+    "verified": {
+      "term": "verified",
+      "description": "Statutory source verification status marker"
+    }
+  },
   "claims": {
     "bm25_top1_pct": {
       "source_artifact": "docs/empirical_retrieval_benchmark.json",

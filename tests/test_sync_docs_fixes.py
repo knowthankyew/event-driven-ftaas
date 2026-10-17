@@ -181,6 +181,50 @@ class TestRecomputeHardening(unittest.TestCase):
         self.assertFalse(ok)
         self.assertTrue(any("ghost" in e for e in errs), errs)
 
+    def test_derived_rank_mismatch_warning(self):
+        art = self._artifact(n=2, hits=2)
+        # Add ranked_ids and relevant_ids where derived rank doesn't match top1_hit
+        art["full_corpus_benchmark"]["query_details"][0]["relevant_ids"] = ["target_chunk"]
+        art["full_corpus_benchmark"]["query_details"][0]["rankings"]["bm25"]["ranked_ids"] = ["other_chunk", "target_chunk"]
+        # Stored says top1_hit=True, but ranked_ids has target at rank 2
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            ok, errs = self._check(art)
+        self.assertTrue(ok)
+        self.assertIn("[WARN]", buf.getvalue())
+        self.assertIn("disagree with derived rank 2", buf.getvalue())
+
+
+class TestClaimTermsValidation(unittest.TestCase):
+    def setUp(self):
+        self._td = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._td.name)
+        self.reg_file = self.tmp / "claims_registry.json"
+        self.reg_file.write_text(
+            json.dumps({"version": "2.0.0", "claim_terms": {"verified": {"term": "verified"}}}),
+            encoding="utf-8"
+        )
+
+    def tearDown(self):
+        self._td.cleanup()
+
+    def test_valid_claim_term_passes(self):
+        text = "This statute is <!-- claim_term:verified -->verified<!-- /claim_term --> by the parser."
+        ok, errs = sync_docs.lint_prose_and_words(text, "test.md", registry_path=self.reg_file)
+        self.assertTrue(ok, errs)
+
+    def test_unregistered_claim_term_fails(self):
+        text = "This statute is <!-- claim_term:unregistered -->verified<!-- /claim_term --> by the parser."
+        ok, errs = sync_docs.lint_prose_and_words(text, "test.md", registry_path=self.reg_file)
+        self.assertFalse(ok)
+        self.assertTrue(any("unknown claim_term ID 'unregistered'" in e for e in errs))
+
+    def test_mismatched_claim_term_text_fails(self):
+        text = "This statute is <!-- claim_term:verified -->authentic<!-- /claim_term --> by the parser."
+        ok, errs = sync_docs.lint_prose_and_words(text, "test.md", registry_path=self.reg_file)
+        self.assertFalse(ok)
+        self.assertTrue(any("does not match registered term" in e for e in errs))
+
 
 if __name__ == "__main__":
     unittest.main()

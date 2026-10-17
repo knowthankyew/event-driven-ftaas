@@ -85,7 +85,7 @@ Benchmarked using `llama-bench` targeting `models/BitNet-b1.58-2B-4T/ggml-model-
 ```
 
 ### Key Scaling Observations
-1. **Linear Scaling on Physical Cores**: Scaling from 1 thread to 2 threads yields a **1.76×** speedup in decode throughput (8.13 t/s $\to$ 14.34 t/s). Scaling to 4 threads reaches **19.96 t/s** (2.45× over single-core).
+1. **Thread Scaling on Physical Cores**: Scaling from 1 thread to 2 threads yields a **1.76×** speedup in decode throughput (8.13 t/s $\to$ 14.34 t/s). Scaling to 4 threads reaches **19.96 t/s** (2.45× over single-core).
 2. **Multi-Core Scaling & Bottlenecks**: Scaling from 4 to 8 threads across all 8 physical cores yields **23.54 t/s** (+18% throughput improvement). This sub-linear scaling gain may reflect a shared hardware bottleneck such as memory bandwidth across cores, though memory bus utilization was not explicitly profiled.
 3. **Prompt Prefill Speed**: Single-prompt prefill bursts at **100.3 to 107.2 tokens/second** on 8 threads during direct `llama-cli` interactive passes.
 
@@ -117,7 +117,7 @@ $$h = W_0 \cdot x + \frac{\alpha}{r} (B \cdot A) \cdot x$$
 3. **Deployment Strategy**:
    - **Multi-Tenant Edge Serving**: Base BitNet weights stay in memory as 1.1 GB ternary integers; request-time forward passes execute ternary SIMD additions on CPU in parallel with tiny float LoRA adapter projections.
 4. **Runtime Separation (Training vs Inference)**:
-   - **`bitnet.cpp` (Inference)**: C++ AVX2 lookup-table runtime optimized exclusively for forward-pass token decode. Memory footprint is strictly bounded to the 1.10 GiB model weights.
+   - **`bitnet.cpp` (Inference)**: C++ AVX2 lookup-table runtime optimized exclusively for forward-pass token decode. Memory footprint is close to the 1.10 GiB model weights, with an active-process peak RSS of approximately 1,150 MB (reported in MODEL_PERFORMANCE_COMPARISON.md).
    - **PyTorch `BitLinear` + PEFT (Training)**: Forward/backward autograd graph execution stores activation tensors and float32 adapter gradients, running under Apple Silicon Metal (MPS) device acceleration or CPU without requiring dedicated high-end server clusters.
 
 ---

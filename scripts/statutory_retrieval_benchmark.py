@@ -369,6 +369,8 @@ def run_benchmark(
     # Pre-embed queries
     bitnet_q_embeds_prefixed = []
     bitnet_q_embeds_unprefixed = []
+    failed_prefixed_query_ids = []
+    failed_unprefixed_query_ids = []
     if bitnet_embed_available:
         print("Embedding self-authored queries...")
         for q in queries:
@@ -378,7 +380,9 @@ def run_benchmark(
                 arr_pre = np.array(v_pre, dtype=np.float32)
                 norm_pre = np.linalg.norm(arr_pre)
                 bitnet_q_embeds_prefixed.append(arr_pre / (norm_pre if norm_pre > 0 else 1.0))
-            except Exception:
+            except Exception as e:
+                print(f"Warning: Failed to embed prefixed query {q.get('id')}: {e}")
+                failed_prefixed_query_ids.append(q.get("id"))
                 bitnet_q_embeds_prefixed.append(np.zeros(640, dtype=np.float32))
 
             try:
@@ -386,7 +390,9 @@ def run_benchmark(
                 arr_un = np.array(v_un, dtype=np.float32)
                 norm_un = np.linalg.norm(arr_un)
                 bitnet_q_embeds_unprefixed.append(arr_un / (norm_un if norm_un > 0 else 1.0))
-            except Exception:
+            except Exception as e:
+                print(f"Warning: Failed to embed unprefixed query {q.get('id')}: {e}")
+                failed_unprefixed_query_ids.append(q.get("id"))
                 bitnet_q_embeds_unprefixed.append(np.zeros(640, dtype=np.float32))
 
         bitnet_q_embeds_prefixed = np.array(bitnet_q_embeds_prefixed)
@@ -495,6 +501,7 @@ def run_benchmark(
     # 7. Evaluate external queries (32 queries)
     print("Evaluating external queries...")
     ext_bitnet_q_embeds = []
+    failed_external_query_ids = []
     if bitnet_embed_available:
         for q in external_queries:
             try:
@@ -502,7 +509,9 @@ def run_benchmark(
                 arr = np.array(v, dtype=np.float32)
                 norm = np.linalg.norm(arr)
                 ext_bitnet_q_embeds.append(arr / (norm if norm > 0 else 1.0))
-            except Exception:
+            except Exception as e:
+                print(f"Warning: Failed to embed external query {q.get('id')}: {e}")
+                failed_external_query_ids.append(q.get("id"))
                 ext_bitnet_q_embeds.append(np.zeros(640, dtype=np.float32))
         ext_bitnet_q_embeds = np.array(ext_bitnet_q_embeds)
     else:
@@ -635,6 +644,9 @@ def run_benchmark(
             "skipped_methods": skipped_methods,
             "zero_vector_chunk_indices": sorted(list(zero_vector_chunk_indices)),
             "zero_vector_short_chunk_indices": sorted(list(zero_vector_short_chunk_indices)),
+            "failed_prefixed_query_ids": sorted(list(set(failed_prefixed_query_ids))),
+            "failed_unprefixed_query_ids": sorted(list(set(failed_unprefixed_query_ids))),
+            "failed_external_query_ids": sorted(list(set(failed_external_query_ids))),
             "self_retrieval_validation": self_retrieval_val,
             "bitnet_diagnostics": bitnet_diagnostics_val
         },

@@ -18,6 +18,7 @@ import json
 import time
 import platform
 import subprocess
+import hashlib
 from pathlib import Path
 
 import torch
@@ -142,20 +143,47 @@ def main():
 
     print(f"Prompt lengths: 598-tok={len_598}, 79-tok={len_79}, 30-tok={len_30}, 29-tok={len_29}, 24-tok={len_24}")
 
+    current_prompt_token_counts = {
+        "long_statute": len_598,
+        "intermediate_statute": len_79,
+        "bisection_statute": len_30,
+        "short_prompt": len_29,
+        "safe_bound_prompt": len_24
+    }
+    prompts_combined = f"{prompt_598}\n{prompt_79}\n{prompt_30}\n{prompt_29}\n{prompt_24}"
+    current_prompts_hash = hashlib.sha256(prompts_combined.encode("utf-8")).hexdigest()
+
     # Check if HF outputs already exist to avoid redundant CPU unquantized float32 generation
     existing_hf = None
+    existing_prompt_counts = None
+    existing_prompts_hash = None
     if os.path.exists(out_file):
         try:
             with open(out_file, "r", encoding="utf-8") as f:
                 prior = json.load(f)
                 if "huggingface_pytorch_reference" in prior:
                     existing_hf = prior["huggingface_pytorch_reference"]
+                    existing_prompt_counts = (
+                        existing_hf.get("prompt_token_counts")
+                        or prior.get("metadata", {}).get("prompt_token_counts")
+                    )
+                    existing_prompts_hash = (
+                        existing_hf.get("prompts_hash")
+                        or prior.get("metadata", {}).get("prompts_hash")
+                    )
         except Exception:
             pass
 
-    if existing_hf and all(k in existing_hf for k in ["greedy_temp_0", "greedy_rep_penalty_1_1", "sampled_temp_0_5_rep_penalty_1_1", "first_token_logits_bisection"]):
+    if (
+        existing_hf
+        and existing_prompt_counts == current_prompt_token_counts
+        and existing_prompts_hash == current_prompts_hash
+        and all(k in existing_hf for k in ["greedy_temp_0", "greedy_rep_penalty_1_1", "sampled_temp_0_5_rep_penalty_1_1", "first_token_logits_bisection"])
+    ):
         print("Using existing verified Hugging Face PyTorch reference outputs...")
         hf_results = existing_hf
+        hf_results["prompt_token_counts"] = current_prompt_token_counts
+        hf_results["prompts_hash"] = current_prompts_hash
     else:
         print("Computing Hugging Face reference passes...")
         model = AutoModelForCausalLM.from_pretrained(model_id, low_cpu_mem_usage=True)
@@ -252,7 +280,9 @@ def main():
                 "factual_correctness": eval_79["factual_correctness"],
                 "extracted_threshold": eval_79["extracted_target"]
             },
-            "first_token_logits_bisection": first_token_logits
+            "first_token_logits_bisection": first_token_logits,
+            "prompt_token_counts": current_prompt_token_counts,
+            "prompts_hash": current_prompts_hash
         }
 
     # 4. GGUF Binary Inspection via GGUFReader
@@ -397,8 +427,23 @@ def main():
     short_correct_count = sum(1 for v in short_runs if v["factual_correctness"])
     corrupted_count = sum(1 for k, v in bitnet_runs.items() if v["is_corrupted"])
 
-    passing_lengths = [v["prompt_tokens"] for k, v in bitnet_runs.items() if v.get("factual_correctness") and "default_b512" in k]
-    failing_lengths = [v["prompt_tokens"] for k, v in bitnet_runs.items() if not v.get("factual_correctness") and "default_b512" in k]
+    def is_default_t4_run(run_info: dict) -> bool:
+        flags = run_info.get("flags", [])
+        disallowed = {"--no-mmap", "--repeat-penalty", "-fa", "-ctk", "-ctv", "-b", "-ub"}
+        if any(flag in disallowed for flag in flags):
+            return False
+        if "-t" in flags:
+            idx = flags.index("-t")
+            if idx + 1 >= len(flags) or flags[idx + 1] != "4":
+                return False
+        else:
+            return False
+        return True
+
+    default_t4_runs = {k: v for k, v in bitnet_runs.items() if is_default_t4_run(v)}
+    passing_lengths = [v["prompt_tokens"] for v in default_t4_runs.values() if v.get("factual_correctness")]
+    failing_runs = [v for v in default_t4_runs.values() if not v.get("factual_correctness")]
+    failing_lengths = [v["prompt_tokens"] for v in failing_runs]
 
     max_passing_default = max(passing_lengths) if passing_lengths else None
     min_failing_default = min(failing_lengths) if failing_lengths else None
@@ -429,9 +474,19 @@ def main():
         f"(exact root cause mechanism unknown; {rope_desc})."
     ]
 
-    if max_passing_default is not None and min_failing_default is not None:
+    if max_passing_default is not None and min_failing_default is not None and max_passing_default < min_failing_default:
+        failing_boundary_runs = [v for v in failing_runs if v["prompt_tokens"] >= min_failing_default]
+        modes = []
+        if any(v.get("is_corrupted") or "corrupt" in v.get("classification", "") for v in failing_boundary_runs):
+            modes.append("corruption")
+        if any("loop" in v.get("classification", "") or "repetitive" in v.get("classification", "") for v in failing_boundary_runs):
+            modes.append("repetitive loops")
+        if any("eos" in v.get("classification", "") for v in failing_boundary_runs):
+            modes.append("premature EOS")
+        failure_desc = f"with {' and '.join(modes)}" if modes else "with degradation"
+
         conclusion_parts.append(
-            f"Under default prefill (b=512), factual extraction succeeds up to {max_passing_default} tokens and fails at >= {min_failing_default} tokens with corruption "
+            f"Under default prefill (b=512), factual extraction succeeds up to {max_passing_default} tokens and fails at >= {min_failing_default} tokens {failure_desc} "
             f"(total corrupted runs={corrupted_count})."
         )
     elif max_passing_default is not None:
@@ -523,7 +578,8 @@ def main():
                 "bisection_statute": len_30,
                 "short_prompt": len_29,
                 "safe_bound_prompt": len_24
-            }
+            },
+            "prompts_hash": current_prompts_hash
         },
         "rope_configuration": {
             "hf_config": {

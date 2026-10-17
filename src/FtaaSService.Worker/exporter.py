@@ -134,7 +134,8 @@ def export_to_edge_onnx(
                         "logits": {0: "batch_size", 1: "sequence_length"}
                     },
                     opset_version=17,
-                    do_constant_folding=True
+                    do_constant_folding=True,
+                    dynamo=False
                 )
 
                 # Verify ONNX model integrity with file path (supports models > 2GB)

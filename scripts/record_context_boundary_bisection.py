@@ -427,11 +427,11 @@ def classify_run_output(output_text: str, expected_regex: str) -> str:
     return "fluent_wrong"
 
 
-def extract_first_token_id(out_text: str) -> Optional[int]:
-    """Extract first generated token ID from model output."""
+def extract_retokenized_first_token_id(out_text: str) -> Optional[int]:
+    """Extract first token ID from re-tokenizing model output."""
     clean = out_text.strip()
     if not clean or clean == "[end of text]":
-        return 128001
+        return None
     cnt, ids, _ = count_tokens(clean)
     if ids and len(ids) > 1 and ids[0] == 128000:
         return ids[1]
@@ -478,20 +478,30 @@ def build_bisection_conclusion(
     total_runs_count: int,
     correct_runs_count: int,
     garbage_runs_count: int,
-    loop_runs_count: int
+    loop_runs_count: int,
+    cap_floor_applied: bool = False
 ) -> str:
     """
     Template function building conclusion text with zero hardcoded digits.
     All numeric values must be interpolated.
     Uses exact required phrase: 'context-length-dependent failure; mechanism unknown'.
     """
+    if cap_floor_applied:
+        margin_sentence = (
+            f"Applying the safety floor below the highest all-pass length yields a "
+            f"recommended safe generation ceiling of {recommended_cap} tokens. "
+        )
+    else:
+        margin_sentence = (
+            f"Applying a safety margin of {stated_margin} tokens below the highest all-pass length yields a "
+            f"recommended safe generation ceiling of {recommended_cap} tokens. "
+        )
     return (
         f"Empirical context-length bisection establishes a context-length-dependent failure; mechanism unknown. "
         f"Across a total of {total_runs_count} evaluated runs, {correct_runs_count} passed factual extraction, "
         f"{garbage_runs_count} exhibited corruption, and {loop_runs_count} degenerated into repetitive loops. "
         f"The highest prompt token length at which all tested clauses pass without degeneration is {highest_all_pass} tokens. "
-        f"Applying a safety margin of {stated_margin} tokens below the highest all-pass length yields a "
-        f"recommended safe generation ceiling of {recommended_cap} tokens. "
+        f"{margin_sentence}"
         f"Prompts exceeding {highest_all_pass} tokens risk context-length-dependent failure on CPU execution."
     )
 
@@ -519,6 +529,21 @@ def execute_bisection_sweep(output_file: Path = DEFAULT_OUTPUT_FILE) -> dict:
     target_lengths = [16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48]
 
     runs_data = []
+
+    # Preflight check: verify token counts for all clause variants are exact and > 0
+    print("Running preflight prompt token count verification...")
+    for c in CLAUSES:
+        for tlen in target_lengths:
+            ptext = c["variants"].get(tlen, "")
+            formatted_prompt = f"User: {ptext}<|eot_id|>\nAssistant: "
+            exact_tokens, _, is_approx = count_tokens(formatted_prompt)
+            if is_approx or exact_tokens == 0:
+                print(
+                    f"[ERROR] Preflight failed for clause {c['id']} target length {tlen}: "
+                    f"tokens={exact_tokens}, is_approximate={is_approx}. Stopping before sweep.",
+                    file=sys.stderr
+                )
+                sys.exit(1)
 
     print(f"Sweeping {len(CLAUSES)} clauses across {len(target_lengths)} target lengths...")
 
@@ -553,7 +578,7 @@ def execute_bisection_sweep(output_file: Path = DEFAULT_OUTPUT_FILE) -> dict:
 
             for cfg_name, flags in configs_to_run:
                 ret, out_text, stdout_tail, stderr_tail = run_bitnet_generation(formatted_prompt, flags)
-                first_tok_id = extract_first_token_id(out_text)
+                first_tok_id = extract_retokenized_first_token_id(out_text)
                 if ret != 0:
                     classification = "runtime_error"
                     is_correct = False
@@ -576,7 +601,7 @@ def execute_bisection_sweep(output_file: Path = DEFAULT_OUTPUT_FILE) -> dict:
                     "command": cmd_redacted,
                     "returncode": ret,
                     "raw_output": out_text,
-                    "first_generated_token_id": first_tok_id,
+                    "retokenized_first_token_id": first_tok_id,
                     "classification": classification,
                     "is_correct": is_correct,
                     "stdout_tail": stdout_tail,
@@ -654,7 +679,7 @@ def execute_bisection_sweep(output_file: Path = DEFAULT_OUTPUT_FILE) -> dict:
         print("[ERROR] No length passed for all clauses; refusing to derive a cap.", file=sys.stderr)
         sys.exit(1)
     raw_cap = highest_all_pass - stated_margin
-    recommended_cap = max(16, raw_cap)
+    recommended_cap = min(highest_all_pass, max(16, raw_cap))
     cap_floor_applied = (recommended_cap != raw_cap)
 
     conclusion_str = build_bisection_conclusion(
@@ -664,7 +689,8 @@ def execute_bisection_sweep(output_file: Path = DEFAULT_OUTPUT_FILE) -> dict:
         total_runs_count=total_runs,
         correct_runs_count=correct_runs,
         garbage_runs_count=garbage_runs,
-        loop_runs_count=loop_runs
+        loop_runs_count=loop_runs,
+        cap_floor_applied=cap_floor_applied
     )
 
     # Compute b1_behavior dynamically from batch_1_immediate_eos runs

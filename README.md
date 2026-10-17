@@ -122,7 +122,8 @@ cd src/FtaaSService.Worker && source .venv/bin/activate && python consumer.py
 # 4. In another terminal, run the Inference Engine
 cd src/FtaaSService.Inference && source .venv/bin/activate && python app.py
 
-# 5. Submit a fine-tuning job via curl
+# 5. Submit a fine-tuning job via curl (from repository root)
+cd ../..
 curl -X POST http://localhost:5100/api/v1/jobs \
   -F "file=@data/datasets/sample-support-compliance.jsonl" \
   -F "jobName=compliance-v1"
