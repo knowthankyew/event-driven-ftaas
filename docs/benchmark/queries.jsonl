@@ -32,4 +32,4 @@
 {"id": "q_032", "query": "Does Virginia law require express verifiable consent before recurring charges?", "relevant_ids": ["va_code_59_1_207"], "author": "single-author", "source": "self-authored", "answerable_in_force": true}
 {"id": "q_033", "query": "What notice timeframe is required for subscription renewals in Washington D.C.?", "relevant_ids": ["dc_code_28_3872"], "author": "single-author", "source": "self-authored", "answerable_in_force": true}
 {"id": "q_034", "query": "What authorization is needed to debit recurring charges from a bank checking account?", "relevant_ids": ["reg_e_1005_10"], "author": "single-author", "source": "self-authored", "answerable_in_force": true}
-{"id": "q_035", "query": "How many days before a scheduled debit can a consumer stop payment under Regulation E?", "relevant_ids": ["reg_e_1005_10_c", "ucc_4_403"], "author": "single-author", "source": "self-authored", "answerable_in_force": true}
+{"id": "q_035", "query": "How many days before a scheduled debit can a consumer stop payment under Regulation E?", "relevant_ids": ["reg_e_1005_10_c"], "author": "single-author", "source": "self-authored", "answerable_in_force": true}

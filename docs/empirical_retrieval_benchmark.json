@@ -10686,8 +10686,7 @@
         "id": "q_035",
         "query": "How many days before a scheduled debit can a consumer stop payment under Regulation E?",
         "relevant_ids": [
-          "reg_e_1005_10_c",
-          "ucc_4_403"
+          "reg_e_1005_10_c"
         ],
         "answerable_in_force": true,
         "rankings": {
@@ -19477,8 +19476,7 @@
         "id": "q_035",
         "query": "How many days before a scheduled debit can a consumer stop payment under Regulation E?",
         "relevant_ids": [
-          "reg_e_1005_10_c",
-          "ucc_4_403"
+          "reg_e_1005_10_c"
         ],
         "answerable_in_force": true,
         "rankings": {
@@ -24329,7 +24327,7 @@
           "ca_ab_2863_annual_notice",
           "uk_dmcc_renewal_notice"
         ],
-        "answerable_in_force": true,
+        "answerable_in_force": false,
         "rankings": {
           "bm25": {
             "top1_id": "ny_gbl_527_a",

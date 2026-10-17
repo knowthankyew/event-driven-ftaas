@@ -280,7 +280,7 @@ def lint_script_conclusions(scripts_dir: Path) -> tuple[bool, list[str]]:
                         if isinstance(child, ast.Constant) and isinstance(child.value, str):
                             # Check if part of a JoinStr or standalone
                             # Ignore docstring
-                            if child == node.body[0] and isinstance(node.body[0], ast.Expr):
+                            if isinstance(node.body[0], ast.Expr) and child == node.body[0].value:
                                 continue
                             if re.search(r"\d", child.value):
                                 errors.append(

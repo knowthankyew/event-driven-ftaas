@@ -96,13 +96,13 @@ PRIMARY_SOURCES = [
     },
     {
         "id": "reg_cc_229_10_c_aggregate",
-        "statute": "12 CFR § 229.10(c)(1)(vi)",
+        "statute": "12 CFR § 229.10(c)(1)(vii)",
         "jurisdiction": "US_FEDERAL",
         "status": "in_force",
         "effective_from": "2025-07-01",
         "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.10",
-        "human_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(c)(1)(vi)",
-        "citation": "12 CFR 229.10(c)(1)(vi) $275 next-day availability minimum (amended 89 FR 54997)",
+        "human_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(c)(1)(vii)",
+        "citation": "12 CFR 229.10(c)(1)(vii) $275 next-day availability minimum (amended 89 FR 54997)",
         "chunk_type": "paraphrase",
         "source_facts": ["$275", "lesser of", "aggregate amount deposited on any one banking day"],
         "legal_notes": "Statutory amount adjusted to $275 effective July 1, 2025 pursuant to 89 FR 54997."
@@ -148,15 +148,15 @@ PRIMARY_SOURCES = [
     },
     {
         "id": "reg_cc_229_19_b",
-        "statute": "12 CFR § 229.19(b)",
+        "statute": "12 CFR § 229.10(a)(2)",
         "jurisdiction": "US_FEDERAL",
         "status": "in_force",
         "effective_from": "1988-09-01",
-        "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.19",
-        "human_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.19#p-229.19(b)",
-        "citation": "12 CFR 229.19(b) ATM exclusion from in-person employee deposit",
+        "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2025-07-01/title-12.xml?part=229&section=229.10",
+        "human_url": "https://www.ecfr.gov/current/title-12/chapter-II/subchapter-A/part-229/subpart-B/section-229.10#p-229.10(a)(2)",
+        "citation": "12 CFR 229.10(a)(2) Cash deposits not made in person to an employee",
         "chunk_type": "paraphrase",
-        "source_facts": ["atm", "business day", "availability"],
+        "source_facts": ["second business day", "not made in person to an employee"],
         "legal_notes": None
     },
 
@@ -646,15 +646,15 @@ def default_http_get_fetcher(url: str, timeout: float = 10.0) -> Tuple[int, byte
     Raises exception on network or protocol failure.
     """
     headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Encoding": "gzip, deflate",
+        "User-Agent": "FtaaSService-StatutorySourceVerifier/2.0 (+https://github.com/cl0rkster/Dev; statutory-verification@ftaas.local)",
+        "Accept-Encoding": "gzip",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
     }
     req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout, context=SSL_CONTEXT) as resp:
         status_code = resp.status
         final_url = resp.geturl()
-        raw_bytes = resp.read()
+        raw_bytes = resp.read(10 * 1024 * 1024)
         headers_dict = dict(resp.headers)
         return status_code, raw_bytes, final_url, headers_dict
 
@@ -662,7 +662,7 @@ def default_http_get_fetcher(url: str, timeout: float = 10.0) -> Tuple[int, byte
 def extract_text_from_bytes(raw_bytes: bytes, headers: Optional[dict] = None) -> str:
     """Decompress and extract text from HTML or XML response bytes."""
     data = raw_bytes
-    if headers and headers.get("Content-Encoding") == "gzip" or (len(data) > 2 and data[:2] == b"\x1f\x8b"):
+    if ((headers and headers.get("Content-Encoding") == "gzip") or (len(data) > 2 and data[:2] == b"\x1f\x8b")):
         try:
             data = gzip.decompress(data)
         except Exception:
@@ -763,16 +763,20 @@ def verify_single_source(
 
         if chunk_type == "verbatim":
             verbatim_text = source.get("text", "")
-            if normalize_text(verbatim_text) not in norm_extracted:
+            if not verbatim_text or normalize_text(verbatim_text) not in norm_extracted:
                 facts_present = False
                 missing_facts.append("verbatim_containment")
         else:
-            for fact in source_facts:
-                if normalize_text(fact) not in norm_extracted:
-                    facts_present = False
-                    missing_facts.append(fact)
+            if not source_facts:
+                facts_present = False
+                missing_facts.append("empty_source_facts")
+            else:
+                for fact in source_facts:
+                    if normalize_text(fact) not in norm_extracted:
+                        facts_present = False
+                        missing_facts.append(fact)
 
-        if facts_present and len(source_facts) > 0:
+        if facts_present:
             record["state"] = "verified"
             record["verified_on"] = attempt_time
             # Save snapshot excerpt only after facts are verified
@@ -791,9 +795,15 @@ def verify_single_source(
                     snapshot_file.write_text(header + excerpt, encoding="utf-8")
         else:
             record["state"] = "mismatch"
+            if chunk_type == "verbatim" and "verbatim_containment" in missing_facts:
+                msg = "Verbatim text was not found in extracted source text."
+            elif "empty_source_facts" in missing_facts:
+                msg = "Source configuration error: source_facts is empty for paraphrase chunk."
+            else:
+                msg = f"Missing required source facts: {missing_facts}"
             record["failure_error"] = {
                 "class": "ContentMismatchError",
-                "message": f"Missing required source facts: {missing_facts}"
+                "message": msg
             }
 
     except urllib.error.HTTPError as e:
@@ -858,6 +868,20 @@ def verify_all_sources(
         },
         "sources": records
     }
+
+    # Clean up stale snapshots whose stem is not among verified sources
+    if snapshot_dir and snapshot_dir.is_dir():
+        verified_shas = {
+            r["extracted_text_sha256"]
+            for r in records
+            if r.get("state") == "verified" and r.get("extracted_text_sha256")
+        }
+        for snap_file in snapshot_dir.glob("*.txt"):
+            if snap_file.stem not in verified_shas:
+                try:
+                    snap_file.unlink()
+                except OSError:
+                    pass
 
     if output_file:
         output_file.parent.mkdir(parents=True, exist_ok=True)

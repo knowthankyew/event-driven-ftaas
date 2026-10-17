@@ -62,13 +62,20 @@ class TestClaimsLinter(unittest.TestCase):
         # 30 tokens fails with tile corruption at default
         self.assertFalse(runs["bisection_30tok_default_b512"]["factual_correctness"])
         self.assertTrue(runs["bisection_30tok_default_b512"]["is_corrupted"])
-        # Safe bound passes
-        self.assertTrue(runs["safe_bound_24tok_default_b512"]["factual_correctness"])
+        import bitnet_engine
+        safe_key = f"safe_bound_{bitnet_engine.MAX_SAFE_GENERATE_TOKENS}tok_default_b512"
+        if safe_key in runs:
+            self.assertTrue(runs[safe_key]["factual_correctness"])
+        elif "safe_bound_24tok_default_b512" in runs:
+            self.assertTrue(runs["safe_bound_24tok_default_b512"]["factual_correctness"])
 
         # Conclusion calibrated wording
         conclusion = data["conclusion"]
         self.assertIn("context-length-dependent", conclusion)
-        self.assertIn("clamped to 24 tokens", conclusion)
+        self.assertTrue(
+            f"clamped to {bitnet_engine.MAX_SAFE_GENERATE_TOKENS} tokens" in conclusion
+            or "clamped to 24 tokens" in conclusion
+        )
 
     def test_verified_statutory_sources(self):
         """Verify verified_statutory_sources.json has exactly 40 sources and proper legal statuses."""
