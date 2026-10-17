@@ -392,23 +392,73 @@ def main():
     short_correct_count = sum(1 for v in short_runs if v["factual_correctness"])
     corrupted_count = sum(1 for k, v in bitnet_runs.items() if v["is_corrupted"])
 
-    max_passing_default = max([v["prompt_tokens"] for k, v in bitnet_runs.items() if ("short" in k or "bisection" in k or "24tok" in k) and v["factual_correctness"] and "default_b512" in k], default=29)
-    min_failing_default = min([v["prompt_tokens"] for k, v in bitnet_runs.items() if ("short" in k or "bisection" in k or "interm" in k) and not v["factual_correctness"] and "default_b512" in k], default=30)
+    passing_lengths = [v["prompt_tokens"] for k, v in bitnet_runs.items() if v.get("factual_correctness") and "default_b512" in k]
+    failing_lengths = [v["prompt_tokens"] for k, v in bitnet_runs.items() if not v.get("factual_correctness") and "default_b512" in k]
 
-    conclusion = (
-        f"Empirical context-length bisection demonstrates that failure in bitnet.cpp is context-length-dependent "
-        f"(exact root cause mechanism unknown; RoPE parameters match reference configuration). "
-        f"Under default prefill (b=512), factual extraction succeeds up to {max_passing_default} tokens and fails at >= {min_failing_default} tokens with corruption "
-        f"(total corrupted runs={corrupted_count}). "
-        f"Under micro-batching (b=16), prompt context beyond 34 tokens degenerates into repetition or premature EOS without factual retrieval "
-        f"(long context correct={long_correct_count}/{len(long_runs)}). "
-        f"KV cache precision flags (-ctk f32 -ctv f32) and Flash Attention toggles (-fa on/off) do not alter the failure boundary. "
-        f"Hugging Face PyTorch reference achieves 100% factual correctness across all lengths and samplers, with corrupt token (ID 112890 '备份') suppressed by >25 logits. "
-        f"Single-token prefill (b=1 oracle) emits immediate [end of text]. "
-        f"Conclusion: Verified-correct factual generation in bitnet.cpp is strictly confined to prompts <= {max_passing_default} tokens. "
-        f"A verified safe operational ceiling is clamped to 24 tokens. "
-        f"Long-context RAG factual generation cannot safely operate on the current bitnet.cpp runtime."
+    max_passing_default = max(passing_lengths) if passing_lengths else None
+    min_failing_default = min(failing_lengths) if failing_lengths else None
+
+    logits_info = hf_results.get("first_token_logits_bisection", {})
+    delta_29 = logits_info.get("prompt_29_tokens", {}).get("logit_delta")
+    delta_30 = logits_info.get("prompt_30_tokens", {}).get("logit_delta")
+
+    b1_run = bitnet_runs.get("single_tok_prefill_b1", {})
+    b1_result_desc = f"Single-token prefill (b=1) evaluates with classification '{b1_run.get('classification', 'unknown')}'." if b1_run else ""
+
+    hf_eval_runs = [v for k, v in hf_results.items() if isinstance(v, dict) and "factual_correctness" in v]
+    hf_all_correct = all(v["factual_correctness"] for v in hf_eval_runs) if hf_eval_runs else False
+
+    safe_cap = bitnet_engine.MAX_SAFE_GENERATE_TOKENS
+
+    conclusion_parts = [
+        "Empirical context-length bisection demonstrates that failure in bitnet.cpp is context-length-dependent "
+        "(exact root cause mechanism unknown; RoPE parameters match reference configuration)."
+    ]
+
+    if max_passing_default is not None and min_failing_default is not None:
+        conclusion_parts.append(
+            f"Under default prefill (b=512), factual extraction succeeds up to {max_passing_default} tokens and fails at >= {min_failing_default} tokens with corruption "
+            f"(total corrupted runs={corrupted_count})."
+        )
+    elif max_passing_default is not None:
+        conclusion_parts.append(
+            f"Under default prefill (b=512), factual extraction succeeds up to {max_passing_default} tokens (total corrupted runs={corrupted_count})."
+        )
+
+    if long_runs:
+        conclusion_parts.append(
+            f"Under micro-batching (b=16), prompt context beyond 34 tokens degenerates into repetition or premature EOS without factual retrieval "
+            f"(long context correct={long_correct_count}/{len(long_runs)})."
+        )
+
+    conclusion_parts.append(
+        "KV cache precision flags (-ctk f32 -ctv f32) and Flash Attention toggles (-fa on/off) do not alter the failure boundary."
     )
+
+    if hf_eval_runs:
+        suppression_desc = ""
+        if delta_29 is not None and delta_30 is not None:
+            suppression_desc = f", with corrupt token (ID 112890 '备份') suppressed by {delta_29} to {delta_30} logits"
+        conclusion_parts.append(
+            f"Hugging Face PyTorch reference achieves {'100%' if hf_all_correct else 'partial'} factual correctness across evaluated samplers{suppression_desc}."
+        )
+
+    if b1_result_desc:
+        conclusion_parts.append(b1_result_desc)
+
+    if max_passing_default is not None:
+        conclusion_parts.append(
+            f"Conclusion: Verified-correct factual generation in bitnet.cpp is strictly confined to prompts <= {max_passing_default} tokens. "
+            f"A verified safe operational ceiling is clamped to {safe_cap} tokens. "
+            f"Long-context RAG factual generation cannot safely operate on the current bitnet.cpp runtime."
+        )
+    else:
+        conclusion_parts.append(
+            f"Conclusion: A verified safe operational ceiling is clamped to {safe_cap} tokens. "
+            f"Long-context RAG factual generation cannot safely operate on the current bitnet.cpp runtime."
+        )
+
+    conclusion = " ".join(conclusion_parts)
 
     payload = {
         "metadata": {

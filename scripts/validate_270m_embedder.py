@@ -102,6 +102,7 @@ def evaluate_clause_set(clauses, tok, model, name="clauses"):
         tok_cmd = [
             str(bitnet_engine.BITNET_TOKENIZE_CLI_PATH),
             "-m", str(bitnet_engine.BITNET_EMBED_MODEL_PATH),
+            "--ids",
             "--stdin",
             "--log-disable"
         ]
@@ -113,17 +114,11 @@ def evaluate_clause_set(clauses, tok, model, name="clauses"):
             encoding="utf-8"
         )
         native_ids = []
-        for line in tok_proc.stdout.splitlines():
-            line_str = line.strip()
-            if line_str and line_str.isdigit():
-                native_ids.append(int(line_str))
-
-        if len(native_ids) != hf_tok_count:
-            parsed = []
-            for token_str in re.findall(r"\b\d+\b", tok_proc.stdout):
-                parsed.append(int(token_str))
-            if len(parsed) == hf_tok_count:
-                native_ids = parsed
+        if tok_proc.returncode == 0 and tok_proc.stdout.strip():
+            raw_out = tok_proc.stdout.strip().strip("[]")
+            for token_str in re.split(r"[\s,]+", raw_out):
+                if token_str.isdigit():
+                    native_ids.append(int(token_str))
 
         native_count = len(native_ids) if native_ids else bitnet_engine.count_embed_tokens(clause_text)
         exact_match = (native_ids == hf_ids) if native_ids else None
@@ -239,7 +234,10 @@ def main():
         with torch.no_grad():
             inputs = minilm_tok(v, return_tensors="pt")
             out = minilm_model(**inputs)
-            emb = torch.nn.functional.normalize(out.last_hidden_state[:, 0], p=2, dim=1)[0].numpy()
+            mask = inputs.attention_mask.unsqueeze(-1).expand(out.last_hidden_state.size()).float()
+            sum_emb = torch.sum(out.last_hidden_state * mask, 1)
+            sum_m = torch.clamp(mask.sum(1), min=1e-9)
+            emb = torch.nn.functional.normalize(sum_emb / sum_m, p=2, dim=1)[0].numpy()
             minilm_vecs[k] = emb
 
     harrier_vecs = {}
@@ -275,13 +273,13 @@ def main():
     conclusion = (
         f"Pairwise similarity correlation against the official unquantized teacher (Harrier 270M) across 190 off-diagonal pairs "
         f"demonstrates moderate, statistically significant relational rank correlation: rho={full_eval['spearman_rho']} "
-        f"(R^2={full_eval['r_squared']}, explaining {full_eval['variance_explained_pct']}% of variance) on full legal clauses (36-75 tokens), "
+        f"(R^2={full_eval['r_squared']}, explaining {full_eval['variance_explained_pct']}% of variance, spearman p={full_eval['spearman_pvalue']:.2e}) on full legal clauses (36-75 tokens), "
         f"and rho={short_eval['spearman_rho']}, r={short_eval['pearson_r']} (R^2={short_eval['r_squared']}, "
-        f"explaining {short_eval['variance_explained_pct']}% of variance) on short clauses (< 30 tokens). "
-        f"While statistically significant (p < 10^-5), explaining 11% to 20% of semantic variance indicates that 1-bit dense embeddings "
+        f"explaining {short_eval['variance_explained_pct']}% of variance, spearman p={short_eval['spearman_pvalue']:.2e}) on short clauses (< 30 tokens). "
+        f"While statistically significant (spearman p={full_eval['spearman_pvalue']:.2e}, pearson p={full_eval['pearson_pvalue']:.2e}), explaining {full_eval['variance_explained_pct']}% to {short_eval['variance_explained_pct']}% of semantic variance indicates that 1-bit dense embeddings "
         f"retain coarse topical clustering but lose significant discriminative signal relative to the FP16 teacher. "
         f"The lower rank correlation on short sequences (< 30 tokens, rho={short_eval['spearman_rho']} vs rho={full_eval['spearman_rho']}) demonstrates that "
-        f"concise statutory clauses lose discriminative signal when quantized to ternary weights, explaining why standalone 1-bit retrieval drops to 0% Top-1 on short chunks."
+        f"concise statutory clauses lose discriminative signal when quantized to ternary weights (as corroborated by the 0% Top-1 short-chunk retrieval rate documented in docs/empirical_retrieval_benchmark.json)."
     )
 
     output_path = os.path.abspath(os.path.join(repo_root, "docs/empirical_270m_embedder_validation.json"))

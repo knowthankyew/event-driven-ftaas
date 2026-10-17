@@ -376,10 +376,26 @@ def train_job(
         except Exception as eval_ex:
             logger.warning(f"Evaluation or Model Registry step encountered notice: {eval_ex}")
 
+        # Extract initial loss from log history if available
+        initial_loss = None
+        for entry in getattr(trainer.state, "log_history", []):
+            if "loss" in entry and initial_loss is None:
+                initial_loss = entry["loss"]
+
+        trainable_params, all_params = (None, None)
+        try:
+            trainable_params, all_params = peft_model.get_nb_trainable_parameters()
+        except Exception:
+            pass
+
         return {
             "mlflowRunId": run_id,
             "mlflowExperimentId": experiment_id,
             "adapterPath": rel_adapter_path,
             "totalSteps": total_steps,
-            "finalLoss": final_loss
+            "finalLoss": final_loss,
+            "initialLoss": initial_loss,
+            "trainableParams": trainable_params,
+            "allParams": all_params,
+            "device": str(DEVICE)
         }

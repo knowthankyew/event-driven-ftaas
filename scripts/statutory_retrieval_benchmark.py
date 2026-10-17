@@ -305,27 +305,52 @@ def run_benchmark(
     print(f"Loaded {len(corpus)} corpus chunks, {len(queries)} self-authored queries, {len(external_queries)} external queries.")
 
     # 2. Model loaders
+    # 2. Model loaders
     import bitnet_engine
     tok_minilm, model_minilm = load_minilm()
+    bitnet_embed_available = bitnet_engine.is_bitnet_embed_available()
+    skipped_methods = []
+    if not bitnet_embed_available:
+        skipped_methods.extend(["bitnet_embedding", "hybrid"])
+    if model_minilm is None:
+        skipped_methods.extend(["minilm_l6", "hybrid_minilm"])
 
     # Embed corpus with BitNet (cached in memory)
-    print("Embedding corpus with BitNet 270M...")
     bitnet_corpus_embeds = []
-    for t in corpus_texts:
-        v, _ = bitnet_engine.embed_bitnet_sync(t)
-        arr = np.array(v, dtype=np.float32)
-        norm = np.linalg.norm(arr)
-        bitnet_corpus_embeds.append(arr / (norm if norm > 0 else 1.0))
-    bitnet_corpus_embeds = np.array(bitnet_corpus_embeds)
-
-    # Embed short corpus with BitNet
     bitnet_short_corpus_embeds = []
-    for t in corpus_short_texts:
-        v, _ = bitnet_engine.embed_bitnet_sync(t)
-        arr = np.array(v, dtype=np.float32)
-        norm = np.linalg.norm(arr)
-        bitnet_short_corpus_embeds.append(arr / (norm if norm > 0 else 1.0))
-    bitnet_short_corpus_embeds = np.array(bitnet_short_corpus_embeds)
+    if bitnet_embed_available:
+        print("Embedding corpus with BitNet 270M...")
+        for t in corpus_texts:
+            try:
+                v, _ = bitnet_engine.embed_bitnet_sync(t)
+                arr = np.array(v, dtype=np.float32)
+                norm = np.linalg.norm(arr)
+                bitnet_corpus_embeds.append(arr / (norm if norm > 0 else 1.0))
+            except bitnet_engine.ContextOverflowError as coe:
+                print(f"Warning: Corpus chunk exceeds context limit ({coe}); using zero vector placeholder.")
+                bitnet_corpus_embeds.append(np.zeros(640, dtype=np.float32))
+            except Exception as e:
+                print(f"Warning: BitNet embedding failed ({e}); using zero vector placeholder.")
+                bitnet_corpus_embeds.append(np.zeros(640, dtype=np.float32))
+        bitnet_corpus_embeds = np.array(bitnet_corpus_embeds)
+
+        # Embed short corpus with BitNet
+        for t in corpus_short_texts:
+            try:
+                v, _ = bitnet_engine.embed_bitnet_sync(t)
+                arr = np.array(v, dtype=np.float32)
+                norm = np.linalg.norm(arr)
+                bitnet_short_corpus_embeds.append(arr / (norm if norm > 0 else 1.0))
+            except bitnet_engine.ContextOverflowError as coe:
+                print(f"Warning: Short chunk exceeds context limit ({coe}); using zero vector placeholder.")
+                bitnet_short_corpus_embeds.append(np.zeros(640, dtype=np.float32))
+            except Exception as e:
+                print(f"Warning: BitNet embedding failed ({e}); using zero vector placeholder.")
+                bitnet_short_corpus_embeds.append(np.zeros(640, dtype=np.float32))
+        bitnet_short_corpus_embeds = np.array(bitnet_short_corpus_embeds)
+    else:
+        bitnet_corpus_embeds = np.zeros((len(corpus), 640), dtype=np.float32)
+        bitnet_short_corpus_embeds = np.zeros((len(corpus), 640), dtype=np.float32)
 
     # Embed corpus with MiniLM
     minilm_corpus_embeds = None
@@ -334,23 +359,33 @@ def run_benchmark(
         minilm_corpus_embeds = compute_minilm_embeddings(corpus_texts, tok_minilm, model_minilm)
 
     # Pre-embed queries
-    print("Embedding self-authored queries...")
     bitnet_q_embeds_prefixed = []
     bitnet_q_embeds_unprefixed = []
-    for q in queries:
-        qt = q["query"]
-        v_pre, _ = bitnet_engine.embed_bitnet_sync(f"query: {qt}")
-        arr_pre = np.array(v_pre, dtype=np.float32)
-        norm_pre = np.linalg.norm(arr_pre)
-        bitnet_q_embeds_prefixed.append(arr_pre / (norm_pre if norm_pre > 0 else 1.0))
+    if bitnet_embed_available:
+        print("Embedding self-authored queries...")
+        for q in queries:
+            qt = q["query"]
+            try:
+                v_pre, _ = bitnet_engine.embed_bitnet_sync(f"query: {qt}")
+                arr_pre = np.array(v_pre, dtype=np.float32)
+                norm_pre = np.linalg.norm(arr_pre)
+                bitnet_q_embeds_prefixed.append(arr_pre / (norm_pre if norm_pre > 0 else 1.0))
+            except Exception:
+                bitnet_q_embeds_prefixed.append(np.zeros(640, dtype=np.float32))
 
-        v_un, _ = bitnet_engine.embed_bitnet_sync(qt)
-        arr_un = np.array(v_un, dtype=np.float32)
-        norm_un = np.linalg.norm(arr_un)
-        bitnet_q_embeds_unprefixed.append(arr_un / (norm_un if norm_un > 0 else 1.0))
+            try:
+                v_un, _ = bitnet_engine.embed_bitnet_sync(qt)
+                arr_un = np.array(v_un, dtype=np.float32)
+                norm_un = np.linalg.norm(arr_un)
+                bitnet_q_embeds_unprefixed.append(arr_un / (norm_un if norm_un > 0 else 1.0))
+            except Exception:
+                bitnet_q_embeds_unprefixed.append(np.zeros(640, dtype=np.float32))
 
-    bitnet_q_embeds_prefixed = np.array(bitnet_q_embeds_prefixed)
-    bitnet_q_embeds_unprefixed = np.array(bitnet_q_embeds_unprefixed)
+        bitnet_q_embeds_prefixed = np.array(bitnet_q_embeds_prefixed)
+        bitnet_q_embeds_unprefixed = np.array(bitnet_q_embeds_unprefixed)
+    else:
+        bitnet_q_embeds_prefixed = np.zeros((len(queries), 640), dtype=np.float32)
+        bitnet_q_embeds_unprefixed = np.zeros((len(queries), 640), dtype=np.float32)
 
     minilm_q_embeds = None
     if model_minilm is not None:
@@ -553,17 +588,21 @@ def run_benchmark(
             "external_queries_evaluated": len(external_queries),
             "tie_breaking_rule": "score descending, then corpus id alphabetically ascending",
             "rounding_rule": "Decimal quantize with ROUND_HALF_UP",
+            "skipped_methods": skipped_methods,
             "self_retrieval_validation": {
                 "total_chunks": len(corpus),
                 "passes": self_hits,
                 "accuracy_pct": round_half_up((self_hits / len(corpus)) * 100.0, 1)
             },
             "bitnet_diagnostics": {
-                "with_query_prefix_top1_hits": full_summary["bitnet_embedding"]["top1_hits"],
-                "without_query_prefix_top1_hits": unprefixed_sum["bitnet_no_prefix"]["top1_hits"],
-                "short_chunks_top1_hits": short_sum["bitnet_short_chunks"]["top1_hits"],
+                "with_query_prefix_top1_hits": full_summary.get("bitnet_embedding", {}).get("top1_hits", 0),
+                "without_query_prefix_top1_hits": unprefixed_sum.get("bitnet_no_prefix", {}).get("top1_hits", 0),
+                "short_chunks_top1_hits": short_sum.get("bitnet_short_chunks", {}).get("top1_hits", 0),
                 "self_retrieval_top1_hits": self_hits,
-                "diagnosis_finding": "Self-retrieval achieves 100%, but query-to-chunk matching remains weak under all prefix configurations; short chunks collapse to 0% top-1."
+                "diagnosis_finding": (
+                    f"Self-retrieval achieves {round_half_up((self_hits / len(corpus)) * 100.0, 1)}%, but query-to-chunk matching remains weak under all prefix configurations; "
+                    f"short chunks achieve {short_sum.get('bitnet_short_chunks', {}).get('top1_recall_pct', 0.0)}% top-1."
+                )
             }
         },
         "full_corpus_benchmark": {

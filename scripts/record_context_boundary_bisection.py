@@ -498,6 +498,10 @@ def execute_bisection_sweep(output_file: Path = DEFAULT_OUTPUT_FILE) -> dict:
     """Run systematic bisection sweep across 12 clauses and lengths 16..48."""
     print("=== Running Context-Length Boundary Bisection Sweep ===")
 
+    if not CLI_PATH.is_file() or not MODEL_PATH.is_file():
+        print(f"[ERROR] Required binary ({CLI_PATH}) or model ({MODEL_PATH}) not found; stopping sweep.", file=sys.stderr)
+        sys.exit(1)
+
     # Get git commits
     bitnet_git_commit = "unknown"
     llama_submodule_commit = "unknown"
@@ -547,8 +551,12 @@ def execute_bisection_sweep(output_file: Path = DEFAULT_OUTPUT_FILE) -> dict:
             for cfg_name, flags in configs_to_run:
                 ret, out_text, stdout_tail, stderr_tail = run_bitnet_generation(formatted_prompt, flags)
                 first_tok_id = extract_first_token_id(out_text)
-                classification = classify_run_output(out_text, regex)
-                is_correct = (classification == "correct")
+                if ret != 0:
+                    classification = "runtime_error"
+                    is_correct = False
+                else:
+                    classification = classify_run_output(out_text, regex)
+                    is_correct = (classification == "correct")
 
                 cmd_redacted = [redact_path(str(CLI_PATH)), "-m", redact_path(str(MODEL_PATH)), "-p", formatted_prompt] + flags
 
@@ -625,6 +633,30 @@ def execute_bisection_sweep(output_file: Path = DEFAULT_OUTPUT_FILE) -> dict:
         loop_runs_count=loop_runs
     )
 
+    # Compute b1_behavior dynamically from batch_1_immediate_eos runs
+    b1_runs = [r for r in runs_data if r["config"] == "batch_1_immediate_eos"]
+    b1_eos = sum(1 for r in b1_runs if r["classification"] == "eos")
+    b1_total = len(b1_runs)
+    if b1_total > 0 and b1_eos == b1_total:
+        b1_behavior = f"Immediate end-of-text emission across all {b1_total} evaluated b=1 runs"
+    elif b1_total > 0:
+        b1_behavior = f"Immediate end-of-text emission in {b1_eos}/{b1_total} evaluated b=1 runs"
+    else:
+        b1_behavior = "No batch=1 runs evaluated"
+
+    # Load HF reference subset from record_hf_vs_bitnet_raw_outputs artifact without embedding unmeasured data
+    hf_artifact = REPO_ROOT / "docs" / "empirical_long_context_isolation_results.json"
+    hf_reference_subset = None
+    if hf_artifact.is_file():
+        try:
+            hf_json = json.loads(hf_artifact.read_text(encoding="utf-8"))
+            hf_reference_subset = {
+                "source_artifact": "docs/empirical_long_context_isolation_results.json",
+                "huggingface_pytorch_reference": hf_json.get("huggingface_pytorch_reference")
+            }
+        except Exception:
+            hf_reference_subset = None
+
     payload = {
         "metadata": {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -637,33 +669,8 @@ def execute_bisection_sweep(output_file: Path = DEFAULT_OUTPUT_FILE) -> dict:
             "highest_all_passing_length": highest_all_pass,
             "stated_margin": stated_margin,
             "recommended_safe_generate_cap": recommended_cap,
-            "b1_behavior": "Immediate end-of-text emission on all evaluated prompts (labeled distinct runtime behavior)",
-            "hf_reference_subset": {
-                "prompt_24_tok": {
-                    "text": "User: Threshold under Sec 10 is $500.\nQuestion: Sec 10 threshold?<|eot_id|>Assistant: ",
-                    "tokens": 23,
-                    "hf_decoded": "Under Sec 10, the threshold is $500.<|eot_id|>",
-                    "hf_first_token_id": 11360,
-                    "hf_first_token": "Under",
-                    "hf_first_token_logit": 14.85
-                },
-                "prompt_29_tok": {
-                    "text": "User: The statutory threshold under Section 10 is $500.\nQuestion: What is the threshold under Section 10?<|eot_id|>Assistant: ",
-                    "tokens": 29,
-                    "hf_decoded": "Under Section 10, the threshold is $500.<|eot_id|>",
-                    "hf_first_token_id": 11360,
-                    "hf_first_token": "Under",
-                    "hf_first_token_logit": 15.22
-                },
-                "prompt_30_tok": {
-                    "text": "User: A The statutory threshold under Section 10 is $500.\nQuestion: What is the threshold under Section 10?<|eot_id|>Assistant: ",
-                    "tokens": 30,
-                    "hf_decoded": "Under Section 10, the threshold is $500.<|eot_id|>",
-                    "hf_first_token_id": 11360,
-                    "hf_first_token": "Under",
-                    "hf_first_token_logit": 14.98
-                }
-            },
+            "b1_behavior": b1_behavior,
+            "hf_reference_subset": hf_reference_subset,
             "conclusion": conclusion_str
         },
         "pass_rate_by_length": pass_rate_by_length,

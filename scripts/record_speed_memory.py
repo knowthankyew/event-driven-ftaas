@@ -96,7 +96,7 @@ def get_machine_specs() -> Dict[str, Any]:
         "machine": platform.machine(),
         "cpu_model": cpu_model,
         "ram_bytes": ram_bytes,
-        "ram_gb": round(ram_bytes / (1024 ** 3), 2) if ram_bytes > 0 else 16.0,
+        "ram_gb": round(ram_bytes / (1024 ** 3), 2) if ram_bytes > 0 else None,
         "python_version": platform.python_version()
     }
 
@@ -388,31 +388,41 @@ def execute_speed_memory_benchmark(output_file: Path = DEFAULT_OUTPUT_FILE) -> D
             print(f"    -> decode: {r_tp.get('decode_tok_per_sec')} tok/s | prefill: {r_tp.get('prefill_tok_per_sec')} tok/s | TTFT: {r_tp.get('time_to_first_token_ms')} ms")
 
     # 3. Baseline Comparison
-    # Conventional Gemma 2 2B FP16 published reference
+    # Conventional Gemma 2 2B FP16 published reference from MODEL_PERFORMANCE_COMPARISON.md Section 2
     published_baseline = {
         "model_name": "google/gemma-2-2b (FP16)",
         "baseline_type": "published_reference",
         "precision": "fp16",
-        "model_weights_mb": 5000.0,
-        "peak_rss_mb": 5400.0,
+        "model_weights_mb": 5240.0,
+        "peak_rss_mb": 5600.0,
         "reference_hardware": "AVX2 CPU (x86_64, 4 threads)",
-        "reference_prefill_tok_per_sec": 60.0,
-        "reference_decode_tok_per_sec": 12.0
+        "reference_prefill_tok_per_sec": 14.2,
+        "reference_decode_tok_per_sec": 8.4,
+        "source_citation": "docs/MODEL_PERFORMANCE_COMPARISON.md Section 2"
     }
 
     # Extract summary metrics for conclusion
     gen_rss_values = [r["max_rss_mb"] for r in rss_measurements if r["model_type"] == "2b_generator" and r.get("max_rss_mb")]
     emb_rss_values = [r["max_rss_mb"] for r in rss_measurements if r["model_type"] == "270m_embedder" and r.get("max_rss_mb")]
 
-    peak_2b_rss = max(gen_rss_values) if gen_rss_values else 1300.0
-    peak_emb_rss = max(emb_rss_values) if emb_rss_values else 450.0
+    peak_2b_rss = max(gen_rss_values) if gen_rss_values else None
+    peak_emb_rss = max(emb_rss_values) if emb_rss_values else None
 
     t4_runs = [r for r in throughput_measurements if r["threads"] == 4 and r.get("decode_tok_per_sec")]
-    t4_sample = t4_runs[0] if t4_runs else {}
+    t4_sample = t4_runs[0] if t4_runs else None
 
-    dec_t4 = t4_sample.get("decode_tok_per_sec", 20.0)
-    pref_t4 = t4_sample.get("prefill_tok_per_sec", 130.0)
-    ttft_t4 = t4_sample.get("time_to_first_token_ms", 100.0)
+    if peak_2b_rss is None or peak_emb_rss is None or t4_sample is None:
+        print("[ERROR] Missing required speed/memory measurements; cannot write empirical results.", file=sys.stderr)
+        sys.exit(1)
+
+    dec_t4 = t4_sample.get("decode_tok_per_sec")
+    pref_t4 = t4_sample.get("prefill_tok_per_sec")
+    ttft_t4 = t4_sample.get("time_to_first_token_ms")
+
+    if dec_t4 is None or pref_t4 is None or ttft_t4 is None:
+        print("[ERROR] Incomplete 4-thread throughput measurements; cannot write empirical results.", file=sys.stderr)
+        sys.exit(1)
+
     comp_ratio = round(published_baseline["peak_rss_mb"] / peak_2b_rss, 2)
 
     conclusion_str = build_speed_memory_conclusion(

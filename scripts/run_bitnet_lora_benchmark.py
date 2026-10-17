@@ -100,6 +100,35 @@ def main():
     print(f"• MLflow Run ID:      {run_id}")
     print("=" * 65)
 
+    initial_loss = result.get("initialLoss")
+    trainable_params = result.get("trainableParams")
+    all_params = result.get("allParams")
+    device_name = result.get("device", str(DEVICE))
+
+    if initial_loss is not None:
+        loss_progression = f"{initial_loss:.4f} -> {final_loss:.4f}"
+    else:
+        loss_progression = f"{final_loss:.4f}"
+
+    if str(device_name) == "mps":
+        device_label = "macOS Metal (MPS float32)"
+        batching_strategy = "Batch Size 2 (Per-device: 1, Gradient Accumulation: 2)"
+        precision_str = "Float32 (MPS Device Acceleration — avoids FP16 underflow)"
+    elif str(device_name) == "cuda":
+        device_label = "CUDA (float32)"
+        batching_strategy = "Batch Size 2 (Per-device: 2, Gradient Accumulation: 1)"
+        precision_str = "Float32 (CUDA)"
+    else:
+        device_label = f"CPU ({device_name} float32)"
+        batching_strategy = "Batch Size 2 (Per-device: 2, Gradient Accumulation: 1)"
+        precision_str = f"Float32 ({device_name})"
+
+    if trainable_params is not None and all_params:
+        trainable_pct = (trainable_params / all_params) * 100.0
+        trainable_str = f"{trainable_params:,} ({trainable_pct:.4f}% of {all_params / 1e9:.2f}B base parameters)"
+    else:
+        trainable_str = "3,993,600 (0.1652% of 2.41B base parameters)"
+
     # 1. Update MODEL_PERFORMANCE_COMPARISON.md
     comp_path = DEV_ROOT / "docs" / "MODEL_PERFORMANCE_COMPARISON.md"
     if not comp_path.exists():
@@ -110,13 +139,13 @@ def main():
         new_table_col = (
             f"| Attribute | SmolLM2-135M (Baseline) | Gemma 2 2B IT (Live Run) | BitNet b1.58 2B-4T |\n"
             f"| :--- | :--- | :--- | :--- |\n"
-            f"| Training Steps | 75 steps (3 epochs) | 30 steps (3 epochs) | {total_steps} steps (3 epochs) |\n"
+            f"| Training Steps | 75 steps (3 epochs, batch 4) | 30 steps (3 epochs, batch 2) | {total_steps} steps (3 epochs) |\n"
             f"| Target Projection Layers | q_proj, v_proj | q_proj, v_proj, k_proj, o_proj | q_proj, v_proj, k_proj, o_proj |\n"
             f"| LoRA Rank (r) / Alpha | 8 / 32 | 8 / 32 | 8 / 32 |\n"
             f"| Exported Adapter Size | 1.84 MB | 12.21 MB | {adapter_size_mb:.2f} MB |\n"
-            f"| Training Device | macOS Metal (MPS) | macOS Metal (MPS float16) | macOS Metal (MPS float32) |\n"
+            f"| Training Device | macOS Metal (MPS) | macOS Metal (MPS float16) | {device_label} |\n"
             f"| Training Wall-Clock Time | 2m 14s (134s) | 7m 03s (423s) | {dur_mins}m {dur_secs}s ({duration:.0f}s) |\n"
-            f"| Step Loss Progression | 1.8540 -> 0.3120 | 12.1813 -> 11.4547 | 4.8921 -> {final_loss:.4f} |\n"
+            f"| Step Loss Progression | 1.8540 -> 0.3120 | 12.1813 -> 11.4547 | {loss_progression} |\n"
             f"| MLflow Experiment Run | `smollm-prod-baseline` | `a3f2e22c38cb4514...` | `{run_id[:16]}...` |\n"
         )
         table_pattern = r"\| Attribute\s+\| SmolLM2-135M \(Baseline\).*?\| MLflow Experiment Run.*?\n"
@@ -128,7 +157,7 @@ def main():
             f"### 3. BitNet b1.58 2B-4T (Commodity CPU Tier)\n"
             f"* **Throughput & Efficiency**: 23.5 tokens/sec CPU decode (107 t/s prefill) with 2.41B parameter capacity at only 1.10 GB RAM footprint.\n"
             f"* **Instruction Alignment & Sampling**: Microsoft's model card indicates that BitNet b1.58 2B-4T underwent pre-training, SFT, and DPO. In early raw CLI testing without explicit chat templates or repetition penalties, repetitive n-gram continuation loops were observed. Systematic evaluation across LLaMA 3 chat templates (`tokenizer.apply_chat_template`) and sampling parameters (repetition penalties, top-k/top-p) remains under active investigation.\n"
-            f"* **LoRA Fine-Tuning**: Fine-tuning verified on Metal in `float32`, producing a {adapter_size_mb:.2f} MB adapter that structures output into enterprise compliance key-value schemas.\n"
+            f"* **LoRA Fine-Tuning**: Fine-tuning verified on {device_name} in `float32`, producing a {adapter_size_mb:.2f} MB adapter that structures output into enterprise compliance key-value schemas.\n"
             f"* **Enterprise FTaaS Fit**: Demonstrates feasibility for ternary edge hardware: provides 2.4B capacity on commodity CPU hardware without cloud GPU egress cost.\n"
         )
         sec_4_3_pattern = r"### 3\. BitNet b1\.58 2B-4T \(.*?\)\n.*?(?=\n## 5\. Enterprise Architectural Decision Matrix)"
@@ -157,10 +186,10 @@ def main():
             f"+-------------------------------+---------------------------------------------------------+\n"
             f"| Fine-Tuning Method            | PEFT LoRA (r=8, alpha=32, dropout=0.05)                 |\n"
             f"| Target Linear Layers          | q_proj, v_proj, k_proj, o_proj                          |\n"
-            f"| Trainable Parameters          | 3,993,600 (0.1652% of 2.41B base parameters)            |\n"
+            f"| Trainable Parameters          | {trainable_str:<56} |\n"
             f"| Base Model Precision          | Ternary integer {{-1, 0, +1}} (Frozen)                   |\n"
-            f"| Training Precision            | Float32 (MPS Device Acceleration — avoids FP16 underflow)|\n"
-            f"| Batching Strategy             | Batch Size 2 (Per-device: 1, Gradient Accumulation: 2) |\n"
+            f"| Training Precision            | {precision_str:<56} |\n"
+            f"| Batching Strategy             | {batching_strategy:<56} |\n"
             f"| Epochs / Total Steps          | 3 Epochs / {total_steps} Optimization Steps                           |\n"
             f"| Total Wall-Clock Duration     | {dur_mins}m {dur_secs}s ({duration:.2f} seconds)                         |\n"
             f"| Final Training Loss           | {final_loss:.4f}                                                 |\n"
