@@ -20,10 +20,12 @@ class TestAdapterIntegrity(unittest.TestCase):
         self.data_root = Path(self.temp_dir.name)
         self.orig_data_root = app.DATA_ROOT
         app.DATA_ROOT = self.data_root
+        app.model_store.peft_model = None
         app.model_store.adapter_cache.clear()
 
     def tearDown(self):
         app.DATA_ROOT = self.orig_data_root
+        app.model_store.peft_model = None
         app.model_store.adapter_cache.clear()
         self.temp_dir.cleanup()
 
@@ -68,7 +70,7 @@ class TestAdapterIntegrity(unittest.TestCase):
 
     @patch("app.PeftModel.from_pretrained")
     def test_lru_cache_eviction_on_production_model_store(self, mock_from_pretrained):
-        """Validates that app.model_store.adapter_cache bounds entries to MAX_CACHED_ADAPTERS and evicts LRU."""
+        """Validates that app.model_store.adapter_cache bounds entries to MAX_CACHED_ADAPTERS, evicts LRU, and deletes evicted adapter."""
         mock_model = MagicMock()
         mock_model.to.return_value = mock_model
         mock_model.eval.return_value = mock_model
@@ -102,6 +104,26 @@ class TestAdapterIntegrity(unittest.TestCase):
         self.assertIn("artifacts/job-1/model_adapters", app.model_store.adapter_cache)
         self.assertIn(f"artifacts/job-{capacity + 1}/model_adapters", app.model_store.adapter_cache)
 
+        # Verify delete_adapter was called for evicted adapter 2
+        mock_model.delete_adapter.assert_called_with("artifacts/job-2/model_adapters")
+
+    def test_generate_rejects_base_model_mismatch_for_pytorch_runtime(self):
+        """Validates that Route 2 of generate checks base_model mismatch and returns 409."""
+        app.model_store.base_model = MagicMock()
+        app.model_store.tokenizer = MagicMock()
+        req = app.GenerateRequest(
+            baseModel="google/gemma-2-2b-it",
+            prompt="Test prompt"
+        )
+        # Assuming DEFAULT_BASE_MODEL is not gemma-2-2b-it
+        with patch.object(app, "DEFAULT_BASE_MODEL", "microsoft/BitNet-b1.58-2B-4T"):
+            with patch.object(app, "is_bitnet_model", return_value=False):
+                with self.assertRaises(HTTPException) as ctx:
+                    app.generate(req)
+                self.assertEqual(ctx.exception.status_code, 409)
+                self.assertEqual(ctx.exception.detail["error"], "base_model_mismatch")
+
 
 if __name__ == "__main__":
     unittest.main()
+

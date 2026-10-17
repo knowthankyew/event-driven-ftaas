@@ -60,17 +60,20 @@ public class ModelCatalogTests
     }
 
     [Fact]
-    public void SupportedModelsCatalog_HasBitNetAsFirstPrimaryEntry()
+    public void SupportedModelsCatalog_HasGemmaAsFirstPrimaryEntry()
     {
         var catalog = SupportedModels.Catalog;
         Assert.NotEmpty(catalog);
-        Assert.Equal(SupportedModels.BitNet2B4T, catalog[0].ModelId);
+        Assert.Equal(SupportedModels.Gemma2_2B_IT, catalog[0].ModelId);
+        Assert.Equal(SupportedModels.BitNet2B4T, catalog[2].ModelId);
+        Assert.True(catalog[2].IsExperimental);
+        Assert.NotNull(catalog[2].Tooltip);
     }
 
     [Fact]
-    public void SubmitJobRequest_DefaultsToBitNetPrimaryModel()
+    public void SubmitJobRequest_DefaultsToGemmaPrimaryModel()
     {
         var request = new SubmitJobRequest();
-        Assert.Equal(SupportedModels.BitNet2B4T, request.BaseModel);
+        Assert.Equal(SupportedModels.Gemma2_2B_IT, request.BaseModel);
     }
 }

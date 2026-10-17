@@ -24,7 +24,7 @@ public static class JobEndpoints
         return group;
     }
 
-    private static async Task<IResult> SubmitJobAsync(
+    internal static async Task<IResult> SubmitJobAsync(
         HttpRequest request,
         [FromServices] IDatasetService datasetService,
         [FromServices] IJobRepository jobRepository,
@@ -34,7 +34,7 @@ public static class JobEndpoints
     {
         string jobId = Guid.NewGuid().ToString("N");
         string jobName = "default-finetune";
-        string baseModel = SupportedModels.SmolLM2;
+        string baseModel = SupportedModels.Gemma2_2B_IT;
         string? datasetPath = null;
         IFormFile? uploadedFile = null;
         Hyperparameters hyperparameters = new();
@@ -148,7 +148,32 @@ public static class JobEndpoints
             SubmittedAt = job.CreatedAt
         };
 
-        await eventPublisher.PublishJobRequestedAsync(requestedEvent, cancellationToken);
+        try
+        {
+            await eventPublisher.PublishJobRequestedAsync(requestedEvent, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await jobRepository.UpdateStatusIdempotentAsync(new JobUpdatedEvent
+            {
+                JobId = jobId,
+                Status = JobStatus.Failed.ToString(),
+                SequenceNumber = 1,
+                ErrorMessage = $"Failed to dispatch job to message broker: {ex.Message}",
+                UpdatedAt = DateTimeOffset.UtcNow
+            }, CancellationToken.None);
+
+            telemetry.RecordSpan("job.publish_failed", jobId, JobStatus.Failed.ToString(), 0, new Dictionary<string, object>
+            {
+                ["error"] = ex.Message
+            });
+
+            return Results.Problem(
+                statusCode: StatusCodes.Status503ServiceUnavailable,
+                title: "Message Broker Unavailable",
+                detail: "Job submission failed while publishing to the message broker. The job has been marked as Failed."
+            );
+        }
 
         telemetry.RecordSpan("job.published", jobId, JobStatus.Queued.ToString(), 0, new Dictionary<string, object>
         {

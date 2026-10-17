@@ -53,7 +53,10 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
             {
                 try { await _channel.CloseAsync(cancellationToken); _channel.Dispose(); } catch { }
             }
-            _channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
+            _channel = await _connection.CreateChannelAsync(
+                new CreateChannelOptions(publisherConfirmationsEnabled: true, publisherConfirmationTrackingEnabled: true),
+                cancellationToken: cancellationToken
+            );
 
             // Declare DLX Exchange and DLQ
             await _channel.ExchangeDeclareAsync(_config.DlxExchange, ExchangeType.Direct, durable: true, cancellationToken: cancellationToken);
@@ -124,7 +127,7 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
         await _channel!.BasicPublishAsync(
             exchange: _config.Exchange,
             routingKey: _config.JobRequestedRoutingKey,
-            mandatory: false,
+            mandatory: true,
             basicProperties: props,
             body: body,
             cancellationToken: cancellationToken

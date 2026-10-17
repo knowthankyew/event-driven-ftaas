@@ -182,7 +182,7 @@ RSS_PROMPTS = {
         "applies for other deposits under Section 229.12."
     ),
     240: (
-        "12 CFR Part 229 Availability of Funds and Collection of Checks (Regulation CC). "
+        "12 CFR Part 229 Availability of Funds and Collection of Checks. "
         "Subpart B Availability of Funds and Disclosure of Schedules. Section 229.10 Next-day availability. "
         "(a) Cash deposits. A bank shall make funds deposited in an account by cash available for withdrawal "
         "not later than the business day after the banking day on which the cash is deposited. "
@@ -192,9 +192,7 @@ RSS_PROMPTS = {
         "not later than the business day after the banking day on which the funds are deposited, in the case of: "
         "A check drawn on the Treasury of the United States; a U.S. Postal Service money order deposited in person; "
         "a check drawn on a Federal Reserve Bank or Federal Home Loan Bank; a cashier check, certified check, or teller check; "
-        "and the lesser of $275 or the aggregate amount deposited on any one banking day. "
-        "Section 229.13 Exceptions. (b) Large deposits. Sections 229.10(c) and 229.12 do not apply to the aggregate amount of deposits "
-        "by one or more checks to the extent that the aggregate amount is in excess of $6,725 on any one banking day."
+        "and the lesser of $275 or the aggregate amount deposited on any one banking day."
     )
 }
 

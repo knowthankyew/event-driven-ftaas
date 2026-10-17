@@ -55,32 +55,74 @@ GUARDED_WORDS = [
 ]
 
 
+_SAFE_CALLS = {"int": int, "float": float, "str": str, "min": min, "max": max}
+
+
+def _eval_const_expr(node: ast.AST, name: str):
+    """Evaluate a constant-defining expression without executing code.
+
+    Supported: literals; int/float/str/min/max over supported args;
+    os.getenv(NAME, default) and os.environ.get(NAME, default), which evaluate to
+    `default` (the documented value when the environment variable is unset).
+    Anything else raises, so a registry claim can never bind to a guessed number.
+    """
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.Call) and not node.keywords:
+        fn = node.func
+        is_getenv = (
+            isinstance(fn, ast.Attribute) and fn.attr == "getenv"
+            and isinstance(fn.value, ast.Name) and fn.value.id == "os"
+        ) or (
+            isinstance(fn, ast.Attribute) and fn.attr == "get"
+            and isinstance(fn.value, ast.Attribute) and fn.value.attr == "environ"
+            and isinstance(fn.value.value, ast.Name) and fn.value.value.id == "os"
+        )
+        if is_getenv and len(node.args) == 2:
+            return _eval_const_expr(node.args[1], name)
+        if isinstance(fn, ast.Name) and fn.id in _SAFE_CALLS and node.args:
+            return _SAFE_CALLS[fn.id](*[_eval_const_expr(a, name) for a in node.args])
+    raise ValueError(
+        f"Constant {name}: unsupported expression ({ast.dump(node)[:80]}...); "
+        f"extend _eval_const_expr deliberately rather than guessing"
+    )
+
+
 def extract_python_constant(file_path: Path, const_name: str) -> int | str | float:
-    """Extract constant definition from a Python module using AST parsing."""
+    """Extract a module-level constant by evaluating its defining expression (AST only)."""
     if not file_path.is_file():
         raise FileNotFoundError(f"Python source file not found: {file_path}")
-    content = file_path.read_text(encoding="utf-8")
-    tree = ast.parse(content, filename=str(file_path))
+    tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
     for node in tree.body:
         if isinstance(node, ast.Assign):
             for target in node.targets:
                 if isinstance(target, ast.Name) and target.id == const_name:
-                    if isinstance(node.value, ast.Constant):
-                        return node.value.value
-                    elif isinstance(node.value, ast.Call):
-                        # E.g. int(os.getenv("...", "24"))
-                        # or min(int(os.getenv("...", "240")), 255)
-                        for arg in ast.walk(node.value):
-                            if isinstance(arg, ast.Constant) and isinstance(arg.value, (int, float)):
-                                return arg.value
-                            elif isinstance(arg, ast.Constant) and isinstance(arg.value, str) and arg.value.isdigit():
-                                return int(arg.value)
-
-    # Fallback regex looking for literal number or string number
-    m = re.search(rf"^{const_name}\s*=\s*.*?['\"]?(\d+)['\"]?", content, re.MULTILINE)
-    if m:
-        return int(m.group(1))
+                    return _eval_const_expr(node.value, const_name)
     raise ValueError(f"Constant {const_name} not found in {file_path}")
+
+
+NAMED_FORMAT_RULES = {
+    # 2-element [low, high] fractions -> "[67.3%, 91.9%]"
+    "ci_pct": lambda v: f"[{v[0] * 100:.1f}%, {v[1] * 100:.1f}%]",
+}
+
+
+def apply_format_rule(claim_id: str, fmt: str, value) -> str:
+    """Render a resolved value. Named rules for structured values; str.format for scalars."""
+    if fmt in NAMED_FORMAT_RULES:
+        try:
+            return NAMED_FORMAT_RULES[fmt](value)
+        except (TypeError, IndexError, KeyError) as e:
+            raise ValueError(f"Claim '{claim_id}': named format_rule {fmt!r} cannot render {value!r}: {e}") from e
+    if isinstance(value, (list, tuple, dict)):
+        raise ValueError(
+            f"Claim '{claim_id}': format_rule {fmt!r} cannot render a {type(value).__name__}; "
+            f"use a named rule ({', '.join(sorted(NAMED_FORMAT_RULES))})"
+        )
+    try:
+        return fmt.format(value=value)
+    except (ValueError, KeyError, IndexError, AttributeError) as e:
+        raise ValueError(f"Claim '{claim_id}': invalid format_rule {fmt!r}: {e}") from e
 
 
 def resolve_claim_value(claim_id: str, claim_cfg: dict, repo_root: Path = REPO_ROOT) -> str:
@@ -97,7 +139,7 @@ def resolve_claim_value(claim_id: str, claim_cfg: dict, repo_root: Path = REPO_R
     # Case 1: Python constant
     if "python_const" in claim_cfg:
         val = extract_python_constant(artifact_path, claim_cfg["python_const"])
-        return fmt.format(value=val)
+        return apply_format_rule(claim_id, fmt, val)
 
     # Case 2: JSON artifact path
     if "json_path" in claim_cfg:
@@ -112,13 +154,7 @@ def resolve_claim_value(claim_id: str, claim_cfg: dict, repo_root: Path = REPO_R
                 cur = cur[int(p)]
             else:
                 raise KeyError(f"Path '{claim_cfg['json_path']}' part '{p}' not found in {artifact_path.name}")
-        val = cur
-        if isinstance(val, list) and len(val) == 2 and all(isinstance(x, (int, float)) for x in val):
-            # Special case for confidence intervals e.g. [0.673, 0.919]
-            if fmt == "CI_PCT":
-                return f"[{val[0]*100:.1f}%, {val[1]*100:.1f}%]"
-            return f"[{val[0]*100:.1f}%, {val[1]*100:.1f}%]"
-        return fmt.format(value=val)
+        return apply_format_rule(claim_id, fmt, cur)
 
     raise ValueError(f"Claim '{claim_id}' has neither 'python_const' nor 'json_path'")
 
@@ -152,19 +188,28 @@ def independent_recompute_metrics(benchmark_path: Path) -> tuple[bool, list[str]
     with open(benchmark_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    if "full_corpus_benchmark" not in data or "query_details" not in data["full_corpus_benchmark"]:
-        return True, []  # Early artifact version or structure
+    full = data.get("full_corpus_benchmark")
+    if not isinstance(full, dict) or "query_details" not in full:
+        # Fail closed: an artifact that cannot be recomputed must not pass as "verified".
+        return False, ["benchmark artifact has no full_corpus_benchmark.query_details; cannot recompute metrics"]
 
-    query_details = data["full_corpus_benchmark"]["query_details"]
-    summary = data["full_corpus_benchmark"].get("summary", {})
+    query_details = full["query_details"]
+    summary = full.get("summary", {})
     n = len(query_details)
     if n == 0:
         return False, ["query_details is empty in benchmark artifact"]
 
-    # Gather methods present
-    first_q = query_details[0]
-    rankings = first_q.get("rankings", {})
-    methods = list(rankings.keys())
+    declared_n = full.get("queries_count")
+    if declared_n != n:
+        errors.append(f"queries_count mismatch: declared {declared_n}, query_details has {n}")
+
+    methods = list(query_details[0].get("rankings", {}).keys())
+    for q in query_details:
+        if set(q.get("rankings", {}).keys()) != set(methods):
+            errors.append(f"query {q.get('id', '?')!r} ranks a different method set than the first query")
+    for m in summary:
+        if m not in methods:
+            errors.append(f"summary method '{m}' has no per-query records")
 
     for m in methods:
         top1_hits = 0
@@ -173,29 +218,37 @@ def independent_recompute_metrics(benchmark_path: Path) -> tuple[bool, list[str]
 
         for q in query_details:
             r = q["rankings"].get(m, {})
-            # If top1_hit is boolean
-            if r.get("top1_hit"):
-                top1_hits += 1
-            if r.get("top3_hit"):
-                top3_hits += 1
-            rr = float(r.get("rr", 0.0))
+            t1, t3, rr = bool(r.get("top1_hit")), bool(r.get("top3_hit")), float(r.get("rr", 0.0))
+            # Per-record invariants (assumes rr = 1/rank): a hit flag must agree with its own rr.
+            if t1 != (abs(rr - 1.0) < 1e-4) or t3 != (rr >= 1.0 / 3.0 - 1e-4) or (t1 and not t3):
+                errors.append(f"Method '{m}' query {q.get('id', '?')!r}: flags (top1={t1}, top3={t3}) disagree with rr={rr}")
+            top1_hits += t1
+            top3_hits += t3
             reciprocal_ranks.append(rr)
 
         mrr_calc = sum(reciprocal_ranks) / n
         top1_ci = independent_wilson_score_interval(top1_hits, n)
         top3_ci = independent_wilson_score_interval(top3_hits, n)
 
-        if m in summary:
-            expected = summary[m]
-            if expected.get("top1_hits") != top1_hits:
-                errors.append(f"Method '{m}' top1_hits mismatch: expected {expected.get('top1_hits')}, calculated {top1_hits}")
-            if expected.get("top3_hits") != top3_hits:
-                errors.append(f"Method '{m}' top3_hits mismatch: expected {expected.get('top3_hits')}, calculated {top3_hits}")
-            if abs(expected.get("mrr", 0.0) - mrr_calc) > 1e-4:
-                errors.append(f"Method '{m}' MRR mismatch: expected {expected.get('mrr')}, calculated {mrr_calc:.4f}")
-            exp_ci1 = expected.get("top1_ci_95")
-            if exp_ci1 and (abs(exp_ci1[0] - top1_ci[0]) > 1e-3 or abs(exp_ci1[1] - top1_ci[1]) > 1e-3):
-                errors.append(f"Method '{m}' top1_ci mismatch: expected {exp_ci1}, calculated {top1_ci}")
+        if m not in summary:
+            errors.append(f"Method '{m}' has per-query records but no summary entry")
+            continue
+        expected = summary[m]
+        if expected.get("top1_hits") != top1_hits:
+            errors.append(f"Method '{m}' top1_hits mismatch: expected {expected.get('top1_hits')}, calculated {top1_hits}")
+        if expected.get("top3_hits") != top3_hits:
+            errors.append(f"Method '{m}' top3_hits mismatch: expected {expected.get('top3_hits')}, calculated {top3_hits}")
+        if abs(expected.get("mrr", 0.0) - mrr_calc) > 1e-4:
+            errors.append(f"Method '{m}' MRR mismatch: expected {expected.get('mrr')}, calculated {mrr_calc:.4f}")
+        # The percentages and both intervals are what the docs actually render; check them too.
+        for key, hits in (("top1_recall_pct", top1_hits), ("top3_recall_pct", top3_hits)):
+            exp_pct = expected.get(key)
+            if exp_pct is None or abs(exp_pct - 100.0 * hits / n) > 0.051:
+                errors.append(f"Method '{m}' {key} mismatch: expected {exp_pct}, calculated {100.0 * hits / n:.1f}")
+        for key, calc in (("top1_ci_95", top1_ci), ("top3_ci_95", top3_ci)):
+            exp_ci = expected.get(key)
+            if not exp_ci or abs(exp_ci[0] - calc[0]) > 1e-3 or abs(exp_ci[1] - calc[1]) > 1e-3:
+                errors.append(f"Method '{m}' {key} mismatch: expected {exp_ci}, calculated {calc}")
 
     return len(errors) == 0, errors
 
@@ -415,13 +468,13 @@ def sync_document(
 
 def main():
     parser = argparse.ArgumentParser(description="Synchronize and lint documentation claims against empirical artifacts.")
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--check",
         action="store_true",
-        default=True,
         help="Check documentation claims and empirical regions without modifying files (DEFAULT)",
     )
-    parser.add_argument(
+    mode.add_argument(
         "--write",
         action="store_true",
         help="Overwrite documentation claim markers with ground truth empirical values",

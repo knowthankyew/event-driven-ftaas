@@ -199,4 +199,36 @@ public class DatasetServiceTests : IDisposable
         Assert.False(result.IsValid);
         Assert.Contains("exceeds maximum permitted dataset limit", result.ErrorMessage);
     }
+
+    [Theory]
+    [InlineData("/etc/passwd")]
+    [InlineData("/var/log/system.log")]
+    [InlineData("datasets/../../etc/passwd")]
+    [InlineData("../secret.txt")]
+    [InlineData("datasets/../../../appsettings.json")]
+    [InlineData("outside_datasets.jsonl")]
+    public async Task NormalizeAndStoreAsync_RejectsPathTraversal_AndNonDatasetsPaths(string maliciousPath)
+    {
+        var result = await _service.NormalizeAndStoreAsync("job-traversal", null, maliciousPath);
+
+        Assert.False(result.IsValid);
+        Assert.Equal("datasetPath must reference a file under 'datasets/'.", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task NormalizeAndStoreAsync_AcceptsValidPathUnderDatasetsDir()
+    {
+        var datasetsDir = Path.Combine(_testDataDir, "datasets");
+        Directory.CreateDirectory(datasetsDir);
+        var filePath = Path.Combine(datasetsDir, "existing_valid.jsonl");
+        await File.WriteAllTextAsync(filePath, "{\"prompt\": \"Test prompt\", \"completion\": \"Test completion\"}\n");
+
+        var result = await _service.NormalizeAndStoreAsync("job-valid-path", null, "datasets/existing_valid.jsonl");
+
+        Assert.True(result.IsValid);
+        Assert.Equal(1, result.RecordCount);
+        Assert.NotNull(result.Sha256Hash);
+        Assert.NotNull(result.RelativePath);
+    }
 }
+

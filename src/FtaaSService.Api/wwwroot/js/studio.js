@@ -16,7 +16,7 @@
     consecutiveProbeFailures: 0,
     isProbingEngine: false,
     supportedModels: [],
-    activeBaseModel: 'microsoft/BitNet-b1.58-2B-4T'
+    activeBaseModel: 'google/gemma-2-2b-it'
   };
 
   // DOM Elements
@@ -185,12 +185,17 @@
 
       let badgeClass = 'edge';
       let badgeText = `${m.parameterCount} Edge`;
-      if (m.modelId.toLowerCase().includes('bitnet')) {
-        badgeClass = 'ternary';
-        badgeText = '1.58-bit CPU';
+      if (m.isExperimental || (m.modelId && m.modelId.toLowerCase().includes('bitnet'))) {
+        badgeClass = 'experimental';
+        badgeText = 'Experimental';
       } else if (m.minGpuVramGb >= 5) {
         badgeClass = 'gpu';
         badgeText = `${m.parameterCount} GPU`;
+      }
+
+      const tooltipText = m.tooltip || (m.isExperimental ? 'Experimental model architecture' : '');
+      if (tooltipText) {
+        btn.setAttribute('title', tooltipText);
       }
 
       btn.innerHTML = `
@@ -335,7 +340,7 @@
       else if (rLower.includes('sev-1') && (lowerResp.includes('15 minutes') || lowerResp.includes('pagerduty') || lowerResp.includes('incident-sev1'))) passed = true;
       else if (rLower.includes('gdpr') && (lowerResp.includes('7 years') || lowerResp.includes('statutory') || lowerResp.includes('gdpr-exception'))) passed = true;
       else if (rLower.includes('sentiment') && lowerResp.includes('sentiment:') && lowerResp.includes('metrics:')) passed = true;
-      else if (responseText && lowerResp.includes('tag:') || lowerResp.includes('tag [')) passed = true;
+      else if (responseText && (lowerResp.includes('tag:') || lowerResp.includes('tag ['))) passed = true;
 
       if (passed) {
         item.classList.add('passed');
@@ -718,7 +723,7 @@
     const formData = new FormData();
     formData.append('file', blob, `${jobName}.jsonl`);
     formData.append('jobName', jobName);
-    const selectedModel = (elements.baseModelSelect && elements.baseModelSelect.value) || state.activeBaseModel || 'microsoft/BitNet-b1.58-2B-4T';
+    const selectedModel = (elements.baseModelSelect && elements.baseModelSelect.value) || state.activeBaseModel || 'google/gemma-2-2b-it';
     formData.append('baseModel', selectedModel);
     formData.append('hyperparameters', JSON.stringify({
       epochs: 3,
@@ -928,7 +933,7 @@
         statusBadge = `<span class="persona-tag" style="background: rgba(239, 68, 68, 0.15); color: #f87171;" title="${escapeHtml(job.errorMessage || 'Training process error')}">Failed</span>`;
       }
 
-      let modelDisplay = 'BitNet b1.58 2B-4T';
+      let modelDisplay = 'Gemma 2 2B IT';
       if (job.baseModel) {
         const lower = job.baseModel.toLowerCase();
         if (lower.includes('bitnet')) modelDisplay = 'BitNet b1.58 2B-4T';

@@ -87,6 +87,7 @@ MAX_CACHED_ADAPTERS = int(os.getenv("MAX_CACHED_ADAPTERS", "5"))
 class ModelStore:
     tokenizer = None
     base_model = None
+    peft_model: Optional[PeftModel] = None
     is_bitnet: bool = False
     backend: str = "transformers"
     adapter_cache: OrderedDict[str, PeftModel] = OrderedDict()
@@ -276,7 +277,9 @@ def generate_tokens(
 def load_or_get_adapter(adapter_rel_path: str) -> PeftModel:
     if adapter_rel_path in model_store.adapter_cache:
         model_store.adapter_cache.move_to_end(adapter_rel_path)
-        return model_store.adapter_cache[adapter_rel_path]
+        if model_store.peft_model is not None and hasattr(model_store.peft_model, "set_adapter"):
+            model_store.peft_model.set_adapter(adapter_rel_path)
+        return model_store.peft_model
 
     full_adapter_path = DATA_ROOT / adapter_rel_path
     if not full_adapter_path.exists():
@@ -330,20 +333,35 @@ def load_or_get_adapter(adapter_rel_path: str) -> PeftModel:
 
     logger.info(f"Mounting verified LoRA adapter ({weights_file.stat().st_size / 1024 / 1024:.2f} MB) on-the-fly from {full_adapter_path}...")
     try:
-        peft_model = PeftModel.from_pretrained(
-            model_store.base_model,
-            str(full_adapter_path)
-        )
-        peft_model.to(DEVICE)
-        peft_model.eval()
-
         # Bounded LRU eviction
         if len(model_store.adapter_cache) >= MAX_CACHED_ADAPTERS:
             evicted_path, _ = model_store.adapter_cache.popitem(last=False)
+            if model_store.peft_model is not None and hasattr(model_store.peft_model, "delete_adapter"):
+                try:
+                    model_store.peft_model.delete_adapter(evicted_path)
+                except Exception as del_err:
+                    logger.warning(f"Failed deleting evicted adapter '{evicted_path}': {del_err}")
             logger.info(f"LRU capacity reached ({MAX_CACHED_ADAPTERS}). Evicted adapter: {evicted_path}")
 
-        model_store.adapter_cache[adapter_rel_path] = peft_model
-        return peft_model
+        if model_store.peft_model is None:
+            model_store.peft_model = PeftModel.from_pretrained(
+                model_store.base_model,
+                str(full_adapter_path),
+                adapter_name=adapter_rel_path
+            )
+            model_store.peft_model.to(DEVICE)
+            model_store.peft_model.eval()
+        else:
+            model_store.peft_model.load_adapter(
+                str(full_adapter_path),
+                adapter_name=adapter_rel_path
+            )
+
+        if hasattr(model_store.peft_model, "set_adapter"):
+            model_store.peft_model.set_adapter(adapter_rel_path)
+
+        model_store.adapter_cache[adapter_rel_path] = model_store.peft_model
+        return model_store.peft_model
     except Exception as ex:
         logger.error(f"Failed mounting adapter from {full_adapter_path}: {ex}")
         raise HTTPException(status_code=500, detail="Failed loading LoRA adapter.")
@@ -517,14 +535,25 @@ def compare_completions(req: CompareRequest):
             )
 
         # 1. Generate with raw Base Model
-        base_completion, base_latency = generate_tokens(
-            model_store.base_model,
-            model_store.tokenizer,
-            req.prompt,
-            req.maxTokens,
-            req.temperature,
-            base_model_id=DEFAULT_BASE_MODEL
-        )
+        if model_store.peft_model is not None and hasattr(model_store.peft_model, "disable_adapter"):
+            with model_store.peft_model.disable_adapter():
+                base_completion, base_latency = generate_tokens(
+                    model_store.peft_model,
+                    model_store.tokenizer,
+                    req.prompt,
+                    req.maxTokens,
+                    req.temperature,
+                    base_model_id=DEFAULT_BASE_MODEL
+                )
+        else:
+            base_completion, base_latency = generate_tokens(
+                model_store.base_model,
+                model_store.tokenizer,
+                req.prompt,
+                req.maxTokens,
+                req.temperature,
+                base_model_id=DEFAULT_BASE_MODEL
+            )
 
         # 2. Generate with Fine-Tuned LoRA Adapter
         if not req.adapterPath:
@@ -619,15 +648,52 @@ def generate(req: GenerateRequest):
         if not model_store.base_model or not model_store.tokenizer:
             raise HTTPException(status_code=503, detail="Model is still loading.")
 
-        model = load_or_get_adapter(req.adapterPath) if req.adapterPath else model_store.base_model
-        completion, latency = generate_tokens(
-            model,
-            model_store.tokenizer,
-            req.prompt,
-            req.maxTokens,
-            req.temperature,
-            base_model_id=DEFAULT_BASE_MODEL
-        )
+        # Guard: if req.baseModel is specified and doesn't match loaded PyTorch model, reject with 409
+        if target_base != DEFAULT_BASE_MODEL:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "base_model_mismatch",
+                    "message": (
+                        f"Requested base model '{target_base}' does not match "
+                        f"loaded inference model '{DEFAULT_BASE_MODEL}'."
+                    ),
+                    "adapterBaseModel": target_base,
+                    "loadedBaseModel": DEFAULT_BASE_MODEL,
+                    "hint": f"Restart the inference service with BASE_MODEL_NAME={target_base}",
+                }
+            )
+
+        if req.adapterPath:
+            model = load_or_get_adapter(req.adapterPath)
+            completion, latency = generate_tokens(
+                model,
+                model_store.tokenizer,
+                req.prompt,
+                req.maxTokens,
+                req.temperature,
+                base_model_id=DEFAULT_BASE_MODEL
+            )
+        else:
+            if model_store.peft_model is not None and hasattr(model_store.peft_model, "disable_adapter"):
+                with model_store.peft_model.disable_adapter():
+                    completion, latency = generate_tokens(
+                        model_store.peft_model,
+                        model_store.tokenizer,
+                        req.prompt,
+                        req.maxTokens,
+                        req.temperature,
+                        base_model_id=DEFAULT_BASE_MODEL
+                    )
+            else:
+                completion, latency = generate_tokens(
+                    model_store.base_model,
+                    model_store.tokenizer,
+                    req.prompt,
+                    req.maxTokens,
+                    req.temperature,
+                    base_model_id=DEFAULT_BASE_MODEL
+                )
 
         metrics.record_request("generate", "success", latency)
         return {

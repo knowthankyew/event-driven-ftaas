@@ -8,7 +8,7 @@ public sealed record SubmitJobRequest
     public string JobName { get; init; } = "default-finetune";
 
     [JsonPropertyName("baseModel")]
-    public string BaseModel { get; init; } = SupportedModels.BitNet2B4T;
+    public string BaseModel { get; init; } = SupportedModels.Gemma2_2B_IT;
 
     [JsonPropertyName("datasetPath")]
     public string? DatasetPath { get; init; }
@@ -253,27 +253,6 @@ public static class SupportedModels
     public static readonly IReadOnlyList<ModelCatalogEntry> Catalog = new List<ModelCatalogEntry>
     {
         new(
-            ModelId: BitNet2B4T,
-            DisplayName: "BitNet b1.58 2B-4T",
-            ParameterCount: "2.4B",
-            ContextLength: 4096,
-            MinGpuVramGb: 0.0,
-            RequiresHfAuth: false,
-            HardwareDisclaimer:
-                "1.58-bit ternary weight model. Executes natively on CPU using AVX2 SIMD " +
-                "integer operations (zero GPU VRAM required). " +
-                "Inference requires the bitnet.cpp C++ runtime."
-        ),
-        new(
-            ModelId: SmolLM2,
-            DisplayName: "SmolLM2-135M",
-            ParameterCount: "135M",
-            ContextLength: 2048,
-            MinGpuVramGb: 0.5,
-            RequiresHfAuth: false,
-            HardwareDisclaimer: null
-        ),
-        new(
             ModelId: Gemma2_2B_IT,
             DisplayName: "Gemma 2 2B IT",
             ParameterCount: "2B",
@@ -285,6 +264,33 @@ public static class SupportedModels
                 "Accept the Gemma license at huggingface.co/google/gemma-2-2b-it and " +
                 "set the HF_TOKEN environment variable before starting the worker."
         ),
+        new(
+            ModelId: SmolLM2,
+            DisplayName: "SmolLM2-135M",
+            ParameterCount: "135M",
+            ContextLength: 2048,
+            MinGpuVramGb: 0.5,
+            RequiresHfAuth: false,
+            HardwareDisclaimer: null
+        ),
+        new(
+            ModelId: BitNet2B4T,
+            DisplayName: "BitNet b1.58 2B-4T (Experimental)",
+            ParameterCount: "2.4B",
+            ContextLength: 4096,
+            MinGpuVramGb: 0.0,
+            RequiresHfAuth: false,
+            HardwareDisclaimer:
+                "1.58-bit ternary weight model. Executes natively on CPU using AVX2 SIMD " +
+                "integer operations (zero GPU VRAM required). " +
+                "Inference requires the bitnet.cpp C++ runtime.",
+            IsExperimental: true,
+            Tooltip:
+                "Experimental Research Architecture: 1.58-bit ternary CPU execution. " +
+                "Embedding context bounded to <= 240 tokens (upstream AVX2 batch ceiling); " +
+                "generation bounded to <= 16 prompt tokens (context breakdown boundary). " +
+                "Production statutory retrieval operates in Retrieval-Only mode."
+        ),
     };
 }
 
@@ -295,5 +301,7 @@ public sealed record ModelCatalogEntry(
     int ContextLength,
     double MinGpuVramGb,
     bool RequiresHfAuth,
-    string? HardwareDisclaimer
+    string? HardwareDisclaimer,
+    bool IsExperimental = false,
+    string? Tooltip = null
 );

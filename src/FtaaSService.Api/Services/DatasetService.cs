@@ -41,10 +41,13 @@ public sealed class DatasetService : IDatasetService
             }
             else if (!string.IsNullOrWhiteSpace(existingPath))
             {
-                // Resolve path relative to dataRoot if not rooted
-                var resolved = Path.IsPathRooted(existingPath)
-                    ? existingPath
-                    : Path.Combine(_dataRoot, existingPath);
+                var datasetsRoot = Path.GetFullPath(Path.Combine(_dataRoot, "datasets")) + Path.DirectorySeparatorChar;
+                var resolved = Path.GetFullPath(Path.Combine(_dataRoot, existingPath));
+                if (Path.IsPathRooted(existingPath) ||
+                    !resolved.StartsWith(datasetsRoot, StringComparison.Ordinal))
+                {
+                    return new DatasetResult(false, null, null, 0, "datasetPath must reference a file under 'datasets/'.");
+                }
 
                 if (!File.Exists(resolved))
                 {

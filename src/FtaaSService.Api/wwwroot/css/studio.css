@@ -1095,3 +1095,10 @@ main.app-main {
   border: 1px solid rgba(168, 85, 247, 0.4);
 }
 
+.model-chip-badge.experimental {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  cursor: help;
+}
+

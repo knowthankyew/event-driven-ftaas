@@ -139,6 +139,7 @@ class TestCrossServiceContracts(unittest.TestCase):
         consumer.channel = mock_channel
 
         job_id = "job-monotonic-seq"
+        prev_seq = 0
         for i in range(1, 6):
             consumer.publish_status_update(
                 job_id=job_id,
@@ -147,7 +148,8 @@ class TestCrossServiceContracts(unittest.TestCase):
             )
             call_kwargs = mock_channel.basic_publish.call_args[1]
             payload = json.loads(call_kwargs["body"])
-            self.assertEqual(payload["sequenceNumber"], i)
+            self.assertGreater(payload["sequenceNumber"], prev_seq)
+            prev_seq = payload["sequenceNumber"]
 
 
 if __name__ == "__main__":

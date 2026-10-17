@@ -18,7 +18,7 @@
     "bm25_top1_ci": {
       "source_artifact": "docs/empirical_retrieval_benchmark.json",
       "json_path": "full_corpus_benchmark.summary.bm25.top1_ci_95",
-      "format_rule": "[{value[0]*100:.1f}%, {value[1]*100:.1f}%]",
+      "format_rule": "ci_pct",
       "used_in": ["docs/ROADMAP.md"],
       "description": "BM25 Top-1 95% Wilson confidence interval"
     },
@@ -39,7 +39,7 @@
     "bm25_top3_ci": {
       "source_artifact": "docs/empirical_retrieval_benchmark.json",
       "json_path": "full_corpus_benchmark.summary.bm25.top3_ci_95",
-      "format_rule": "[{value[0]*100:.1f}%, {value[1]*100:.1f}%]",
+      "format_rule": "ci_pct",
       "used_in": ["docs/ROADMAP.md"],
       "description": "BM25 Top-3 95% Wilson confidence interval"
     },
@@ -67,7 +67,7 @@
     "regex_top1_ci": {
       "source_artifact": "docs/empirical_retrieval_benchmark.json",
       "json_path": "full_corpus_benchmark.summary.regex.top1_ci_95",
-      "format_rule": "[{value[0]*100:.1f}%, {value[1]*100:.1f}%]",
+      "format_rule": "ci_pct",
       "used_in": ["docs/ROADMAP.md"],
       "description": "Deterministic Regex Top-1 95% Wilson confidence interval"
     },
@@ -88,7 +88,7 @@
     "regex_top3_ci": {
       "source_artifact": "docs/empirical_retrieval_benchmark.json",
       "json_path": "full_corpus_benchmark.summary.regex.top3_ci_95",
-      "format_rule": "[{value[0]*100:.1f}%, {value[1]*100:.1f}%]",
+      "format_rule": "ci_pct",
       "used_in": ["docs/ROADMAP.md"],
       "description": "Deterministic Regex Top-3 95% Wilson confidence interval"
     },
@@ -116,7 +116,7 @@
     "bitnet_top1_ci": {
       "source_artifact": "docs/empirical_retrieval_benchmark.json",
       "json_path": "full_corpus_benchmark.summary.bitnet_embedding.top1_ci_95",
-      "format_rule": "[{value[0]*100:.1f}%, {value[1]*100:.1f}%]",
+      "format_rule": "ci_pct",
       "used_in": ["docs/ROADMAP.md"],
       "description": "BitNet 270M Top-1 95% Wilson confidence interval"
     },
@@ -137,7 +137,7 @@
     "bitnet_top3_ci": {
       "source_artifact": "docs/empirical_retrieval_benchmark.json",
       "json_path": "full_corpus_benchmark.summary.bitnet_embedding.top3_ci_95",
-      "format_rule": "[{value[0]*100:.1f}%, {value[1]*100:.1f}%]",
+      "format_rule": "ci_pct",
       "used_in": ["docs/ROADMAP.md"],
       "description": "BitNet 270M Top-3 95% Wilson confidence interval"
     },
@@ -165,7 +165,7 @@
     "hybrid_top1_ci": {
       "source_artifact": "docs/empirical_retrieval_benchmark.json",
       "json_path": "full_corpus_benchmark.summary.hybrid.top1_ci_95",
-      "format_rule": "[{value[0]*100:.1f}%, {value[1]*100:.1f}%]",
+      "format_rule": "ci_pct",
       "used_in": ["docs/ROADMAP.md"],
       "description": "Hybrid Pipeline Top-1 95% Wilson confidence interval"
     },
@@ -186,7 +186,7 @@
     "hybrid_top3_ci": {
       "source_artifact": "docs/empirical_retrieval_benchmark.json",
       "json_path": "full_corpus_benchmark.summary.hybrid.top3_ci_95",
-      "format_rule": "[{value[0]*100:.1f}%, {value[1]*100:.1f}%]",
+      "format_rule": "ci_pct",
       "used_in": ["docs/ROADMAP.md"],
       "description": "Hybrid Pipeline Top-3 95% Wilson confidence interval"
     },
@@ -214,7 +214,7 @@
     "minilm_top1_ci": {
       "source_artifact": "docs/empirical_retrieval_benchmark.json",
       "json_path": "full_corpus_benchmark.summary.minilm_l6.top1_ci_95",
-      "format_rule": "[{value[0]*100:.1f}%, {value[1]*100:.1f}%]",
+      "format_rule": "ci_pct",
       "used_in": ["docs/ROADMAP.md"],
       "description": "all-MiniLM-L6-v2 Top-1 95% Wilson confidence interval"
     },
@@ -235,7 +235,7 @@
     "minilm_top3_ci": {
       "source_artifact": "docs/empirical_retrieval_benchmark.json",
       "json_path": "full_corpus_benchmark.summary.minilm_l6.top3_ci_95",
-      "format_rule": "[{value[0]*100:.1f}%, {value[1]*100:.1f}%]",
+      "format_rule": "ci_pct",
       "used_in": ["docs/ROADMAP.md"],
       "description": "all-MiniLM-L6-v2 Top-3 95% Wilson confidence interval"
     },
@@ -263,7 +263,7 @@
     "hybrid_minilm_top1_ci": {
       "source_artifact": "docs/empirical_retrieval_benchmark.json",
       "json_path": "full_corpus_benchmark.summary.hybrid_minilm.top1_ci_95",
-      "format_rule": "[{value[0]*100:.1f}%, {value[1]*100:.1f}%]",
+      "format_rule": "ci_pct",
       "used_in": ["docs/ROADMAP.md"],
       "description": "Hybrid BM25+MiniLM Top-1 95% Wilson confidence interval"
     },
@@ -284,7 +284,7 @@
     "hybrid_minilm_top3_ci": {
       "source_artifact": "docs/empirical_retrieval_benchmark.json",
       "json_path": "full_corpus_benchmark.summary.hybrid_minilm.top3_ci_95",
-      "format_rule": "[{value[0]*100:.1f}%, {value[1]*100:.1f}%]",
+      "format_rule": "ci_pct",
       "used_in": ["docs/ROADMAP.md"],
       "description": "Hybrid BM25+MiniLM Top-3 95% Wilson confidence interval"
     },

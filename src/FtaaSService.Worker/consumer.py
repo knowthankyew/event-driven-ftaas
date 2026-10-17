@@ -115,7 +115,7 @@ class JobConsumer:
         started_at: str = None,
         finished_at: str = None
     ):
-        seq = self.sequence_map.get(job_id, 0) + 1
+        seq = max(time.time_ns(), self.sequence_map.get(job_id, 0) + 1)
         self.sequence_map[job_id] = seq
 
         payload = {

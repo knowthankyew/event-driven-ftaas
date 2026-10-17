@@ -1,5 +1,7 @@
 using System.Text;
+using System.Text.Json;
 using FtaaSService.Api.Domain;
+using FtaaSService.Api.Endpoints;
 using FtaaSService.Api.Messaging;
 using FtaaSService.Api.Services;
 using FtaaSService.Api.Storage;
@@ -130,4 +132,63 @@ public class OperationalMetricsAndDlqTests : IDisposable
         var clearedCount = await publisherWithDlq.GetDlqMessageCountAsync();
         Assert.Equal(0u, clearedCount);
     }
+
+    private class FakeFailingEventPublisher : IEventPublisher
+    {
+        public bool IsConnected => false;
+        public Task PublishJobRequestedAsync(JobRequestedEvent @event, CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("Simulated broker transport failure.");
+        }
+        public Task<uint> GetDlqMessageCountAsync(CancellationToken cancellationToken = default) => Task.FromResult(0u);
+    }
+
+    [Fact]
+    public async Task SubmitJobAsync_MarksJobFailedAndReturns503_WhenBrokerPublishFails()
+    {
+        await _repository.InitializeAsync();
+
+        var datasetsDir = Path.Combine(_testDir, "datasets");
+        Directory.CreateDirectory(datasetsDir);
+        var datasetFile = Path.Combine(datasetsDir, "test_fail.jsonl");
+        await File.WriteAllTextAsync(datasetFile, "{\"prompt\": \"hello\", \"completion\": \"world\"}\n");
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["DATA_ROOT"] = _testDir })
+            .Build();
+        var datasetService = new DatasetService(config, NullLogger<DatasetService>.Instance);
+
+        var context = new DefaultHttpContext();
+        var json = JsonSerializer.Serialize(new SubmitJobRequest
+        {
+            JobName = "failing-broker-job",
+            BaseModel = SupportedModels.Gemma2_2B_IT,
+            DatasetPath = "datasets/test_fail.jsonl"
+        });
+        context.Request.ContentType = "application/json";
+        context.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var failingPublisher = new FakeFailingEventPublisher();
+
+        var result = await JobEndpoints.SubmitJobAsync(
+            context.Request,
+            datasetService,
+            _repository,
+            failingPublisher,
+            _telemetry,
+            CancellationToken.None
+        );
+
+        // Verify 503 Service Unavailable returned
+        var statusResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, statusResult.StatusCode);
+
+        // Verify job in repository transitioned to Failed, NOT remaining Queued
+        var jobs = await _repository.ListAsync(10);
+        var job = Assert.Single(jobs);
+        Assert.Equal(JobStatus.Failed, job.Status);
+        Assert.NotNull(job.ErrorMessage);
+        Assert.Contains("Simulated broker transport failure", job.ErrorMessage);
+    }
 }
+
