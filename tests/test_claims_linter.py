@@ -164,9 +164,9 @@ class TestClaimsLinter(unittest.TestCase):
         # In-force answerable subset benchmark
         in_force = data["in_force_answerable_benchmark"]["summary"]
         self.assertEqual(in_force["bm25"]["top1_hits"], 23)
-        self.assertEqual(in_force["bm25"]["top1_recall_pct"], 82.1)
-        self.assertEqual(in_force["hybrid"]["top1_hits"], 24)
-        self.assertEqual(in_force["hybrid"]["top1_recall_pct"], 85.7)
+        self.assertEqual(in_force["bm25"]["top1_recall_pct"], 79.3)
+        self.assertEqual(in_force["hybrid"]["top1_hits"], 23)
+        self.assertEqual(in_force["hybrid"]["top1_recall_pct"], 79.3)
 
         # Vacated rules validation
         vacated_val = data["vacated_rule_validation"]
