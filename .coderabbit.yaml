@@ -1,0 +1,26 @@
+# CodeRabbit Configuration for FTaaS / ML Portfolio
+# Targeted Scope: Full Repository Deep Audit
+
+language: "en-US"
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  sequence_diagrams: true
+  auto_review:
+    enabled: true
+    drafts: true
+
+  # Filter out binary assets, demo media, and database files.
+  # Structured empirical JSON artifacts (empirical_*.json, verified_statutory_sources.json)
+  # are intentionally included so CodeRabbit can audit claim correctness and data consistency.
+  path_filters:
+    - "!**/*.gif"
+    - "!**/*.mp4"
+    - "!**/*.zip"
+    - "!**/*.db"
+    - "!mlflow.db"
+    - "!mlflow_data/**"
+    - "!node_modules/**"
