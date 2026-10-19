@@ -1,3 +1,9 @@
+<!-- diagram-meta
+  last-validated: 2026-10-19
+  covers: [src/**, tests/**, scripts/**]
+  generated-by: manual
+-->
+
 # Event-Driven "Fine-Tuning as a Service" (FTaaS)
 
 An enterprise-grade, asynchronous, event-driven ML platform demonstrating a polyglot microservice pattern (.NET 10 and Python), decoupled compute orchestration, experiment telemetry (MLflow), parameter-efficient fine-tuning (PEFT/LoRA), and dynamic model serving.
