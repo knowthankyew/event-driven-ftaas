@@ -1,6 +1,6 @@
 # Core ML Frameworks
 torch>=2.14.1
-transformers>=5.19.0,<5.20
+transformers>=5.20.2,<5.21
 peft>=0.21.2
 accelerate>=1.15.0
 datasets>=5.1.0
@@ -12,12 +12,12 @@ numpy<3.0.0
 scipy<1.19.0
 
 # MLOps & Experiment Tracking
-mlflow>=3.17.1
+mlflow>=3.17.2
 
 # Messaging & Serving Utilities
 pika>=1.4.4
 pydantic>=2.14.1
-fastapi>=0.143.1
+fastapi>=0.159.1
 uvicorn>=0.54.0
 
 # Observability & Telemetry
