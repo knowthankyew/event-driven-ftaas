@@ -1,5 +1,5 @@
 <!-- diagram-meta
-  last-validated: 2026-10-19
+  last-validated: 2026-10-24
   covers: [src/**, tests/**, scripts/**]
   generated-by: manual
 -->
@@ -20,6 +20,7 @@ flowchart TD
         UI -->|Drag-drop CSV/JSONL dataset| API
         UI -->|1-Click Train Team Adapter| API
         UI -->|Side-by-side comparison arena| API
+        QA[Playwright QA Walkthrough Suite] -.->|End-to-end verification & visual checkpoints| UI
     end
 
     subgraph Client["Client Applications / Ingestion"]
@@ -46,14 +47,14 @@ flowchart TD
     subgraph Compute["Training Compute Worker (Python)"]
         RMQ -->|3. Consume job| PW[Python Training Worker]
         PW -->|Load JSONL via datasetPath| DISK
-        PW -->|Apply LoRA & Train| HF[SmolLM2-135M / Gemma-2-2B IT]
+        PW -->|Apply LoRA & Train| HF[SmolLM2-135M / Gemma-2-2B IT / BitNet b1.58 2B-4T]
         PW -->|4. Stream step loss & hardware metrics| MLF
         PW -->|Save adapter weights| ART
     end
 
     subgraph Serving["Dynamic Model Serving"]
         API -->|Proxy or Call| INF
-        INF -->|Load Base Weights (SmolLM2 or Gemma)| HF
+        INF -->|Load Base Weights (SmolLM2, Gemma, or BitNet)| HF
         INF -->|Mount LoRA Adapter by JobId or URI| ART
         INF -->|Return Side-by-Side Completions| API
     end
@@ -72,9 +73,9 @@ flowchart TD
 3. **Hardware-Adaptive & Local-First (Zero Cloud Cost)**:
    - Automated device detection (`mps` on Apple Silicon, `cuda` on Nvidia, or multi-threaded `cpu`).
    - Tiered baseline models:
-     - **SmolLM2-135M** (`HuggingFaceTB/SmolLM2-135M`): Ultra-compact baseline (2,048-token context, LoRA rank 8, alpha 32, ~1.8 MB adapter) fine-tuning in 2–4 minutes on Apple Silicon (M1–M4) or CUDA.
-     - **Google Gemma 2 2B IT** (`google/gemma-2-2b-it`): High-capacity reasoning tier (8,192-token context, LoRA rank 8, alpha 32, ~12.2 MB adapter) utilizing Gemma chat templates (`<start_of_turn>`) with hardware preflight gates (~8 GB VRAM requirement and Hugging Face license check).
-     - **Microsoft BitNet b1.58 2B-4T** (`microsoft/BitNet-b1.58-2B-4T`): 1.58-bit ternary foundation model ($W \in \{-1, 0, +1\}$, 4,096-token architectural context with bounded 16-token generation and 240-token embedding ceilings) operating at ~1.10 GB RAM footprint via integer addition/subtraction, delivering up to 23.5 tokens/sec decode entirely on CPU (zero GPU required).
+     - **SmolLM2-135M** (`HuggingFaceTB/SmolLM2-135M`): Ultra-compact baseline (2,048-token context, ~1,500 words / ~3–4 pages, LoRA rank 8, alpha 32, ~1.8 MB adapter) fine-tuning in 2–4 minutes on Apple Silicon (M1–M4) or CUDA.
+     - **Google Gemma 2 2B IT** (`google/gemma-2-2b-it`): High-capacity reasoning tier (8,192-token context, ~6,000 words / ~12–15 single-spaced pages, LoRA rank 8, alpha 32, ~12.2 MB adapter) utilizing Gemma chat templates (`<start_of_turn>`) with hardware preflight gates (~8 GB VRAM requirement and Hugging Face license check).
+     - **Microsoft BitNet b1.58 2B-4T** (`microsoft/BitNet-b1.58-2B-4T`): 1.58-bit ternary foundation model ($W \in \{-1, 0, +1\}$, 4,096-token architectural context, ~3,000 words / ~6–8 pages, with bounded 16-token generation and 240-token embedding ceilings) operating at ~1.10 GB RAM footprint via integer addition/subtraction, delivering up to 23.5 tokens/sec decode entirely on CPU (zero GPU required).
 4. **Observable MLOps & Distributed Tracing**:
    - Unified `JobId` correlation across HTTP headers, AMQP properties, Python structured logs, and MLflow experiment tags.
    - Step-level loss curves, learning rate, and duration recorded in MLflow.
@@ -85,7 +86,8 @@ flowchart TD
    - Solves the gap between complex ML infrastructure and business value.
    - **Side-by-Side Comparison Arena**: Directly showcases the business contrast between a generic foundational model and a team-tuned LoRA adapter (e.g. enforcing Reg CC, FDIC, or internal SLAs).
    - **No-Code Adapter Studio**: Empowers support and compliance leads to curate prompt-completion examples and launch fine-tuning jobs via simple visual tables and drag-and-drop CSV/JSONL.
-   - **Hybrid Simulation Fallback**: If the GPU/MPS inference container is offline or pre-warming, the API transparently serves realistic domain comparisons so business stakeholders can explore without engineering friction.
+   - **Hybrid Simulation Fallback**: If the GPU/MPS inference container is offline or pre-warming, the API transparently serves realistic domain comparisons so business stakeholders can explore without engineering friction (configurable via `STUDIO_PREVIEW_FALLBACK` / `PreviewFallbackEnabled`).
+   - **Automated Playwright QA Baseline**: End-to-end headless browser validation (`scripts/qa-walkthrough.sh`) ensuring zero console errors, full DOM verification across all 5 studio stages, and regression-proof visual checkpoints.
 
 ---
 
@@ -379,6 +381,21 @@ stateDiagram-v2
 - Full 7-phase execution roadmap documented in [`ROADMAP.md`](ROADMAP.md).
 - Baseline edge model profile documented in [`SMOL_PROTOTYPE_RESULTS.md`](SMOL_PROTOTYPE_RESULTS.md).
 
+### Phase 8: 1-Bit Dense Embedding Subsystem (`bitnet-embedding-270m`)
+- Dynamic ingestion and serving of Microsoft's 1.58-bit dense embedding model (`bitnet-embedding-270m-bf16-i2_s.gguf`, 350.46 MB on disk) in `bitnet.cpp`.
+- 640-dimension embeddings with bounded 240-token safe operational context on AVX2 CPU SIMD (preventing upstream batch decode crash at token 257).
+- Empirical hardware profiling via `/usr/bin/time -l` measuring 741.9 MB RSS on short queries and ~1,523.5 MB RSS at 240 tokens.
+
+### Phase 9: Zero-Egress Statutory Pack Retrieval Baseline
+- Integrated multi-jurisdiction regulatory corpus: 12 CFR Part 229 (Reg CC), 12 CFR Part 1005 (Reg E), 12 CFR Part 330 (FDIC), 31 CFR Part 1010 (BSA/AML).
+- High-efficiency cosine similarity vector search and verifiable primary statutory source fetcher (`verify_statutory_sources.py`).
+- Strict AST conclusion invariants and automated Wilson score confidence interval validation (`sync_docs.py`).
+
+### Phase 10: Automated Playwright Studio Walkthrough Suite & Empirical QA Baseline
+- Playwright-based browser orchestration (`scripts/qa-walkthrough.sh`, `scripts/qa-walkthrough.js`) executing 46 automated assertions across the entire Studio workflow.
+- High-resolution visual checkpoints (`tests/qa-screenshots/01_studio_initialization.png` through `05_adapter_library_loaded.png`).
+- Zero console error tolerance and fail-closed validation across PII guardrails, persona switching, and side-by-side comparison.
+
 ---
 
 ## 6. Production Cloud & FinOps Architecture Mapping
@@ -425,13 +442,24 @@ ml/
 │   ├── SMOL_PROTOTYPE_RESULTS.md # Baseline ultra-compact SmolLM2-135M benchmark & ONNX profile
 │   ├── GEMMA_PROTOTYPE_RESULTS.md # High-capacity reasoning Gemma 2 2B IT benchmark & evaluation
 │   ├── BITNET_PROTOTYPE_RESULTS.md # 1.58-bit ternary CPU BitNet b1.58 2B-4T benchmark & evaluation
+│   ├── claims_registry.json      # Cryptographic & empirical claims verification database
 │   └── PRIVACY_TELEMETRY_SCHEMA.md # Portfolio privacy & telemetry governance schema
 ├── scripts/
 │   ├── dev-up.sh                 # Start infra, check health, seed datasets
 │   ├── dev-down.sh               # Tear down infra
 │   ├── verify-e2e.sh             # Master single-command verification script
+│   ├── qa-walkthrough.sh         # Headless Playwright Studio walkthrough orchestrator
+│   ├── qa-walkthrough.js         # Playwright QA verification script & screenshot captures
+│   ├── sync_docs.py              # Empirical claims synchronizer & AST linter
 │   ├── run_gemma_benchmark.py    # Standalone Gemma 2B live benchmark runner
+│   ├── run_bitnet_benchmark.py   # Standalone BitNet live benchmark runner
 │   └── seed_dataset.py           # Domain dataset generator
+├── tests/
+│   ├── FtaaSService.Api.Tests/   # .NET 10 integration, domain, & controller test suite
+│   ├── test_bitnet_engine.py     # Python BitNet C++ subprocess serving tests
+│   ├── test_claims_linter.py     # Empirical claims registry & Wilson interval tests
+│   ├── test_trainer.py           # Python PEFT/LoRA training unit tests
+│   └── qa-screenshots/           # Playwright UI visual baseline checkpoints
 ├── data/
 │   ├── datasets/                 # Ingested and sample JSONL datasets
 │   ├── artifacts/                # Exported LoRA adapter weights
@@ -443,6 +471,7 @@ ml/
 │   │   ├── Messaging/            # RabbitMQ producer & status consumer
 │   │   ├── Storage/              # SQLite repository
 │   │   ├── wwwroot/              # FTaaS Studio Single Page App (index.html, studio.js)
+│   │   ├── appsettings.json      # Service configuration & preview fallback settings
 │   │   ├── FtaaSService.Api.csproj
 │   │   └── Program.cs
 │   ├── FtaaSService.Worker/      # Python Training Worker
@@ -455,5 +484,6 @@ ml/
 │   │   └── requirements.txt
 │   └── FtaaSService.Inference/   # Dynamic Adapter Serving Engine
 │       ├── app.py                # FastAPI dynamic serving endpoint & routing
+│       ├── bitnet_engine.py      # Native BitNet C++ AVX2 SIMD serving engine
 │       └── requirements.txt
 ```
