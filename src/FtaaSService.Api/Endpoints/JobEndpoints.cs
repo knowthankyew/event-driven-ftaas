@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using FtaaSService.Api.Domain;
 using FtaaSService.Api.Messaging;
 using FtaaSService.Api.Services;
+using FtaaSService.Api.Services.Howso;
 using FtaaSService.Api.Storage;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,6 +15,9 @@ public static class JobEndpoints
     public static RouteGroupBuilder MapJobEndpoints(this RouteGroupBuilder group)
     {
         group.MapPost("/", SubmitJobAsync)
+            .DisableAntiforgery();
+
+        group.MapPost("/audit", AuditDatasetPreviewAsync)
             .DisableAntiforgery();
 
         group.MapGet("/", ListJobsAsync);
@@ -38,6 +42,7 @@ public static class JobEndpoints
         string? datasetPath = null;
         IFormFile? uploadedFile = null;
         Hyperparameters hyperparameters = new();
+        bool enableHowsoPreflight = false;
 
         if (request.HasFormContentType)
         {
@@ -55,6 +60,14 @@ public static class JobEndpoints
 
             if (form.TryGetValue("datasetPath", out var formPath) && !string.IsNullOrWhiteSpace(formPath))
                 datasetPath = formPath.ToString();
+
+            if (form.TryGetValue("enableHowsoPreflight", out var formPreflight) && !string.IsNullOrWhiteSpace(formPreflight))
+            {
+                if (bool.TryParse(formPreflight.ToString(), out var parsedPreflight))
+                {
+                    enableHowsoPreflight = parsedPreflight;
+                }
+            }
 
             if (form.TryGetValue("hyperparameters", out var formHp) && !string.IsNullOrWhiteSpace(formHp))
             {
@@ -90,7 +103,13 @@ public static class JobEndpoints
                 datasetPath = body.DatasetPath;
                 if (body.Hyperparameters is not null)
                     hyperparameters = body.Hyperparameters;
+                enableHowsoPreflight = body.EnableHowsoPreflight;
             }
+        }
+
+        if (!enableHowsoPreflight && request.Query.TryGetValue("enableHowsoPreflight", out var queryPreflight) && bool.TryParse(queryPreflight, out var qp))
+        {
+            enableHowsoPreflight = qp;
         }
 
         // 1. Validate hyperparameters range
@@ -121,7 +140,7 @@ public static class JobEndpoints
         }
 
         // 2. Validate and normalize dataset
-        var normResult = await datasetService.NormalizeAndStoreAsync(jobId, uploadedFile, datasetPath, cancellationToken);
+        var normResult = await datasetService.NormalizeAndStoreAsync(jobId, uploadedFile, datasetPath, enableHowsoPreflight, cancellationToken);
         if (!normResult.IsValid)
         {
             return Results.UnprocessableEntity(new
@@ -148,12 +167,30 @@ public static class JobEndpoints
 
         await jobRepository.CreateAsync(job, cancellationToken);
 
-        telemetry.RecordSpan("job.accepted", jobId, JobStatus.Queued.ToString(), 0, new Dictionary<string, object>
+        var spanAttrs = new Dictionary<string, object>
         {
             ["base_model"] = baseModel,
             ["dataset_hash"] = normResult.Sha256Hash!,
             ["dataset_relative_path"] = normResult.RelativePath!
-        });
+        };
+
+        if (enableHowsoPreflight)
+        {
+            spanAttrs["howso.preflight.enabled"] = true;
+            spanAttrs["howso.preflight.status"] = normResult.HowsoPreflightStatus ?? "Disabled";
+            if (normResult.PreflightDurationMs.HasValue)
+            {
+                spanAttrs["howso.preflight.duration_ms"] = normResult.PreflightDurationMs.Value;
+            }
+            if (normResult.HowsoAudit is not null)
+            {
+                spanAttrs["howso.cases.original_count"] = normResult.HowsoAudit.OriginalCount;
+                spanAttrs["howso.cases.ablated_count"] = normResult.HowsoAudit.AblatedCount;
+                spanAttrs["howso.cases.anomalous_count"] = normResult.HowsoAudit.AnomalousCount;
+            }
+        }
+
+        telemetry.RecordSpan("job.accepted", jobId, JobStatus.Queued.ToString(), 0, spanAttrs);
 
         // 4. Publish AMQP Event
         var requestedEvent = new JobRequestedEvent
@@ -208,7 +245,9 @@ public static class JobEndpoints
             BaseModel = baseModel,
             DatasetPath = normResult.RelativePath!,
             DatasetHash = normResult.Sha256Hash!,
-            CreatedAt = job.CreatedAt
+            CreatedAt = job.CreatedAt,
+            HowsoAudit = normResult.HowsoAudit,
+            HowsoPreflightStatus = normResult.HowsoPreflightStatus
         };
 
         return Results.Accepted($"/api/v1/jobs/{jobId}", response);
@@ -492,5 +531,169 @@ public static class JobEndpoints
         {
             _exportLock.Release();
         }
+    }
+
+    internal static async Task<IResult> AuditDatasetPreviewAsync(
+        HttpRequest request,
+        [FromServices] IDatasetService datasetService,
+        [FromServices] IHowsoClient howsoClient,
+        CancellationToken cancellationToken)
+    {
+        IFormFile? uploadedFile = null;
+        string? datasetPath = null;
+        List<HowsoDatasetRecord>? directRecords = null;
+        float ablationThreshold = 0.15f;
+        float anomalyThreshold = 5.0f;
+
+        if (request.HasFormContentType)
+        {
+            var form = await request.ReadFormAsync(cancellationToken);
+            if (form.Files.Count > 0)
+            {
+                uploadedFile = form.Files[0];
+            }
+            if (form.TryGetValue("datasetPath", out var pathVal) && !string.IsNullOrWhiteSpace(pathVal))
+            {
+                datasetPath = pathVal.ToString();
+            }
+            if (form.TryGetValue("ablationThreshold", out var ablVal) && !string.IsNullOrWhiteSpace(ablVal))
+            {
+                if (!float.TryParse(ablVal, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var at) || float.IsNaN(at) || float.IsInfinity(at) || at < 0)
+                {
+                    return Results.BadRequest(new DatasetAuditResponse
+                    {
+                        IsValid = false,
+                        ErrorMessage = "ablationThreshold must be a non-negative finite number."
+                    });
+                }
+                ablationThreshold = at;
+            }
+            if (form.TryGetValue("anomalyThreshold", out var anomVal) && !string.IsNullOrWhiteSpace(anomVal))
+            {
+                if (!float.TryParse(anomVal, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ant) || float.IsNaN(ant) || float.IsInfinity(ant) || ant < 0)
+                {
+                    return Results.BadRequest(new DatasetAuditResponse
+                    {
+                        IsValid = false,
+                        ErrorMessage = "anomalyThreshold must be a non-negative finite number."
+                    });
+                }
+                anomalyThreshold = ant;
+            }
+        }
+        else
+        {
+            DatasetAuditRequest? body = null;
+            try
+            {
+                body = await request.ReadFromJsonAsync<DatasetAuditRequest>(cancellationToken: cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new DatasetAuditResponse
+                {
+                    IsValid = false,
+                    ErrorMessage = $"Invalid JSON payload: {ex.Message}"
+                });
+            }
+
+            if (body is not null)
+            {
+                datasetPath = body.DatasetPath;
+                directRecords = body.Records;
+
+                if (float.IsNaN(body.AblationThreshold) || float.IsInfinity(body.AblationThreshold) || body.AblationThreshold < 0)
+                {
+                    return Results.BadRequest(new DatasetAuditResponse
+                    {
+                        IsValid = false,
+                        ErrorMessage = "ablationThreshold must be a non-negative finite number."
+                    });
+                }
+                ablationThreshold = body.AblationThreshold;
+
+                if (float.IsNaN(body.AnomalyThreshold) || float.IsInfinity(body.AnomalyThreshold) || body.AnomalyThreshold < 0)
+                {
+                    return Results.BadRequest(new DatasetAuditResponse
+                    {
+                        IsValid = false,
+                        ErrorMessage = "anomalyThreshold must be a non-negative finite number."
+                    });
+                }
+                anomalyThreshold = body.AnomalyThreshold;
+            }
+        }
+
+        List<HowsoDatasetRecord> recordsToAudit;
+
+        if (directRecords is not null && directRecords.Count > 0)
+        {
+            if (directRecords.Count > DatasetService.MaxPreviewAuditRecords)
+            {
+                return Results.UnprocessableEntity(new DatasetAuditResponse
+                {
+                    IsValid = false,
+                    ErrorMessage = $"Direct records payload exceeds maximum preview audit limit of {DatasetService.MaxPreviewAuditRecords:N0} records. For larger datasets, submit a job with enableHowsoPreflight enabled."
+                });
+            }
+
+            if (!DatasetService.ValidateDirectRecords(directRecords, out var directError))
+            {
+                return Results.UnprocessableEntity(new DatasetAuditResponse
+                {
+                    IsValid = false,
+                    ErrorMessage = directError
+                });
+            }
+
+            recordsToAudit = directRecords;
+        }
+        else
+        {
+            var (isValid, errorMessage, extractedRecords) = await datasetService.ValidateAndExtractRecordsAsync(
+                uploadedFile, datasetPath, cancellationToken);
+
+            if (!isValid || extractedRecords is null)
+            {
+                return Results.UnprocessableEntity(new DatasetAuditResponse
+                {
+                    IsValid = false,
+                    ErrorMessage = errorMessage ?? "Dataset validation failed"
+                });
+            }
+
+            if (extractedRecords.Count > DatasetService.MaxPreviewAuditRecords)
+            {
+                return Results.UnprocessableEntity(new DatasetAuditResponse
+                {
+                    IsValid = false,
+                    ErrorMessage = $"Preview audit dataset exceeds maximum preview limit of {DatasetService.MaxPreviewAuditRecords:N0} records (contained {extractedRecords.Count:N0} records). For larger datasets, submit a training job with enableHowsoPreflight enabled."
+                });
+            }
+
+            recordsToAudit = extractedRecords;
+        }
+
+        var auditResult = await howsoClient.AuditDatasetAsync(
+            recordsToAudit,
+            ablationThreshold: ablationThreshold,
+            anomalyThreshold: anomalyThreshold,
+            cancellationToken: cancellationToken);
+
+        if (auditResult is null)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status503ServiceUnavailable,
+                title: "Howso Arbiter Unavailable",
+                detail: "Howso containerized audit service failed to respond or is offline."
+            );
+        }
+
+        return Results.Ok(new DatasetAuditResponse
+        {
+            IsValid = true,
+            Summary = auditResult.Summary,
+            CleanedRecordCount = auditResult.CleanedRecords.Count
+        });
     }
 }

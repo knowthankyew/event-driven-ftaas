@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using FtaaSService.Api.Services.Howso;
 
 namespace FtaaSService.Api.Domain;
 
@@ -15,6 +16,9 @@ public sealed record SubmitJobRequest
 
     [JsonPropertyName("hyperparameters")]
     public Hyperparameters Hyperparameters { get; init; } = new();
+
+    [JsonPropertyName("enableHowsoPreflight")]
+    public bool EnableHowsoPreflight { get; init; } = false;
 }
 
 public sealed record SubmitJobResponse
@@ -39,6 +43,42 @@ public sealed record SubmitJobResponse
 
     [JsonPropertyName("createdAt")]
     public required DateTimeOffset CreatedAt { get; init; }
+
+    [JsonPropertyName("howsoAudit")]
+    public HowsoAuditSummary? HowsoAudit { get; init; }
+
+    [JsonPropertyName("howsoPreflightStatus")]
+    public string? HowsoPreflightStatus { get; init; }
+}
+
+public sealed record DatasetAuditRequest
+{
+    [JsonPropertyName("datasetPath")]
+    public string? DatasetPath { get; init; }
+
+    [JsonPropertyName("records")]
+    public List<HowsoDatasetRecord>? Records { get; init; }
+
+    [JsonPropertyName("ablationThreshold")]
+    public float AblationThreshold { get; init; } = 0.15f;
+
+    [JsonPropertyName("anomalyThreshold")]
+    public float AnomalyThreshold { get; init; } = 5.0f;
+}
+
+public sealed record DatasetAuditResponse
+{
+    [JsonPropertyName("isValid")]
+    public bool IsValid { get; init; }
+
+    [JsonPropertyName("errorMessage")]
+    public string? ErrorMessage { get; init; }
+
+    [JsonPropertyName("summary")]
+    public HowsoAuditSummary? Summary { get; init; }
+
+    [JsonPropertyName("cleanedRecordCount")]
+    public int CleanedRecordCount { get; init; }
 }
 
 public sealed record JobDetailResponse
@@ -222,6 +262,39 @@ public sealed record InferenceCompareResponse
 
     [JsonPropertyName("note")]
     public string? Note { get; init; }
+
+    [JsonPropertyName("howsoProvenance")]
+    public HowsoVerifyResult? HowsoProvenance { get; init; }
+}
+
+public sealed record InferenceVerifyRequest
+{
+    [JsonPropertyName("jobId")]
+    public string? JobId { get; init; }
+
+    [JsonPropertyName("prompt")]
+    public required string Prompt { get; init; }
+
+    [JsonPropertyName("candidateCompletion")]
+    public required string CandidateCompletion { get; init; }
+
+    [JsonPropertyName("referenceRecords")]
+    public List<HowsoDatasetRecord>? ReferenceRecords { get; init; }
+
+    [JsonPropertyName("maxTolerableSurprisal")]
+    public float MaxTolerableSurprisal { get; init; } = 6.0f;
+}
+
+public sealed record InferenceVerifyResponse
+{
+    [JsonPropertyName("isConforming")]
+    public bool IsConforming { get; init; }
+
+    [JsonPropertyName("provenance")]
+    public HowsoVerifyResult? Provenance { get; init; }
+
+    [JsonPropertyName("message")]
+    public string? Message { get; init; }
 }
 
 public sealed record LatencyBreakdown

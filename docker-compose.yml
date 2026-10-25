@@ -40,3 +40,18 @@ services:
       retries: 6
       start_period: 15s
     restart: unless-stopped
+
+  howso:
+    build:
+      context: ./src/howso-service
+      dockerfile: Dockerfile
+    container_name: ftaas-howso
+    ports:
+      - "127.0.0.1:5200:5200"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5200/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    restart: unless-stopped

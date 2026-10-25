@@ -1,6 +1,11 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using FtaaSService.Api.Services.Howso;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace FtaaSService.Api.Services;
 
@@ -8,10 +13,15 @@ public sealed class DatasetService : IDatasetService
 {
     private readonly string _dataRoot;
     private readonly ILogger<DatasetService> _logger;
+    private readonly IHowsoClient? _howsoClient;
 
-    public DatasetService(IConfiguration configuration, ILogger<DatasetService> logger)
+    public DatasetService(
+        IConfiguration configuration,
+        ILogger<DatasetService> logger,
+        IHowsoClient? howsoClient = null)
     {
         _logger = logger;
+        _howsoClient = howsoClient;
         _dataRoot = configuration.GetValue<string>("DATA_ROOT") 
                     ?? Path.Combine(Directory.GetCurrentDirectory(), "data");
 
@@ -19,235 +29,439 @@ public sealed class DatasetService : IDatasetService
     }
 
     private const long MaxFileSizeBytes = 25 * 1024 * 1024; // 25 MB safety ceiling
-    private const int MaxRecordCount = 50_000;
+    public const int MaxRecordCount = 50_000;
+    public const int MaxPreviewAuditRecords = 2_500;
+    private const int MaxBatchAuditSize = 1_000;
+    private const int MaxHowsoPreflightCeiling = 5_000;
+    private static readonly TimeSpan PreflightTimeout = TimeSpan.FromSeconds(90);
 
     public async Task<DatasetResult> NormalizeAndStoreAsync(
         string jobId,
         IFormFile? uploadedFile,
         string? existingPath,
+        bool enableHowsoPreflight = false,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            Stream inputStream;
-            string? sourceResolvedPath = null;
-            if (uploadedFile is not null && uploadedFile.Length > 0)
-            {
-                if (uploadedFile.Length > MaxFileSizeBytes)
-                {
-                    return new DatasetResult(false, null, null, 0,
-                        $"Upload size ({uploadedFile.Length / (1024 * 1024)} MB) exceeds maximum permitted dataset limit of {MaxFileSizeBytes / (1024 * 1024)} MB.");
-                }
-                inputStream = uploadedFile.OpenReadStream();
-            }
-            else if (!string.IsNullOrWhiteSpace(existingPath))
-            {
-                var datasetsRoot = Path.GetFullPath(Path.Combine(_dataRoot, "datasets")) + Path.DirectorySeparatorChar;
-                var resolved = Path.GetFullPath(Path.Combine(_dataRoot, existingPath));
-                sourceResolvedPath = resolved;
-                if (Path.IsPathRooted(existingPath) ||
-                    !resolved.StartsWith(datasetsRoot, StringComparison.Ordinal))
-                {
-                    return new DatasetResult(false, null, null, 0, "datasetPath must reference a file under 'datasets/'.");
-                }
+            var (isValid, errorMessage, sourceResolvedPath, validatedRecords) = 
+                await ExtractRecordsInternalAsync(jobId, uploadedFile, existingPath, cancellationToken);
 
-                if (!File.Exists(resolved))
-                {
-                    return new DatasetResult(false, null, null, 0, $"Dataset file not found at '{existingPath}'");
-                }
-
-                var fileInfo = new FileInfo(resolved);
-                if (fileInfo.Length > MaxFileSizeBytes)
-                {
-                    return new DatasetResult(false, null, null, 0,
-                        $"Dataset file size ({fileInfo.Length / (1024 * 1024)} MB) exceeds maximum permitted limit of {MaxFileSizeBytes / (1024 * 1024)} MB.");
-                }
-
-                inputStream = File.OpenRead(resolved);
-            }
-            else
+            if (!isValid || validatedRecords is null)
             {
-                return new DatasetResult(false, null, null, 0, "Neither a file upload nor a datasetPath was provided.");
+                return new DatasetResult(false, null, null, 0, errorMessage);
             }
 
-            using (inputStream)
+            HowsoAuditSummary? howsoAuditSummary = null;
+            string preflightStatus = enableHowsoPreflight ? "Skipped" : "Disabled";
+            double? preflightDurationMs = null;
+            var recordsToWrite = validatedRecords;
+
+            if (enableHowsoPreflight && _howsoClient != null)
             {
-                var relativePath = Path.Combine("datasets", $"{jobId}.jsonl");
-                var targetDiskPath = Path.Combine(_dataRoot, relativePath);
+                var preflightStart = Stopwatch.GetTimestamp();
+                using var preflightCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                preflightCts.CancelAfter(PreflightTimeout);
 
-                using var reader = new StreamReader(inputStream, Encoding.UTF8);
-                var validatedRecords = new List<(string Prompt, string Completion)>();
-                int recordCount = 0;
-                string? line;
-                bool isFirstLine = true;
-                bool isCsv = uploadedFile?.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) == true
-                             || existingPath?.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) == true;
-                int promptColIdx = 0;
-                int compColIdx = 1;
-
-                // Pass 1: Stream-scan input entirely in-memory — zero files created on disk prior to 100% compliance pass
-                while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
+                try
                 {
-                    if (string.IsNullOrWhiteSpace(line)) continue;
-
-                    // Full-Row PII Check across all columns/properties (including unmapped metadata)
-                    var piiDetected = ScanForPii(line);
-                    if (piiDetected is not null)
+                    if (validatedRecords.Count > MaxHowsoPreflightCeiling)
                     {
-                        // Redacted logging: record only Job ID and PII category name, NEVER raw payload or token values
-                        _logger.LogWarning("Job {JobId}: Ingestion blocked due to detected customer {PiiType} in payload at record {RecordIndex}",
-                            jobId, piiDetected, recordCount + 1);
-                        return new DatasetResult(false, null, null, 0,
-                            $"Security/PII compliance violation at record {recordCount + 1}: Detected potential real customer {piiDetected} in payload (including unmapped metadata columns). Training dataset rejected by server ingestion gateway.");
+                        preflightStatus = "Skipped";
+                        _logger.LogWarning("Job {JobId}: Dataset record count ({Count}) exceeds Howso preflight ceiling ({Ceiling}). Skipping preflight audit to preserve ingestion latency SLA.",
+                            jobId, validatedRecords.Count, MaxHowsoPreflightCeiling);
                     }
-
-                    if (isFirstLine && !line.TrimStart().StartsWith("{"))
+                    else if (validatedRecords.Count <= MaxBatchAuditSize)
                     {
-                        isCsv = true;
-                    }
+                        _logger.LogInformation("Job {JobId}: Executing Howso information-theoretic dataset preflight audit on {RecordCount} records", jobId, validatedRecords.Count);
+                        var howsoRecords = validatedRecords.Select(r => new HowsoDatasetRecord(r.Prompt, r.Completion)).ToList();
+                        var auditResult = await _howsoClient.AuditDatasetAsync(howsoRecords, cancellationToken: preflightCts.Token);
 
-                    string prompt = "";
-                    string completion = "";
-
-                    if (isCsv)
-                    {
-                        var cols = ParseCsvRow(line);
-                        if (cols is null)
+                        if (auditResult != null)
                         {
-                            return new DatasetResult(false, null, null, 0,
-                                $"CSV line {recordCount + 1} has unbalanced quotes (multiline fields are unsupported).");
-                        }
+                            howsoAuditSummary = auditResult.Summary;
+                            preflightStatus = "Completed";
+                            _logger.LogInformation("Job {JobId}: Howso preflight audit complete. Original: {OriginalCount}, Cleaned: {CleanedCount}, Ablated: {AblatedCount}, Anomalous: {AnomalousCount}",
+                                jobId, howsoAuditSummary.OriginalCount, howsoAuditSummary.CleanedCount, howsoAuditSummary.AblatedCount, howsoAuditSummary.AnomalousCount);
 
-                        if (isFirstLine)
-                        {
-                            isFirstLine = false;
-                            var headerLower = cols.Select(c => c.Trim().ToLowerInvariant().Trim('"', '\'')).ToList();
-                            var pIdx = headerLower.FindIndex(h => h is "prompt" or "question" or "inquiry");
-                            var cIdx = headerLower.FindIndex(h => h is "completion" or "response" or "answer");
-                            if (pIdx != -1 && cIdx != -1)
+                            if (auditResult.CleanedRecords.Count > 0)
                             {
-                                promptColIdx = pIdx;
-                                compColIdx = cIdx;
-                                continue;
+                                recordsToWrite = auditResult.CleanedRecords.Select(r => (r.Prompt, r.Completion)).ToList();
                             }
-                        }
-
-                        if (cols.Count > Math.Max(promptColIdx, compColIdx))
-                        {
-                            prompt = cols[promptColIdx].Trim();
-                            completion = cols[compColIdx].Trim();
-                        }
-                        else if (cols.Count >= 2)
-                        {
-                            prompt = cols[0].Trim();
-                            completion = cols[1].Trim();
+                            else
+                            {
+                                howsoAuditSummary = null;
+                                preflightStatus = "FellBack";
+                                _logger.LogWarning("Job {JobId}: Howso audit cleaned record count is 0. Retaining original validated records.", jobId);
+                            }
                         }
                         else
                         {
-                            return new DatasetResult(false, null, null, 0, $"CSV line {recordCount + 1} has insufficient columns (expected at least prompt and completion).");
+                            preflightStatus = "FellBack";
+                            _logger.LogWarning("Job {JobId}: Howso preflight audit returned null or failed. Falling back to standard validated records.", jobId);
                         }
                     }
                     else
                     {
-                        isFirstLine = false;
-                        JsonDocument doc;
-                        try
-                        {
-                            doc = JsonDocument.Parse(line);
-                        }
-                        catch (Exception ex)
-                        {
-                            return new DatasetResult(false, null, null, 0, $"Invalid JSON at line {recordCount + 1}: {ex.Message}");
-                        }
+                        // Chunk larger datasets across MaxBatchAuditSize batches to respect service bounds while preventing memory exhaustion
+                        var chunks = validatedRecords.Chunk(MaxBatchAuditSize).ToList();
+                        _logger.LogInformation("Job {JobId}: Executing chunked Howso preflight audit across {ChunkCount} batches ({TotalCount} records total)",
+                            jobId, chunks.Count, validatedRecords.Count);
 
-                        using (doc)
+                        var cleanedChunkRecords = new List<HowsoDatasetRecord>();
+                        int totalOriginal = 0;
+                        int totalCleaned = 0;
+                        int totalAblated = 0;
+                        int totalAnomalous = 0;
+                        var allAblated = new List<Dictionary<string, object>>();
+                        var allAnomalous = new List<Dictionary<string, object>>();
+                        var allDeviations = new Dictionary<string, float>();
+                        bool allSucceeded = true;
+
+                        for (int chunkIdx = 0; chunkIdx < chunks.Count; chunkIdx++)
                         {
-                            var root = doc.RootElement;
-                            if (!root.TryGetProperty("prompt", out var promptElem) || promptElem.ValueKind != JsonValueKind.String)
+                            var chunk = chunks[chunkIdx];
+                            int indexOffset = chunkIdx * MaxBatchAuditSize;
+                            var howsoChunk = chunk.Select(r => new HowsoDatasetRecord(r.Prompt, r.Completion)).ToList();
+                            var chunkResult = await _howsoClient.AuditDatasetAsync(howsoChunk, cancellationToken: preflightCts.Token);
+                            if (chunkResult is null)
                             {
-                                return new DatasetResult(false, null, null, 0, $"Line {recordCount + 1} is missing required string 'prompt' property.");
+                                preflightStatus = "FellBack";
+                                _logger.LogWarning("Job {JobId}: Howso preflight batch {ChunkIndex} returned null or failed. Aborting chunked audit and falling back to standard records.",
+                                    jobId, chunkIdx + 1);
+                                allSucceeded = false;
+                                break;
                             }
 
-                            if (!root.TryGetProperty("completion", out var compElem) || compElem.ValueKind != JsonValueKind.String)
+                            cleanedChunkRecords.AddRange(chunkResult.CleanedRecords);
+                            totalOriginal += chunkResult.Summary.OriginalCount;
+                            totalCleaned += chunkResult.Summary.CleanedCount;
+                            totalAblated += chunkResult.Summary.AblatedCount;
+                            totalAnomalous += chunkResult.Summary.AnomalousCount;
+
+                            foreach (var r in chunkResult.Summary.AblatedRecords)
                             {
-                                return new DatasetResult(false, null, null, 0, $"Line {recordCount + 1} is missing required string 'completion' property.");
+                                var cloned = new Dictionary<string, object>(r) { ["batch_index"] = chunkIdx };
+                                if (cloned.TryGetValue("ablated_index", out var ai) && int.TryParse(ai.ToString(), out var parsedAi))
+                                    cloned["ablated_index"] = parsedAi + indexOffset;
+                                if (cloned.TryGetValue("merged_into_index", out var mi) && int.TryParse(mi.ToString(), out var parsedMi))
+                                    cloned["merged_into_index"] = parsedMi + indexOffset;
+                                allAblated.Add(cloned);
                             }
 
-                            prompt = promptElem.GetString()?.Trim() ?? "";
-                            completion = compElem.GetString()?.Trim() ?? "";
+                            foreach (var r in chunkResult.Summary.AnomalousRecords)
+                            {
+                                var cloned = new Dictionary<string, object>(r) { ["batch_index"] = chunkIdx };
+                                if (cloned.TryGetValue("record_index", out var ri) && int.TryParse(ri.ToString(), out var parsedRi))
+                                    cloned["record_index"] = parsedRi + indexOffset;
+                                allAnomalous.Add(cloned);
+                            }
+
+                            foreach (var (k, v) in chunkResult.Summary.MeasuredDeviations)
+                            {
+                                allDeviations[k] = v;
+                            }
                         }
-                    }
 
-                    if (prompt.Length < 3 || completion.Length < 1)
-                    {
-                        return new DatasetResult(false, null, null, 0, $"Line {recordCount + 1} has empty or insufficiently short prompt/completion tokens.");
-                    }
-
-                    validatedRecords.Add((prompt, completion));
-                    recordCount++;
-
-                    if (recordCount > MaxRecordCount)
-                    {
-                        return new DatasetResult(false, null, null, 0,
-                            $"Dataset exceeds maximum permitted ceiling of {MaxRecordCount:N0} records.");
-                    }
-                }
-
-                if (recordCount == 0)
-                {
-                    return new DatasetResult(false, null, null, 0, "Dataset contains no valid records.");
-                }
-
-                // Pass 2: Write strictly sanitized normalized { prompt, completion } records to disk
-                using var outStream = File.Create(targetDiskPath);
-                using var writer = new StreamWriter(outStream, new UTF8Encoding(false));
-                using var sha256 = SHA256.Create();
-
-                foreach (var (prompt, completion) in validatedRecords)
-                {
-                    var normalizedJson = JsonSerializer.Serialize(new { prompt, completion });
-                    await writer.WriteLineAsync(normalizedJson);
-                }
-
-                await writer.FlushAsync(cancellationToken);
-
-                // Compute hash over written normalized file
-                outStream.Position = 0;
-                var hashBytes = await sha256.ComputeHashAsync(outStream, cancellationToken);
-                var hashHex = Convert.ToHexStringLower(hashBytes);
-
-                if (!string.IsNullOrWhiteSpace(sourceResolvedPath))
-                {
-                    var existingDir = Path.GetDirectoryName(sourceResolvedPath) ?? "";
-                    var existingFileNameWithoutExt = Path.GetFileNameWithoutExtension(sourceResolvedPath);
-                    var existingExt = Path.GetExtension(sourceResolvedPath);
-                    var companionValCandidate = Path.Combine(existingDir, $"{existingFileNameWithoutExt}-val{existingExt}");
-                    if (File.Exists(companionValCandidate))
-                    {
-                        var valTargetDiskPath = Path.Combine(_dataRoot, "datasets", $"{jobId}-val.jsonl");
-                        try
+                        if (allSucceeded && cleanedChunkRecords.Count > 0)
                         {
-                            File.Copy(companionValCandidate, valTargetDiskPath, overwrite: true);
-                            _logger.LogInformation("Job {JobId}: Copied companion validation dataset from {Source} to {Dest}",
-                                jobId, companionValCandidate, valTargetDiskPath);
+                            howsoAuditSummary = new HowsoAuditSummary(
+                                OriginalCount: totalOriginal,
+                                CleanedCount: totalCleaned,
+                                AblatedCount: totalAblated,
+                                AnomalousCount: totalAnomalous,
+                                MeasuredDeviations: allDeviations,
+                                AnomalousRecords: allAnomalous,
+                                AblatedRecords: allAblated
+                            );
+                            preflightStatus = "Completed";
+                            recordsToWrite = cleanedChunkRecords.Select(r => (r.Prompt, r.Completion)).ToList();
+                            _logger.LogInformation("Job {JobId}: Chunked Howso preflight audit complete. Original: {OriginalCount}, Cleaned: {CleanedCount}, Ablated: {AblatedCount}, Anomalous: {AnomalousCount}",
+                                jobId, totalOriginal, totalCleaned, totalAblated, totalAnomalous);
                         }
-                        catch (Exception ex)
+                        else
                         {
-                            _logger.LogWarning(ex, "Job {JobId}: Failed copying companion validation dataset: {Message}", jobId, ex.Message);
+                            preflightStatus = "FellBack";
                         }
                     }
                 }
-
-                _logger.LogInformation("Job {JobId}: Successfully normalized {RecordCount} records (SHA: {Hash}) to {Path}",
-                    jobId, recordCount, hashHex, relativePath);
-
-                return new DatasetResult(true, relativePath, hashHex, recordCount, null);
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (OperationCanceledException)
+                {
+                    preflightStatus = "FellBack";
+                    _logger.LogWarning("Job {JobId}: Howso preflight audit timed out after {TimeoutSeconds}s. Falling back to standard validated records.", jobId, (int)PreflightTimeout.TotalSeconds);
+                }
+                catch (Exception ex)
+                {
+                    preflightStatus = "FellBack";
+                    _logger.LogWarning(ex, "Job {JobId}: Error during Howso preflight audit: {Message}. Falling back to standard validated records.", jobId, ex.Message);
+                }
+                finally
+                {
+                    preflightDurationMs = Stopwatch.GetElapsedTime(preflightStart).TotalMilliseconds;
+                }
             }
+
+            var relativePath = Path.Combine("datasets", $"{jobId}.jsonl");
+            var targetDiskPath = Path.Combine(_dataRoot, relativePath);
+
+            // Pass 2: Write strictly sanitized normalized { prompt, completion } records to disk
+            using var outStream = File.Create(targetDiskPath);
+            using var writer = new StreamWriter(outStream, new UTF8Encoding(false));
+            using var sha256 = SHA256.Create();
+
+            foreach (var (prompt, completion) in recordsToWrite)
+            {
+                var normalizedJson = JsonSerializer.Serialize(new { prompt, completion });
+                await writer.WriteLineAsync(normalizedJson);
+            }
+
+            await writer.FlushAsync(cancellationToken);
+
+            // Compute hash over written normalized file
+            outStream.Position = 0;
+            var hashBytes = await sha256.ComputeHashAsync(outStream, cancellationToken);
+            var hashHex = Convert.ToHexStringLower(hashBytes);
+
+            if (!string.IsNullOrWhiteSpace(sourceResolvedPath))
+            {
+                var existingDir = Path.GetDirectoryName(sourceResolvedPath) ?? "";
+                var existingFileNameWithoutExt = Path.GetFileNameWithoutExtension(sourceResolvedPath);
+                var existingExt = Path.GetExtension(sourceResolvedPath);
+                var companionValCandidate = Path.Combine(existingDir, $"{existingFileNameWithoutExt}-val{existingExt}");
+                if (File.Exists(companionValCandidate))
+                {
+                    var valTargetDiskPath = Path.Combine(_dataRoot, "datasets", $"{jobId}-val.jsonl");
+                    try
+                    {
+                        File.Copy(companionValCandidate, valTargetDiskPath, overwrite: true);
+                        _logger.LogInformation("Job {JobId}: Copied companion validation dataset from {Source} to {Dest}",
+                            jobId, companionValCandidate, valTargetDiskPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Job {JobId}: Failed copying companion validation dataset: {Message}", jobId, ex.Message);
+                    }
+                }
+            }
+
+            _logger.LogInformation("Job {JobId}: Successfully normalized {RecordCount} records (SHA: {Hash}) to {Path}",
+                jobId, recordsToWrite.Count, hashHex, relativePath);
+
+            return new DatasetResult(true, relativePath, hashHex, recordsToWrite.Count, null, howsoAuditSummary, preflightStatus, preflightDurationMs);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error normalizing dataset for Job {JobId}", jobId);
             return new DatasetResult(false, null, null, 0, $"Error processing dataset: {ex.Message}");
+        }
+    }
+
+    public async Task<(bool IsValid, string? ErrorMessage, List<HowsoDatasetRecord>? Records)> ValidateAndExtractRecordsAsync(
+        IFormFile? uploadedFile,
+        string? existingPath,
+        CancellationToken cancellationToken = default)
+    {
+        var (isValid, errorMessage, _, records) = await ExtractRecordsInternalAsync(null, uploadedFile, existingPath, cancellationToken);
+        if (!isValid || records is null)
+        {
+            return (false, errorMessage, null);
+        }
+
+        var howsoRecords = records.Select(r => new HowsoDatasetRecord(r.Prompt, r.Completion)).ToList();
+        return (true, null, howsoRecords);
+    }
+
+    private async Task<(bool IsValid, string? ErrorMessage, string? SourceResolvedPath, List<(string Prompt, string Completion)>? Records)> ExtractRecordsInternalAsync(
+        string? jobId,
+        IFormFile? uploadedFile,
+        string? existingPath,
+        CancellationToken cancellationToken)
+    {
+        Stream inputStream;
+        string? sourceResolvedPath = null;
+        if (uploadedFile is not null && uploadedFile.Length > 0)
+        {
+            if (uploadedFile.Length > MaxFileSizeBytes)
+            {
+                return (false,
+                    $"Upload size ({uploadedFile.Length / (1024 * 1024)} MB) exceeds maximum permitted dataset limit of {MaxFileSizeBytes / (1024 * 1024)} MB.",
+                    null, null);
+            }
+            inputStream = uploadedFile.OpenReadStream();
+        }
+        else if (!string.IsNullOrWhiteSpace(existingPath))
+        {
+            var datasetsRoot = Path.GetFullPath(Path.Combine(_dataRoot, "datasets")) + Path.DirectorySeparatorChar;
+            var resolved = Path.GetFullPath(Path.Combine(_dataRoot, existingPath));
+            sourceResolvedPath = resolved;
+            if (Path.IsPathRooted(existingPath) ||
+                !resolved.StartsWith(datasetsRoot, StringComparison.Ordinal))
+            {
+                return (false, "datasetPath must reference a file under 'datasets/'.", null, null);
+            }
+
+            if (!File.Exists(resolved))
+            {
+                return (false, $"Dataset file not found at '{existingPath}'", null, null);
+            }
+
+            var fileInfo = new FileInfo(resolved);
+            if (fileInfo.Length > MaxFileSizeBytes)
+            {
+                return (false,
+                    $"Dataset file size ({fileInfo.Length / (1024 * 1024)} MB) exceeds maximum permitted limit of {MaxFileSizeBytes / (1024 * 1024)} MB.",
+                    null, null);
+            }
+
+            inputStream = File.OpenRead(resolved);
+        }
+        else
+        {
+            return (false, "Neither a file upload nor a datasetPath was provided.", null, null);
+        }
+
+        using (inputStream)
+        {
+            using var reader = new StreamReader(inputStream, Encoding.UTF8);
+            var validatedRecords = new List<(string Prompt, string Completion)>();
+            int recordCount = 0;
+            string? line;
+            bool isFirstLine = true;
+            bool isCsv = uploadedFile?.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) == true
+                         || existingPath?.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) == true;
+            int promptColIdx = 0;
+            int compColIdx = 1;
+
+            // Pass 1: Stream-scan input entirely in-memory — zero files created on disk prior to 100% compliance pass
+            while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                // Full-Row PII Check across all columns/properties (including unmapped metadata)
+                var piiDetected = ScanForPii(line);
+                if (piiDetected is not null)
+                {
+                    // Redacted logging: record only Job ID and PII category name, NEVER raw payload or token values
+                    _logger.LogWarning("Job {JobId}: Ingestion blocked due to detected customer {PiiType} in payload at record {RecordIndex}",
+                        jobId ?? "Preflight", piiDetected, recordCount + 1);
+                    return (false,
+                        $"Security/PII compliance violation at record {recordCount + 1}: Detected potential real customer {piiDetected} in payload (including unmapped metadata columns). Training dataset rejected by server ingestion gateway.",
+                        null, null);
+                }
+
+                if (isFirstLine && !line.TrimStart().StartsWith("{"))
+                {
+                    isCsv = true;
+                }
+
+                string prompt = "";
+                string completion = "";
+
+                if (isCsv)
+                {
+                    var cols = ParseCsvRow(line);
+                    if (cols is null)
+                    {
+                        return (false,
+                            $"CSV line {recordCount + 1} has unbalanced quotes (multiline fields are unsupported).",
+                            null, null);
+                    }
+
+                    if (isFirstLine)
+                    {
+                        isFirstLine = false;
+                        var headerLower = cols.Select(c => c.Trim().ToLowerInvariant().Trim('"', '\'')).ToList();
+                        var pIdx = headerLower.FindIndex(h => h is "prompt" or "question" or "inquiry");
+                        var cIdx = headerLower.FindIndex(h => h is "completion" or "response" or "answer");
+                        if (pIdx != -1 && cIdx != -1)
+                        {
+                            promptColIdx = pIdx;
+                            compColIdx = cIdx;
+                            continue;
+                        }
+                    }
+
+                    if (cols.Count > Math.Max(promptColIdx, compColIdx))
+                    {
+                        prompt = cols[promptColIdx].Trim();
+                        completion = cols[compColIdx].Trim();
+                    }
+                    else if (cols.Count >= 2)
+                    {
+                        prompt = cols[0].Trim();
+                        completion = cols[1].Trim();
+                    }
+                    else
+                    {
+                        return (false,
+                            $"CSV line {recordCount + 1} has insufficient columns (expected at least prompt and completion).",
+                            null, null);
+                    }
+                }
+                else
+                {
+                    isFirstLine = false;
+                    JsonDocument doc;
+                    try
+                    {
+                        doc = JsonDocument.Parse(line);
+                    }
+                    catch (Exception ex)
+                    {
+                        return (false, $"Invalid JSON at line {recordCount + 1}: {ex.Message}", null, null);
+                    }
+
+                    using (doc)
+                    {
+                        var root = doc.RootElement;
+                        if (!root.TryGetProperty("prompt", out var promptElem) || promptElem.ValueKind != JsonValueKind.String)
+                        {
+                            return (false, $"Line {recordCount + 1} is missing required string 'prompt' property.", null, null);
+                        }
+
+                        if (!root.TryGetProperty("completion", out var compElem) || compElem.ValueKind != JsonValueKind.String)
+                        {
+                            return (false, $"Line {recordCount + 1} is missing required string 'completion' property.", null, null);
+                        }
+
+                        prompt = promptElem.GetString()?.Trim() ?? "";
+                        completion = compElem.GetString()?.Trim() ?? "";
+                    }
+                }
+
+                if (prompt.Length < 3 || completion.Length < 1)
+                {
+                    return (false, $"Line {recordCount + 1} has empty or insufficiently short prompt/completion tokens.", null, null);
+                }
+
+                if (prompt.Length > 10_000 || completion.Length > 10_000)
+                {
+                    return (false, $"Line {recordCount + 1} exceeds maximum permitted length of 10,000 characters per field.", null, null);
+                }
+
+                validatedRecords.Add((prompt, completion));
+                recordCount++;
+
+                if (recordCount > MaxRecordCount)
+                {
+                    return (false, $"Dataset exceeds maximum permitted ceiling of {MaxRecordCount:N0} records.", null, null);
+                }
+            }
+
+            if (recordCount == 0)
+            {
+                return (false, "Dataset contains no valid records.", null, null);
+            }
+
+            return (true, null, sourceResolvedPath, validatedRecords);
         }
     }
 
@@ -266,7 +480,7 @@ public sealed class DatasetService : IDatasetService
         @"\b(?:\d{4}[ -]?){3}\d{4}\b|\b\d{15,16}\b",
         System.Text.RegularExpressions.RegexOptions.Compiled);
 
-    private static string? ScanForPii(string text)
+    public static string? ScanForPii(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
 
@@ -370,5 +584,60 @@ public sealed class DatasetService : IDatasetService
 
         fields.Add(sb.ToString().Trim());
         return fields;
+    }
+
+    public static bool ValidateDirectRecords(IReadOnlyList<HowsoDatasetRecord>? records, out string? errorMessage)
+    {
+        if (records is null || records.Count == 0)
+        {
+            errorMessage = "Records list cannot be null or empty.";
+            return false;
+        }
+
+        for (int i = 0; i < records.Count; i++)
+        {
+            var r = records[i];
+            if (r is null)
+            {
+                errorMessage = $"Direct records validation error: Record {i + 1} is null.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(r.Prompt) || r.Prompt.Trim().Length < 3 ||
+                string.IsNullOrWhiteSpace(r.Completion) || r.Completion.Trim().Length < 1)
+            {
+                errorMessage = $"Direct records validation error: Record {i + 1} has empty or insufficiently short prompt/completion tokens.";
+                return false;
+            }
+
+            if (r.Prompt.Length > 10_000 || r.Completion.Length > 10_000)
+            {
+                errorMessage = $"Direct records validation error: Record {i + 1} exceeds maximum token character limit of 10,000 characters.";
+                return false;
+            }
+
+            if (float.IsNaN(r.Weight) || float.IsInfinity(r.Weight) || r.Weight < 0)
+            {
+                errorMessage = $"Direct records validation error: Record {i + 1} has an invalid or negative weight.";
+                return false;
+            }
+
+            var piiPrompt = ScanForPii(r.Prompt);
+            if (piiPrompt is not null)
+            {
+                errorMessage = $"Security/PII compliance violation at record {i + 1}: Detected potential real customer {piiPrompt} in prompt payload.";
+                return false;
+            }
+
+            var piiComp = ScanForPii(r.Completion);
+            if (piiComp is not null)
+            {
+                errorMessage = $"Security/PII compliance violation at record {i + 1}: Detected potential real customer {piiComp} in completion payload.";
+                return false;
+            }
+        }
+
+        errorMessage = null;
+        return true;
     }
 }

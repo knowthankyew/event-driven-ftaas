@@ -1,6 +1,7 @@
 using FtaaSService.Api.Endpoints;
 using FtaaSService.Api.Messaging;
 using FtaaSService.Api.Services;
+using FtaaSService.Api.Services.Howso;
 using FtaaSService.Api.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,9 +13,11 @@ builder.Services.Configure<RabbitMqConfig>(builder.Configuration.GetSection("Rab
 builder.Services.AddSingleton<IFtaasTelemetry, FtaasTelemetry>();
 builder.Services.AddSingleton<IJobRepository, SqliteJobRepository>();
 builder.Services.AddSingleton<IDatasetService, DatasetService>();
+builder.Services.AddSingleton<IHowsoClient, HowsoClient>();
 builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
 builder.Services.AddHostedService<JobStatusListener>();
 builder.Services.AddHttpClient();
+builder.Services.AddMemoryCache(options => { options.SizeLimit = 100_000; });
 
 // Add ProblemDetails & CORS
 builder.Services.AddProblemDetails();

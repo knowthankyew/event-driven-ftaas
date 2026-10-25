@@ -21,5 +21,8 @@ This platform enables fine-tuning and inference orchestration with third-party f
 - **`google/gemma-2-2b-it`**: Developed and published by Google LLC. Available under the Google Gemma Terms of Use. Users and operators must accept Google's terms and adhere to the Gemma Prohibited Use Policy prior to downloading or fine-tuning weights.
 - **`microsoft/BitNet-b1.58-2B-4T`**: Developed and published by Microsoft Corporation. Licensed under the MIT License. Available via Microsoft BitNet / Hugging Face.
 
+## 5. Optional Containerized Sidecars & Microservice Isolation Notice
+- **`howso-service` (FTaaS Data Arbiter)**: Implements information-theoretic instance-based learning principles and equations (Laplace-Lukaszyk-Karmowski distance, marginal surprisal, and information-theoretic dataset ablation) based on research by Dr. Christopher J. Hazard et al. (Howso Incorporated). The containerized service and its reference implementation are licensed under the GNU Affero General Public License v3 (AGPL-3.0) in `src/howso-service/LICENSE-AGPL.txt`. To preserve the MIT license of `event-driven-ftaas`, this capability executes strictly as an isolated containerized network service over HTTP/REST (port 5200). No AGPL source or binary dependencies are linked in-process into the primary .NET API or PyTorch Worker runtimes.
+
 See [LICENSE](./LICENSE) for root license terms.
 

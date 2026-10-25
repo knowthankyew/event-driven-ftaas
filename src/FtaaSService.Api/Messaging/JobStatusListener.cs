@@ -116,6 +116,11 @@ public sealed class JobStatusListener : BackgroundService
             {
                 break;
             }
+            catch (RabbitMQ.Client.Exceptions.BrokerUnreachableException)
+            {
+                _logger.LogWarning("RabbitMQ broker ({Host}:{Port}) is offline. Retrying in 5s... (Studio preview mode active)", _config.HostName, _config.Port);
+                await Task.Delay(5000, stoppingToken);
+            }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "RabbitMQ listener encountered an error. Retrying in 5 seconds...");

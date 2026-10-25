@@ -54,7 +54,22 @@
     dropZone: document.getElementById('drop-zone'),
     libraryGrid: document.getElementById('library-grid'),
     overviewAdapters: document.getElementById('stat-adapters'),
-    pipelineTracker: document.getElementById('pipeline-tracker')
+    pipelineTracker: document.getElementById('pipeline-tracker'),
+    howsoStatusPill: document.getElementById('howso-status-pill'),
+    howsoStatusIndicator: document.getElementById('howso-status-indicator'),
+    howsoStatusText: document.getElementById('howso-status-text'),
+    howsoProvenancePanel: document.getElementById('howso-provenance-panel'),
+    howsoGroundingBadge: document.getElementById('howso-grounding-badge'),
+    howsoSurprisalMetric: document.getElementById('howso-surprisal-metric'),
+    howsoNatsVal: document.getElementById('howso-nats-val'),
+    howsoPredictedTag: document.getElementById('howso-predicted-tag'),
+    howsoCandidateTag: document.getElementById('howso-candidate-tag'),
+    howsoConformanceStatus: document.getElementById('howso-conformance-status'),
+    howsoInfluentialList: document.getElementById('howso-influential-list'),
+    howsoExplanationText: document.getElementById('howso-explanation-text'),
+    chkEnableHowso: document.getElementById('chk-enable-howso'),
+    btnPreviewAudit: document.getElementById('btn-preview-audit'),
+    howsoAuditCard: document.getElementById('howso-audit-card')
   };
 
   // Initialize
@@ -62,6 +77,7 @@
     setupTabNavigation();
     setupDropzone();
     setupEventListeners();
+    checkHowsoHealth().catch(() => {});
     await checkEngineHealth();
     await loadModelCatalog();
     await loadPersonas();
@@ -511,6 +527,74 @@
       }
     }
 
+    // Render Howso Mathematical Provenance Card
+    if (data.howsoProvenance && elements.howsoProvenancePanel) {
+      elements.howsoProvenancePanel.style.display = 'block';
+      const prov = data.howsoProvenance;
+
+      if (elements.howsoNatsVal) {
+        elements.howsoNatsVal.textContent = `${prov.measuredSurprisalNats.toFixed(2)} nats`;
+      }
+
+      if (elements.howsoGroundingBadge) {
+        if (prov.isConforming) {
+          elements.howsoGroundingBadge.className = 'badge-grounded';
+          elements.howsoGroundingBadge.textContent = '✓ Verified Manifold';
+        } else {
+          elements.howsoGroundingBadge.className = 'badge-anomaly';
+          elements.howsoGroundingBadge.textContent = '⚠️ High Surprisal';
+        }
+      }
+
+      if (elements.howsoPredictedTag) {
+        elements.howsoPredictedTag.textContent = prov.predictedTag || 'N/A';
+      }
+      if (elements.howsoCandidateTag) {
+        elements.howsoCandidateTag.textContent = prov.candidateTag || 'N/A';
+      }
+      if (elements.howsoConformanceStatus) {
+        elements.howsoConformanceStatus.innerHTML = prov.isConforming
+          ? '<span style="color:#34d399;">Conforming (In-Distribution)</span>'
+          : '<span style="color:#f87171;">Anomalous (Deviating)</span>';
+      }
+
+      if (elements.howsoInfluentialList) {
+        elements.howsoInfluentialList.innerHTML = '';
+        if (prov.influentialCases && prov.influentialCases.length > 0) {
+          prov.influentialCases.forEach(c => {
+            const card = document.createElement('div');
+            card.className = 'influential-case-card';
+            const weight = c.influenceWeightPercent || 0;
+            card.innerHTML = `
+              <div class="case-info">
+                <div class="case-tag-row">
+                  <span class="tag-pill">${escapeHtml(c.tag)}</span>
+                  <span style="font-size:0.75rem; color:var(--text-dim);">Case #${c.caseIndex}</span>
+                </div>
+                <div class="case-prompt-snippet">"${escapeHtml(c.sourcePrompt || '')}"</div>
+              </div>
+              <div class="case-metrics">
+                <div style="font-size:0.75rem; font-weight:600; color:#a5b4fc;">${weight}% Influence</div>
+                <div class="influence-bar-wrap">
+                  <div class="influence-bar-fill" style="width: ${Math.min(100, Math.max(5, weight))}%;"></div>
+                </div>
+                <div style="font-size:0.7rem; color:var(--text-dim);">${c.surprisalNats.toFixed(2)} nats</div>
+              </div>
+            `;
+            elements.howsoInfluentialList.appendChild(card);
+          });
+        } else {
+          elements.howsoInfluentialList.innerHTML = '<div style="font-size:0.75rem; color:var(--text-dim);">No distinct reference cases identified.</div>';
+        }
+      }
+
+      if (elements.howsoExplanationText) {
+        elements.howsoExplanationText.textContent = prov.explanation || 'Mathematical explanation verified via Lukaszyk-Karmowski expected distance.';
+      }
+    } else if (elements.howsoProvenancePanel) {
+      elements.howsoProvenancePanel.style.display = 'none';
+    }
+
     // Update compliance checklist
     if (state.selectedPersona) {
       renderComplianceRules(state.selectedPersona.complianceRules, data.fineTunedCompletion);
@@ -583,6 +667,39 @@
       if (elements.modeStatusText) {
         elements.modeStatusText.innerHTML = `Engine: <strong style="color: #fbbf24;">Preview Mode</strong>`;
       }
+    }
+  }
+
+  // Active Howso Data Arbiter Health Probe
+  async function checkHowsoHealth() {
+    try {
+      const res = await fetch('/api/v1/studio/howso-health');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.isLive) {
+          if (elements.howsoStatusIndicator) {
+            elements.howsoStatusIndicator.style.background = '#10b981';
+            elements.howsoStatusIndicator.style.boxShadow = '0 0 8px #10b981';
+          }
+          if (elements.howsoStatusText) {
+            elements.howsoStatusText.innerHTML = `Howso Arbiter: <strong style="color: #34d399;">Live (${escapeHtml(data.engine || 'Active')})</strong>`;
+          }
+          return;
+        }
+      }
+      handleHowsoOffline();
+    } catch {
+      handleHowsoOffline();
+    }
+  }
+
+  function handleHowsoOffline() {
+    if (elements.howsoStatusIndicator) {
+      elements.howsoStatusIndicator.style.background = '#64748b';
+      elements.howsoStatusIndicator.style.boxShadow = 'none';
+    }
+    if (elements.howsoStatusText) {
+      elements.howsoStatusText.innerHTML = `Howso Arbiter: <strong style="color: #94a3b8;">Offline</strong>`;
     }
   }
 
@@ -753,6 +870,8 @@
     formData.append('jobName', jobName);
     const selectedModel = (elements.baseModelSelect && elements.baseModelSelect.value) || state.activeBaseModel || 'google/gemma-2-2b-it';
     formData.append('baseModel', selectedModel);
+    const enablePreflight = elements.chkEnableHowso ? elements.chkEnableHowso.checked : true;
+    formData.append('enableHowsoPreflight', enablePreflight ? 'true' : 'false');
     formData.append('hyperparameters', JSON.stringify({
       epochs: 3,
       learningRate: 0.0003,
@@ -773,7 +892,18 @@
       }
 
       const jobData = await res.json();
-      showToast(`Job "${jobData.jobName}" accepted (ID: ${jobData.jobId.substring(0, 8)}...)!`, 'success');
+      if (jobData.howsoPreflightStatus === 'FellBack') {
+        showToast(`Job "${jobData.jobName}" accepted, but Howso preflight audit timed out or failed. Continuing with original dataset.`, 'warning');
+      } else if (jobData.howsoPreflightStatus === 'Skipped' && formData.get('enableHowsoPreflight') === 'true') {
+        showToast(`Job "${jobData.jobName}" accepted. Preflight audit skipped (dataset exceeds ceiling or service unavailable).`, 'warning');
+      } else if (jobData.howsoAudit && (jobData.howsoAudit.ablatedCount > 0 || jobData.howsoAudit.anomalousCount > 0)) {
+        const parts = [];
+        if (jobData.howsoAudit.ablatedCount > 0) parts.push(`ablated ${jobData.howsoAudit.ablatedCount} redundant case(s)`);
+        if (jobData.howsoAudit.anomalousCount > 0) parts.push(`quarantined ${jobData.howsoAudit.anomalousCount} anomaly(ies)`);
+        showToast(`Job "${jobData.jobName}" queued! Howso preflight ${parts.join(' and ')}.`, 'success');
+      } else {
+        showToast(`Job "${jobData.jobName}" accepted (ID: ${jobData.jobId.substring(0, 8)}...)!`, 'success');
+      }
 
       // Add to local state & reload jobs
       await loadJobs();
@@ -788,6 +918,84 @@
       elements.submitJobBtn.disabled = false;
       elements.submitJobBtn.innerHTML = '<span>🚀</span> Train & Deploy Team Adapter';
     }
+  }
+
+  // Preflight Howso Information-Theoretic Audit
+  async function previewHowsoAudit() {
+    const validPairs = state.datasetRows.filter(r => r.prompt && r.prompt.trim() && r.completion && r.completion.trim());
+    if (validPairs.length === 0) {
+      showToast('Please provide at least one prompt-completion pair to audit.', 'error');
+      return;
+    }
+
+    if (!elements.btnPreviewAudit) return;
+    elements.btnPreviewAudit.disabled = true;
+    elements.btnPreviewAudit.innerHTML = '<span>⏳</span> Auditing Cases...';
+
+    try {
+      const payload = {
+        records: validPairs.map(p => ({ prompt: p.prompt.trim(), completion: p.completion.trim(), weight: 1.0 })),
+        ablationThreshold: 0.15,
+        anomalyThreshold: 5.0
+      };
+
+      const res = await fetch('/api/v1/jobs/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.isValid) {
+        showToast(data.errorMessage || `Audit failed with HTTP ${res.status}`, 'error');
+        return;
+      }
+
+      renderHowsoAuditSummary(data.summary);
+      showToast('Howso information-theoretic audit complete!', 'success');
+    } catch (err) {
+      showToast(`Audit failed: ${err.message}`, 'error');
+    } finally {
+      elements.btnPreviewAudit.disabled = false;
+      elements.btnPreviewAudit.innerHTML = '<span>🔍</span> Preview Audit';
+    }
+  }
+
+  function renderHowsoAuditSummary(summary) {
+    if (!elements.howsoAuditCard) return;
+    elements.howsoAuditCard.style.display = 'block';
+    elements.howsoAuditCard.innerHTML = `
+      <div style="font-size: 0.8rem; font-weight: 600; color: #c7d2fe; margin-bottom: 0.6rem; display: flex; align-items: center; justify-content: space-between;">
+        <span>📐 Howso Information Metric Audit Preview</span>
+        <span style="font-size: 0.725rem; color: #34d399;">Lukaszyk-Karmowski Laplace Norm</span>
+      </div>
+      <div class="audit-metrics-grid">
+        <div class="audit-metric-box">
+          <div class="audit-metric-label">Original Cases</div>
+          <div class="audit-metric-val">${summary.originalCount}</div>
+        </div>
+        <div class="audit-metric-box">
+          <div class="audit-metric-label">Cleaned Dataset</div>
+          <div class="audit-metric-val cleaned">${summary.cleanedCount}</div>
+        </div>
+        <div class="audit-metric-box">
+          <div class="audit-metric-label">Ablated (Merged)</div>
+          <div class="audit-metric-val ablated">${summary.ablatedCount}</div>
+        </div>
+        <div class="audit-metric-box">
+          <div class="audit-metric-label">Anomalies Quarantined</div>
+          <div class="audit-metric-val anomalous">${summary.anomalousCount}</div>
+        </div>
+      </div>
+      <div style="font-size: 0.75rem; color: var(--text-dim); line-height: 1.4;">
+        ${summary.ablatedCount > 0 
+          ? `✓ <strong>${summary.ablatedCount} redundant case(s)</strong> have surprisal below threshold and will be merged to compress LoRA training time.` 
+          : 'Zero duplicate cases detected.'}
+        ${summary.anomalousCount > 0 
+          ? `⚠️ <strong>${summary.anomalousCount} anomalous case(s)</strong> quarantined from the training manifold.` 
+          : ' Dataset has healthy informational consistency.'}
+      </div>
+    `;
   }
 
   function highlightActivePipelineNode(nodeId) {
@@ -1063,6 +1271,7 @@
   function startPolling() {
     if (state.pollInterval) clearInterval(state.pollInterval);
     state.pollInterval = setInterval(async () => {
+      checkHowsoHealth().catch(() => {});
       await checkEngineHealth();
       await loadJobs();
     }, 8000);
@@ -1080,6 +1289,9 @@
     }
     if (elements.submitJobBtn) {
       elements.submitJobBtn.addEventListener('click', submitFineTuningJob);
+    }
+    if (elements.btnPreviewAudit) {
+      elements.btnPreviewAudit.addEventListener('click', previewHowsoAudit);
     }
     if (elements.baseModelSelect) {
       elements.baseModelSelect.addEventListener('change', updateModelDisclaimer);

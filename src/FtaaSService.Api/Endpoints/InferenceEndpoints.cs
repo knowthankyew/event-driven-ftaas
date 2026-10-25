@@ -1,7 +1,10 @@
 using System.Net.Http.Json;
 using FtaaSService.Api.Domain;
+using FtaaSService.Api.Services;
+using FtaaSService.Api.Services.Howso;
 using FtaaSService.Api.Storage;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace FtaaSService.Api.Endpoints;
 
@@ -10,22 +13,29 @@ public static class InferenceEndpoints
     public static RouteGroupBuilder MapInferenceEndpoints(this RouteGroupBuilder group)
     {
         group.MapPost("/compare", CompareInferenceAsync);
+        group.MapPost("/verify", VerifyProvenanceAsync);
         return group;
     }
 
-    private static async Task<IResult> CompareInferenceAsync(
+    internal static async Task<IResult> CompareInferenceAsync(
         [FromBody] InferenceCompareRequest request,
         [FromServices] IJobRepository jobRepository,
+        [FromServices] IDatasetService datasetService,
+        [FromServices] IHowsoClient howsoClient,
         [FromServices] IHttpClientFactory httpClientFactory,
         [FromServices] IConfiguration configuration,
+        [FromServices] IMemoryCache memoryCache,
+        [FromServices] ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
+        var logger = loggerFactory.CreateLogger("InferenceEndpoints");
         string baseModel = request.BaseModel ?? "HuggingFaceTB/SmolLM2-135M";
         string? adapterPath = request.AdapterPath;
+        FinetuneJob? job = null;
 
         if (!string.IsNullOrWhiteSpace(request.JobId))
         {
-            var job = await jobRepository.GetByIdAsync(request.JobId, cancellationToken);
+            job = await jobRepository.GetByIdAsync(request.JobId, cancellationToken);
             if (job is null)
             {
                 return Results.NotFound(new { error = $"Job '{request.JobId}' not found." });
@@ -70,6 +80,11 @@ public static class InferenceEndpoints
             if (response.IsSuccessStatusCode)
             {
                 var data = await response.Content.ReadFromJsonAsync<InferenceCompareResponse>(cancellationToken: cancellationToken);
+                if (data is not null)
+                {
+                    var provenance = await VerifyProvenanceInternalAsync(howsoClient, datasetService, memoryCache, job, request.Prompt, data.FineTunedCompletion, logger, cancellationToken);
+                    return Results.Ok(data with { HowsoProvenance = provenance });
+                }
                 return Results.Ok(data);
             }
 
@@ -85,7 +100,8 @@ public static class InferenceEndpoints
             if (configuration.GetValue<bool>("STUDIO_PREVIEW_FALLBACK"))
             {
                 var fallback = GenerateStudioPreview(request.Prompt, request.JobId, baseModel, adapterPath);
-                return Results.Ok(fallback);
+                var provenance = await VerifyProvenanceInternalAsync(howsoClient, datasetService, memoryCache, job, request.Prompt, fallback.FineTunedCompletion, logger, cancellationToken);
+                return Results.Ok(fallback with { HowsoProvenance = provenance });
             }
             return Results.Problem(
                 statusCode: StatusCodes.Status502BadGateway,
@@ -101,6 +117,196 @@ public static class InferenceEndpoints
                 detail: "Inference engine timed out while processing completion."
             );
         }
+    }
+
+    private static async Task<List<HowsoDatasetRecord>?> GetDatasetRecordsAsync(
+        IDatasetService datasetService,
+        IMemoryCache memoryCache,
+        FinetuneJob job,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(job.DatasetPath)) return null;
+
+        string cacheKey = $"howso_dataset_{(!string.IsNullOrWhiteSpace(job.DatasetHash) ? job.DatasetHash : job.DatasetPath)}";
+        if (memoryCache.TryGetValue(cacheKey, out List<HowsoDatasetRecord>? cached) && cached is not null)
+        {
+            return cached;
+        }
+
+        var (isValid, _, records) = await datasetService.ValidateAndExtractRecordsAsync(null, job.DatasetPath, cancellationToken);
+        if (isValid && records is not null && records.Count > 0)
+        {
+            var cacheEntryOptions = new MemoryCacheEntryOptions()
+                .SetSize(records.Count)
+                .SetSlidingExpiration(TimeSpan.FromMinutes(30));
+            memoryCache.Set(cacheKey, records, cacheEntryOptions);
+            return records;
+        }
+
+        return null;
+    }
+
+    private static List<HowsoDatasetRecord> SelectRelevantRecords(
+        List<HowsoDatasetRecord> records,
+        string prompt,
+        int maxRecords = 2000)
+    {
+        if (records.Count <= maxRecords)
+        {
+            return records;
+        }
+
+        var promptTokens = prompt
+            .ToLowerInvariant()
+            .Split(new[] { ' ', '\t', '\r', '\n', '.', ',', ';', ':', '!', '?' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet();
+
+        if (promptTokens.Count == 0)
+        {
+            return records.Take(maxRecords).ToList();
+        }
+
+        return records
+            .Select(r =>
+            {
+                int score = 0;
+                var words = r.Prompt
+                    .ToLowerInvariant()
+                    .Split(new[] { ' ', '\t', '\r', '\n', '.', ',', ';', ':', '!', '?' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                foreach (var w in words)
+                {
+                    if (promptTokens.Contains(w)) score++;
+                }
+                return (Record: r, Score: score);
+            })
+            .OrderByDescending(x => x.Score)
+            .Take(maxRecords)
+            .Select(x => x.Record)
+            .ToList();
+    }
+
+    private static async Task<HowsoVerifyResult?> VerifyProvenanceInternalAsync(
+        IHowsoClient howsoClient,
+        IDatasetService datasetService,
+        IMemoryCache memoryCache,
+        FinetuneJob? job,
+        string prompt,
+        string fineTunedCompletion,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            List<HowsoDatasetRecord>? refRecords = null;
+            if (job is not null)
+            {
+                refRecords = await GetDatasetRecordsAsync(datasetService, memoryCache, job, cancellationToken);
+                if (refRecords is null || refRecords.Count == 0)
+                {
+                    return null;
+                }
+            }
+            else
+            {
+                refRecords = StudioEndpoints.GetDefaultReferenceRecords(prompt);
+            }
+
+            var selectedRecords = SelectRelevantRecords(refRecords, prompt);
+            return await howsoClient.VerifyCompletionAsync(selectedRecords, prompt, fineTunedCompletion, cancellationToken: cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to compute Howso completion provenance; continuing with graceful fallback.");
+            return null;
+        }
+    }
+
+    internal static async Task<IResult> VerifyProvenanceAsync(
+        [FromBody] InferenceVerifyRequest request,
+        [FromServices] IJobRepository jobRepository,
+        [FromServices] IDatasetService datasetService,
+        [FromServices] IHowsoClient howsoClient,
+        [FromServices] IMemoryCache memoryCache,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Prompt) || string.IsNullOrWhiteSpace(request.CandidateCompletion))
+        {
+            return Results.BadRequest(new { error = "Prompt and CandidateCompletion cannot be empty." });
+        }
+
+        if (request.Prompt.Length > 10_000 || request.CandidateCompletion.Length > 10_000)
+        {
+            return Results.BadRequest(new { error = "Prompt and CandidateCompletion cannot exceed 10,000 characters." });
+        }
+
+        if (request.ReferenceRecords is not null && request.ReferenceRecords.Count > 0)
+        {
+            if (request.ReferenceRecords.Count > DatasetService.MaxPreviewAuditRecords)
+            {
+                return Results.BadRequest(new
+                {
+                    error = $"Reference records payload exceeds maximum limit of {DatasetService.MaxPreviewAuditRecords:N0} records."
+                });
+            }
+
+            if (!DatasetService.ValidateDirectRecords(request.ReferenceRecords, out var directError))
+            {
+                return Results.BadRequest(new { error = directError });
+            }
+        }
+
+        List<HowsoDatasetRecord>? refRecords = request.ReferenceRecords;
+
+        if (refRecords is null || refRecords.Count == 0)
+        {
+            if (!string.IsNullOrWhiteSpace(request.JobId))
+            {
+                var job = await jobRepository.GetByIdAsync(request.JobId, cancellationToken);
+                if (job is null)
+                {
+                    return Results.NotFound(new { error = $"Job '{request.JobId}' not found." });
+                }
+
+                refRecords = await GetDatasetRecordsAsync(datasetService, memoryCache, job, cancellationToken);
+                if (refRecords is null || refRecords.Count == 0)
+                {
+                    return Results.UnprocessableEntity(new { error = $"Dataset for job '{request.JobId}' is empty, missing, or invalid." });
+                }
+            }
+            else
+            {
+                refRecords = StudioEndpoints.GetDefaultReferenceRecords(request.Prompt);
+            }
+        }
+
+        var selectedRecords = SelectRelevantRecords(refRecords, request.Prompt);
+
+        var result = await howsoClient.VerifyCompletionAsync(
+            selectedRecords,
+            request.Prompt,
+            request.CandidateCompletion,
+            maxTolerableSurprisal: request.MaxTolerableSurprisal,
+            cancellationToken: cancellationToken);
+
+        if (result is null)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status503ServiceUnavailable,
+                title: "Howso Arbiter Unavailable",
+                detail: "Howso containerized provenance arbiter failed to respond or is offline."
+            );
+        }
+
+        return Results.Ok(new InferenceVerifyResponse
+        {
+            IsConforming = result.IsConforming,
+            Provenance = result,
+            Message = result.Explanation
+        });
     }
 
     private static InferenceCompareResponse GenerateStudioPreview(string prompt, string? jobId, string baseModel, string? adapterPath)
