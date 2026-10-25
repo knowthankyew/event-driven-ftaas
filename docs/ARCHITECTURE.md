@@ -1,5 +1,5 @@
 <!-- diagram-meta
-  last-validated: 2026-10-24
+  last-validated: 2026-10-25
   covers: [src/**, tests/**, scripts/**]
   generated-by: manual
 -->
@@ -28,6 +28,11 @@ flowchart TD
         C[CLI / API Caller] -->|POST /api/v1/jobs| API
         API -->|GET /api/v1/jobs/{id}| DB
         API -->|POST /api/v1/inference/compare| INF[Inference Engine :8000]
+    end
+
+    subgraph DataArbiter["Data Arbiter & Verification (AGPL-3.0 Isolated Microservice)"]
+        API <-->|Preflight dataset ablation & surprisal audit :5200| HOWSO[howso-service :5200]
+        API <-->|Verify completion provenance & attribution :5200| HOWSO
     end
 
     subgraph Broker["Messaging Layer (RabbitMQ AMQP)"]
@@ -455,9 +460,10 @@ ml/
 │   ├── run_bitnet_benchmark.py   # Standalone BitNet live benchmark runner
 │   └── seed_dataset.py           # Domain dataset generator
 ├── tests/
-│   ├── FtaaSService.Api.Tests/   # .NET 10 integration, domain, & controller test suite
+│   ├── FtaaSService.Api.Tests/   # .NET 10 integration, domain, & controller test suite (incl. Howso)
 │   ├── test_bitnet_engine.py     # Python BitNet C++ subprocess serving tests
 │   ├── test_claims_linter.py     # Empirical claims registry & Wilson interval tests
+│   ├── test_howso_service.py     # Howso data arbiter ablation, surprisal, and health tests
 │   ├── test_trainer.py           # Python PEFT/LoRA training unit tests
 │   └── qa-screenshots/           # Playwright UI visual baseline checkpoints
 ├── data/
@@ -469,6 +475,7 @@ ml/
 │   │   ├── Domain/               # Job state machine, entities, validation, ModelCatalog
 │   │   ├── Endpoints/            # Minimal API endpoints (Jobs, Inference, Studio, Health)
 │   │   ├── Messaging/            # RabbitMQ producer & status consumer
+│   │   ├── Services/             # Dataset normalization & Howso client integration
 │   │   ├── Storage/              # SQLite repository
 │   │   ├── wwwroot/              # FTaaS Studio Single Page App (index.html, studio.js)
 │   │   ├── appsettings.json      # Service configuration & preview fallback settings
@@ -482,8 +489,13 @@ ml/
 │   │   ├── exporter.py           # Edge ONNX manifest & adapter exporter
 │   │   ├── evaluator.py          # Benchmark metric calculation
 │   │   └── requirements.txt
-│   └── FtaaSService.Inference/   # Dynamic Adapter Serving Engine
-│       ├── app.py                # FastAPI dynamic serving endpoint & routing
-│       ├── bitnet_engine.py      # Native BitNet C++ AVX2 SIMD serving engine
-│       └── requirements.txt
+│   ├── FtaaSService.Inference/   # Dynamic Adapter Serving Engine
+│   │   ├── app.py                # FastAPI dynamic serving endpoint & routing
+│   │   ├── bitnet_engine.py      # Native BitNet C++ AVX2 SIMD serving engine
+│   │   └── requirements.txt
+│   └── howso-service/            # Containerized Howso Data Arbiter (AGPL-3.0 HTTP Boundary)
+│       ├── Dockerfile            # Standalone container specification (port 5200)
+│       ├── service.py            # Information-theoretic ablation & attribution engine
+│       ├── requirements.txt      # FastAPI, Amalgam, and numeric dependencies
+│       └── LICENSE-AGPL.txt      # AGPL-3.0 license disclosure
 ```
