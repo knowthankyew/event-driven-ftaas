@@ -18,23 +18,27 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 PROHIBITED_WORDS = [
-    re.compile(r"\bbulletproof\b", re.IGNORECASE),
+    re.compile(r"\bbullet-?proof\b", re.IGNORECASE),
+    re.compile(r"\brock\s+solid\b", re.IGNORECASE),
     re.compile(r"\bconclusive\b", re.IGNORECASE),
     re.compile(r"\bdefinitive\b", re.IGNORECASE),
     re.compile(r"\binfinitely scalable\b", re.IGNORECASE),
 ]
 
-DOCS_TO_SCAN = [
-    REPO_ROOT / "docs" / "ARCHITECTURE.md",
-    REPO_ROOT / "README.md",
-    REPO_ROOT / "docs" / "ROADMAP.md",
-    REPO_ROOT / "docs" / "MODEL_PERFORMANCE_COMPARISON.md",
-    REPO_ROOT / "docs" / "BITNET_INTEGRATION_SPECIFICATION.md",
-]
+def get_docs_to_scan():
+    docs = [
+        REPO_ROOT / "README.md",
+        REPO_ROOT / "ROADMAP.md",
+        REPO_ROOT / "ARCHITECTURE.md",
+    ]
+    docs_dir = REPO_ROOT / "docs"
+    if docs_dir.is_dir():
+        docs.extend(sorted(docs_dir.glob("*.md")))
+    return docs
 
 
 def audit_vocabulary(errors: list[str]) -> None:
-    for doc in DOCS_TO_SCAN:
+    for doc in get_docs_to_scan():
         if not doc.is_file():
             continue
         lines = doc.read_text(encoding="utf-8").splitlines()

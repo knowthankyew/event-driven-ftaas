@@ -1,5 +1,6 @@
 <!-- diagram-meta
-  last-validated: 2026-10-25
+  last-validated: 2026-10-26
+  validated-commit: 15f7ad6
   covers: [src/**, tests/**, scripts/**]
   generated-by: manual
 -->
@@ -24,14 +25,14 @@ flowchart TD
     end
 
     subgraph Client["Client Applications / Ingestion"]
-        UI -->|POST /api/v1/jobs multipart or datasetPath| API[.NET 10 Ingestion Gateway :5100]
+        UI -->|POST /api/v1/jobs multipart or datasetPath| API[".NET 10 Ingestion Gateway :5100<br/><code>src/FtaaSService.Api/Program.cs</code>"]
         C[CLI / API Caller] -->|POST /api/v1/jobs| API
-        API -->|GET /api/v1/jobs/{id}| DB
-        API -->|POST /api/v1/inference/compare| INF[Inference Engine :8000]
+        API -->|GET /api/v1/jobs/{id}| DB["SQLite Job State Repository<br/><code>src/FtaaSService.Api/Storage/SqliteJobRepository.cs</code>"]
+        API -->|POST /api/v1/inference/compare| INF["Inference Engine :8000<br/><code>src/FtaaSService.Inference/app.py</code>"]
     end
 
     subgraph DataArbiter["Data Arbiter & Verification (AGPL-3.0 Isolated Microservice)"]
-        API <-->|Preflight dataset ablation & surprisal audit :5200| HOWSO[howso-service :5200]
+        API <-->|Preflight dataset ablation & surprisal audit :5200| HOWSO["howso-service :5200<br/><code>src/howso-service/service.py</code>"]
         API <-->|Verify completion provenance & attribution :5200| HOWSO
     end
 
@@ -44,15 +45,15 @@ flowchart TD
 
     subgraph Storage["Storage & Tracking"]
         API -->|Store dataset & compute SHA-256| DISK[(Data Storage / JSONL)]
-        API <--> DB[(SQLite Job State Repository)]
+        API <--> DB
         PW <--> MLF[MLflow Tracking Server]
         MLF <--> ART[(Artifact Store / LoRA Adapters)]
     end
 
     subgraph Compute["Training Compute Worker (Python)"]
-        RMQ -->|3. Consume job| PW[Python Training Worker]
+        RMQ -->|3. Consume job| PW["Python Training Worker<br/><code>src/FtaaSService.Worker/consumer.py</code>"]
         PW -->|Load JSONL via datasetPath| DISK
-        PW -->|Apply LoRA & Train| HF[SmolLM2-135M / Gemma-2-2B IT / BitNet b1.58 2B-4T]
+        PW -->|Apply LoRA & Train| HF["SmolLM2 / Gemma / BitNet<br/><code>src/FtaaSService.Inference/bitnet_engine.py</code>"]
         PW -->|4. Stream step loss & hardware metrics| MLF
         PW -->|Save adapter weights| ART
     end
