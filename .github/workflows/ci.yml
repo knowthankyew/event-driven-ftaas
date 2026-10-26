@@ -72,10 +72,9 @@ jobs:
       - name: Run Python Unit & Cross-Service Contract Tests
         run: python -m unittest discover -s tests
 
-      - name: Verify Documentation & Benchmark Table Synchronization
+      - name: Execute Claims, Empirical Benchmarks & Governance Gate
         run: |
-          python scripts/sync_docs.py --check
-          python scripts/sync_benchmark_docs.py --check
+          python scripts/audit-claims.py
 
       - name: Generate CycloneDX SBOM
         run: npx --yes @cyclonedx/cdxgen@10.9.3 -o bom.json
