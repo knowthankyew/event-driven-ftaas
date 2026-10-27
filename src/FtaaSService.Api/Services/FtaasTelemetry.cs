@@ -41,6 +41,8 @@ public sealed class FtaasTelemetry : IFtaasTelemetry
             "job_id", "status", "duration_ms", "duration_sec", "base_model", "dataset_hash",
             "dataset_relative_path", "current_step", "total_steps", "progress_pct", "loss",
             "device", "adapter_path", "adapter_size_bytes", "exchange", "routing_key",
+            "surprisal.preflight.enabled", "surprisal.preflight.status", "surprisal.preflight.duration_ms",
+            "surprisal.cases.original_count", "surprisal.cases.ablated_count", "surprisal.cases.anomalous_count",
             "howso.preflight.enabled", "howso.preflight.status", "howso.preflight.duration_ms",
             "howso.cases.original_count", "howso.cases.ablated_count", "howso.cases.anomalous_count"
         });

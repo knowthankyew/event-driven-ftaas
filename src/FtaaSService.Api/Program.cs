@@ -1,6 +1,7 @@
 using FtaaSService.Api.Endpoints;
 using FtaaSService.Api.Messaging;
 using FtaaSService.Api.Services;
+using FtaaSService.Api.Services.Surprisal;
 using FtaaSService.Api.Services.Howso;
 using FtaaSService.Api.Storage;
 
@@ -12,8 +13,10 @@ builder.Services.Configure<RabbitMqConfig>(builder.Configuration.GetSection("Rab
 // Register Core Services
 builder.Services.AddSingleton<IFtaasTelemetry, FtaasTelemetry>();
 builder.Services.AddSingleton<IJobRepository, SqliteJobRepository>();
+builder.Services.AddSingleton<SurprisalClient>();
+builder.Services.AddSingleton<ISurprisalClient>(sp => sp.GetRequiredService<SurprisalClient>());
+builder.Services.AddSingleton<IHowsoClient>(sp => sp.GetRequiredService<SurprisalClient>());
 builder.Services.AddSingleton<IDatasetService, DatasetService>();
-builder.Services.AddSingleton<IHowsoClient, HowsoClient>();
 builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
 builder.Services.AddHostedService<JobStatusListener>();
 builder.Services.AddHttpClient();

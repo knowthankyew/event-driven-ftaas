@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-HOWSO_DIR = Path(__file__).resolve().parent.parent / "src" / "howso-service"
+SURPRISAL_DIR = Path(__file__).resolve().parent.parent / "src" / "surprisal-service"
 
 
 def _find_free_port() -> int:
@@ -19,7 +19,7 @@ def _find_free_port() -> int:
 
 class _SubprocessHttpClient:
     """
-    Lightweight HTTP client communicating with the isolated howso-service
+    Lightweight HTTP client communicating with the isolated surprisal-service
     subprocess over loopback TCP/JSON.
     """
 
@@ -49,9 +49,9 @@ class _SubprocessHttpClient:
             return e.code, json.loads(e.read().decode("utf-8"))
 
 
-class TestHowsoService(unittest.TestCase):
+class TestSurprisalService(unittest.TestCase):
     """
-    Tests howso-service over an isolated out-of-process HTTP boundary to ensure
+    Tests surprisal-service over an isolated out-of-process HTTP boundary to ensure
     clean microservice interface isolation.
     """
 
@@ -75,7 +75,7 @@ class TestHowsoService(unittest.TestCase):
                 "--log-level",
                 "warning",
             ],
-            cwd=str(HOWSO_DIR),
+            cwd=str(SURPRISAL_DIR),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -87,7 +87,7 @@ class TestHowsoService(unittest.TestCase):
         while time.monotonic() < deadline:
             if cls.proc.poll() is not None:
                 _, stderr = cls.proc.communicate(timeout=2)
-                raise RuntimeError(f"howso-service subprocess exited early: {stderr}")
+                raise RuntimeError(f"surprisal-service subprocess exited early: {stderr}")
             try:
                 status, _ = cls.client.get("/health")
                 if status == 200:
@@ -95,7 +95,7 @@ class TestHowsoService(unittest.TestCase):
             except Exception:
                 time.sleep(0.1)
         cls.tearDownClass()
-        raise RuntimeError("Timed out waiting for isolated howso-service subprocess on /health")
+        raise RuntimeError("Timed out waiting for isolated surprisal-service subprocess on /health")
 
     @classmethod
     def tearDownClass(cls):
@@ -113,25 +113,25 @@ class TestHowsoService(unittest.TestCase):
             cls.proc = None
 
     def test_zero_in_process_service_import(self):
-        """Verify that `service` from src/howso-service is NOT loaded in sys.modules."""
+        """Verify that `service` from src/surprisal-service is NOT loaded in sys.modules."""
         for mod_name, mod in list(sys.modules.items()):
             mod_file = getattr(mod, "__file__", None) or ""
             self.assertNotIn(
-                "howso-service",
+                "surprisal-service",
                 str(mod_file),
                 f"Subprocess module '{mod_name}' ({mod_file}) must not be imported in-process.",
             )
 
-    def test_howso_service_health(self):
+    def test_surprisal_service_health(self):
         status, data = self.client.get("/health")
         self.assertEqual(status, 200)
         self.assertEqual(data["status"], "healthy")
-        self.assertEqual(data["service"], "howso-data-arbiter")
+        self.assertEqual(data["service"], "surprisal-data-arbiter")
         self.assertEqual(data["license"], "MIT")
         self.assertFalse(data["native_howso_available"])
         self.assertIn("Reference Information Engine", data["engine"])
 
-    def test_howso_audit_ablation_and_anomaly(self):
+    def test_surprisal_audit_ablation_and_anomaly(self):
         # Load actual sample dataset
         dataset_path = Path(__file__).resolve().parent.parent / "data" / "datasets" / "sample-support-compliance.jsonl"
         with open(dataset_path, "r", encoding="utf-8") as f:
@@ -168,7 +168,7 @@ class TestHowsoService(unittest.TestCase):
         self.assertIn(0, ablated_targets)
         self.assertGreater(body["cleaned_records"][0]["weight"], 1.0)
 
-    def test_howso_verify_completion_provenance(self):
+    def test_surprisal_verify_completion_provenance(self):
         # Load actual sample dataset for realistic statistical distribution
         dataset_path = Path(__file__).resolve().parent.parent / "data" / "datasets" / "sample-support-compliance.jsonl"
         with open(dataset_path, "r", encoding="utf-8") as f:

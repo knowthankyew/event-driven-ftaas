@@ -1,12 +1,13 @@
 using System.Net;
 using System.Text;
+using FtaaSService.Api.Services.Surprisal;
 using FtaaSService.Api.Services.Howso;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FtaaSService.Api.Tests;
 
-public class HowsoClientTests
+public class SurprisalClientTests
 {
     private sealed class DelegatingMockHandler : HttpMessageHandler
     {
@@ -40,6 +41,16 @@ public class HowsoClientTests
         return new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["SURPRISAL_SERVICE_URL"] = baseUrl
+            })
+            .Build();
+    }
+
+    private static IConfiguration CreateLegacyConfig(string baseUrl = "http://localhost:5200")
+    {
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
                 ["HOWSO_SERVICE_URL"] = baseUrl
             })
             .Build();
@@ -60,7 +71,7 @@ public class HowsoClientTests
         });
 
         var factory = new MockHttpClientFactory(handler);
-        var client = new HowsoClient(factory, CreateConfig(), NullLogger<HowsoClient>.Instance);
+        var client = new SurprisalClient(factory, CreateConfig(), NullLogger<SurprisalClient>.Instance);
 
         var result = await client.CheckHealthAsync();
 
@@ -71,11 +82,31 @@ public class HowsoClientTests
     }
 
     [Fact]
+    public async Task CheckHealthAsync_ResolvesLegacyHowsoServiceUrlConfig()
+    {
+        var jsonResponse = "{\"status\": \"Healthy\", \"engine\": \"Independent Reference Information Engine\", \"license\": \"MIT\"}";
+        var handler = new DelegatingMockHandler(req =>
+        {
+            Assert.Equal("http://legacy-arbiter:5200/health", req.RequestUri!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(jsonResponse, Encoding.UTF8, "application/json")
+            };
+        });
+
+        var factory = new MockHttpClientFactory(handler);
+        var client = new SurprisalClient(factory, CreateLegacyConfig("http://legacy-arbiter:5200"), NullLogger<SurprisalClient>.Instance);
+
+        var result = await client.CheckHealthAsync();
+        Assert.True(result.IsLive);
+    }
+
+    [Fact]
     public async Task CheckHealthAsync_ReturnsOffline_WhenEndpointThrowsOrFails()
     {
         var handler = new DelegatingMockHandler(_ => throw new HttpRequestException("Connection refused"));
         var factory = new MockHttpClientFactory(handler);
-        var client = new HowsoClient(factory, CreateConfig(), NullLogger<HowsoClient>.Instance);
+        var client = new SurprisalClient(factory, CreateConfig(), NullLogger<SurprisalClient>.Instance);
 
         var result = await client.CheckHealthAsync();
 
@@ -118,9 +149,9 @@ public class HowsoClientTests
         });
 
         var factory = new MockHttpClientFactory(handler);
-        var client = new HowsoClient(factory, CreateConfig(), NullLogger<HowsoClient>.Instance);
+        var client = new SurprisalClient(factory, CreateConfig(), NullLogger<SurprisalClient>.Instance);
 
-        var inputRecords = new List<HowsoDatasetRecord>
+        var inputRecords = new List<SurprisalDatasetRecord>
         {
             new("Prompt 1", "Answer 1"),
             new("Prompt 1 duplicate", "Answer 1"),
@@ -149,9 +180,9 @@ public class HowsoClientTests
         });
 
         var factory = new MockHttpClientFactory(handler);
-        var client = new HowsoClient(factory, CreateConfig(), NullLogger<HowsoClient>.Instance);
+        var client = new SurprisalClient(factory, CreateConfig(), NullLogger<SurprisalClient>.Instance);
 
-        var result = await client.AuditDatasetAsync(Array.Empty<HowsoDatasetRecord>());
+        var result = await client.AuditDatasetAsync(Array.Empty<SurprisalDatasetRecord>());
 
         Assert.Null(result);
         Assert.False(invoked);
@@ -166,9 +197,9 @@ public class HowsoClientTests
         });
 
         var factory = new MockHttpClientFactory(handler);
-        var client = new HowsoClient(factory, CreateConfig(), NullLogger<HowsoClient>.Instance);
+        var client = new SurprisalClient(factory, CreateConfig(), NullLogger<SurprisalClient>.Instance);
 
-        var result = await client.AuditDatasetAsync(new[] { new HowsoDatasetRecord("Prompt", "Completion") });
+        var result = await client.AuditDatasetAsync(new[] { new SurprisalDatasetRecord("Prompt", "Completion") });
 
         Assert.Null(result);
     }
@@ -206,9 +237,9 @@ public class HowsoClientTests
         });
 
         var factory = new MockHttpClientFactory(handler);
-        var client = new HowsoClient(factory, CreateConfig(), NullLogger<HowsoClient>.Instance);
+        var client = new SurprisalClient(factory, CreateConfig(), NullLogger<SurprisalClient>.Instance);
 
-        var refRecords = new[] { new HowsoDatasetRecord("Prompt", "Completion [ACH-HELD-VERIFY]") };
+        var refRecords = new[] { new SurprisalDatasetRecord("Prompt", "Completion [ACH-HELD-VERIFY]") };
         var result = await client.VerifyCompletionAsync(refRecords, "Prompt", "Completion [ACH-HELD-VERIFY]");
 
         Assert.NotNull(result);
@@ -223,9 +254,9 @@ public class HowsoClientTests
     {
         var handler = new DelegatingMockHandler(_ => throw new HttpRequestException("Network failure"));
         var factory = new MockHttpClientFactory(handler);
-        var client = new HowsoClient(factory, CreateConfig(), NullLogger<HowsoClient>.Instance);
+        var client = new SurprisalClient(factory, CreateConfig(), NullLogger<SurprisalClient>.Instance);
 
-        var refRecords = new[] { new HowsoDatasetRecord("Prompt", "Completion") };
+        var refRecords = new[] { new SurprisalDatasetRecord("Prompt", "Completion") };
         var result = await client.VerifyCompletionAsync(refRecords, "Prompt", "Completion");
 
         Assert.Null(result);
@@ -239,7 +270,7 @@ public class HowsoClientTests
 
         var handler = new DelegatingMockHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
         var factory = new MockHttpClientFactory(handler);
-        var client = new HowsoClient(factory, CreateConfig(), NullLogger<HowsoClient>.Instance);
+        var client = new SurprisalClient(factory, CreateConfig(), NullLogger<SurprisalClient>.Instance);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             client.CheckHealthAsync(cancellationToken: cts.Token));
@@ -253,9 +284,9 @@ public class HowsoClientTests
 
         var handler = new DelegatingMockHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
         var factory = new MockHttpClientFactory(handler);
-        var client = new HowsoClient(factory, CreateConfig(), NullLogger<HowsoClient>.Instance);
+        var client = new SurprisalClient(factory, CreateConfig(), NullLogger<SurprisalClient>.Instance);
 
-        var refRecords = new[] { new HowsoDatasetRecord("Prompt", "Completion") };
+        var refRecords = new[] { new SurprisalDatasetRecord("Prompt", "Completion") };
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             client.AuditDatasetAsync(refRecords, cancellationToken: cts.Token));
     }
@@ -268,10 +299,21 @@ public class HowsoClientTests
 
         var handler = new DelegatingMockHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
         var factory = new MockHttpClientFactory(handler);
-        var client = new HowsoClient(factory, CreateConfig(), NullLogger<HowsoClient>.Instance);
+        var client = new SurprisalClient(factory, CreateConfig(), NullLogger<SurprisalClient>.Instance);
 
-        var refRecords = new[] { new HowsoDatasetRecord("Prompt", "Completion") };
+        var refRecords = new[] { new SurprisalDatasetRecord("Prompt", "Completion") };
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             client.VerifyCompletionAsync(refRecords, "Prompt", "Completion", cancellationToken: cts.Token));
+    }
+
+    [Fact]
+    public void BackwardCompatibility_HowsoClientAlias_InstantiatesAndImplementsInterfaces()
+    {
+        var handler = new DelegatingMockHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var factory = new MockHttpClientFactory(handler);
+        var client = new HowsoClient(factory, CreateConfig(), NullLogger<SurprisalClient>.Instance);
+
+        Assert.IsAssignableFrom<ISurprisalClient>(client);
+        Assert.IsAssignableFrom<IHowsoClient>(client);
     }
 }

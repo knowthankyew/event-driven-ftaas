@@ -38,15 +38,15 @@ updates:
         patterns:
           - "*"
 
-  # Python Howso Data Arbiter Service
+  # Python Surprisal Data Arbiter Service
   - package-ecosystem: "pip"
-    directory: "/src/howso-service"
+    directory: "/src/surprisal-service"
     schedule:
       interval: "weekly"
     assignees:
       - "knowthankyew"
     groups:
-      python-howso-dependencies:
+      python-surprisal-dependencies:
         patterns:
           - "*"
 
@@ -69,7 +69,7 @@ updates:
         versions: [">= 3.13.0"]
 
   - package-ecosystem: "docker"
-    directory: "/src/howso-service"
+    directory: "/src/surprisal-service"
     schedule:
       interval: "weekly"
     assignees:

@@ -1,5 +1,6 @@
 using System.Text;
 using FtaaSService.Api.Services;
+using FtaaSService.Api.Services.Surprisal;
 using FtaaSService.Api.Services.Howso;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
@@ -54,6 +55,7 @@ public class DatasetServiceTests : IDisposable
         Assert.Equal(1, result.RecordCount);
         Assert.NotNull(result.Sha256Hash);
         Assert.NotNull(result.RelativePath);
+        Assert.Equal("Disabled", result.SurprisalPreflightStatus);
         Assert.Equal("Disabled", result.HowsoPreflightStatus);
 
         var diskPath = Path.Combine(_testDataDir, result.RelativePath);
@@ -231,6 +233,7 @@ public class DatasetServiceTests : IDisposable
         Assert.Equal(1, result.RecordCount);
         Assert.NotNull(result.Sha256Hash);
         Assert.NotNull(result.RelativePath);
+        Assert.Equal("Disabled", result.SurprisalPreflightStatus);
         Assert.Equal("Disabled", result.HowsoPreflightStatus);
     }
 
@@ -267,15 +270,15 @@ public class DatasetServiceTests : IDisposable
         Assert.Contains("unbalanced quotes", result.ErrorMessage);
     }
 
-    private sealed class FakeHowsoClient : IHowsoClient
+    private sealed class FakeSurprisalClient : ISurprisalClient, IHowsoClient
     {
-        public Func<IEnumerable<HowsoDatasetRecord>, Task<HowsoAuditResult?>>? OnAudit { get; set; }
+        public Func<IEnumerable<SurprisalDatasetRecord>, Task<SurprisalAuditResult?>>? OnAudit { get; set; }
 
-        public Task<HowsoHealthResult> CheckHealthAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new HowsoHealthResult(true, "Healthy", "Independent Reference Information Engine (Hazard et al. Laplace-LK Surprisal)", "MIT", "OK"));
+        public Task<SurprisalHealthResult> CheckHealthAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new SurprisalHealthResult(true, "Healthy", "Independent Reference Information Engine (Hazard et al. Laplace-LK Surprisal)", "MIT", "OK"));
 
-        public Task<HowsoAuditResult?> AuditDatasetAsync(
-            IEnumerable<HowsoDatasetRecord> records,
+        public Task<SurprisalAuditResult?> AuditDatasetAsync(
+            IEnumerable<SurprisalDatasetRecord> records,
             float ablationThreshold = 0.15f,
             float anomalyThreshold = 5.0f,
             CancellationToken cancellationToken = default)
@@ -285,26 +288,26 @@ public class DatasetServiceTests : IDisposable
             {
                 return OnAudit(records);
             }
-            return Task.FromResult<HowsoAuditResult?>(null);
+            return Task.FromResult<SurprisalAuditResult?>(null);
         }
 
-        public Task<HowsoVerifyResult?> VerifyCompletionAsync(
-            IEnumerable<HowsoDatasetRecord> referenceRecords,
+        public Task<SurprisalVerifyResult?> VerifyCompletionAsync(
+            IEnumerable<SurprisalDatasetRecord> referenceRecords,
             string prompt,
             string candidateCompletion,
             float maxTolerableSurprisal = 6.0f,
             CancellationToken cancellationToken = default)
-            => Task.FromResult<HowsoVerifyResult?>(null);
+            => Task.FromResult<SurprisalVerifyResult?>(null);
     }
 
     [Fact]
     public async Task NormalizeAndStoreAsync_WithHowsoPreflight_AblatesRecordsAndSetsAuditSummary()
     {
-        var fakeHowso = new FakeHowsoClient
+        var fakeSurprisal = new FakeSurprisalClient
         {
             OnAudit = records =>
             {
-                var summary = new HowsoAuditSummary(
+                var summary = new SurprisalAuditSummary(
                     OriginalCount: 3,
                     CleanedCount: 2,
                     AblatedCount: 1,
@@ -313,12 +316,12 @@ public class DatasetServiceTests : IDisposable
                     AnomalousRecords: new List<Dictionary<string, object>>(),
                     AblatedRecords: new List<Dictionary<string, object>>()
                 );
-                var cleaned = new List<HowsoDatasetRecord>
+                var cleaned = new List<SurprisalDatasetRecord>
                 {
                     new("Prompt 1", "Completion 1", 2.0f),
                     new("Prompt 2", "Completion 2", 1.0f)
                 };
-                return Task.FromResult<HowsoAuditResult?>(new HowsoAuditResult(summary, cleaned));
+                return Task.FromResult<SurprisalAuditResult?>(new SurprisalAuditResult(summary, cleaned));
             }
         };
 
@@ -329,22 +332,24 @@ public class DatasetServiceTests : IDisposable
             })
             .Build();
 
-        var service = new DatasetService(config, NullLogger<DatasetService>.Instance, fakeHowso);
+        var service = new DatasetService(config, NullLogger<DatasetService>.Instance, fakeSurprisal);
 
         var jsonl = "{\"prompt\": \"Prompt 1\", \"completion\": \"Completion 1\"}\n" +
                     "{\"prompt\": \"Prompt 1 dupe\", \"completion\": \"Completion 1\"}\n" +
                     "{\"prompt\": \"Prompt 2\", \"completion\": \"Completion 2\"}\n";
         var file = CreateFormFile(jsonl);
 
-        var result = await service.NormalizeAndStoreAsync("job-howso-preflight", file, null, enableHowsoPreflight: true);
+        var result = await service.NormalizeAndStoreAsync("job-howso-preflight", file, null, enableSurprisalPreflight: true);
 
         Assert.True(result.IsValid);
         Assert.Equal(2, result.RecordCount);
+        Assert.NotNull(result.SurprisalAudit);
         Assert.NotNull(result.HowsoAudit);
+        Assert.Equal("Completed", result.SurprisalPreflightStatus);
         Assert.Equal("Completed", result.HowsoPreflightStatus);
-        Assert.Equal(1, result.HowsoAudit.AblatedCount);
-        Assert.Equal(3, result.HowsoAudit.OriginalCount);
-        Assert.Equal(2, result.HowsoAudit.CleanedCount);
+        Assert.Equal(1, result.SurprisalAudit.AblatedCount);
+        Assert.Equal(3, result.SurprisalAudit.OriginalCount);
+        Assert.Equal(2, result.SurprisalAudit.CleanedCount);
 
         var diskPath = Path.Combine(_testDataDir, result.RelativePath!);
         var lines = await File.ReadAllLinesAsync(diskPath);
@@ -356,9 +361,9 @@ public class DatasetServiceTests : IDisposable
     [Fact]
     public async Task NormalizeAndStoreAsync_WithHowsoPreflight_GracefullyFallsBackWhenHowsoFails()
     {
-        var fakeHowso = new FakeHowsoClient
+        var fakeSurprisal = new FakeSurprisalClient
         {
-            OnAudit = _ => throw new HttpRequestException("Howso sidecar offline")
+            OnAudit = _ => throw new HttpRequestException("Surprisal sidecar offline")
         };
 
         var config = new ConfigurationBuilder()
@@ -368,18 +373,20 @@ public class DatasetServiceTests : IDisposable
             })
             .Build();
 
-        var service = new DatasetService(config, NullLogger<DatasetService>.Instance, fakeHowso);
+        var service = new DatasetService(config, NullLogger<DatasetService>.Instance, fakeSurprisal);
 
         var jsonl = "{\"prompt\": \"Prompt 1\", \"completion\": \"Completion 1\"}\n" +
                     "{\"prompt\": \"Prompt 2\", \"completion\": \"Completion 2\"}\n" +
                     "{\"prompt\": \"Prompt 3\", \"completion\": \"Completion 3\"}\n";
         var file = CreateFormFile(jsonl);
 
-        var result = await service.NormalizeAndStoreAsync("job-howso-fallback", file, null, enableHowsoPreflight: true);
+        var result = await service.NormalizeAndStoreAsync("job-howso-fallback", file, null, enableSurprisalPreflight: true);
 
         Assert.True(result.IsValid);
         Assert.Equal(3, result.RecordCount);
+        Assert.Null(result.SurprisalAudit);
         Assert.Null(result.HowsoAudit);
+        Assert.Equal("FellBack", result.SurprisalPreflightStatus);
         Assert.Equal("FellBack", result.HowsoPreflightStatus);
 
         var diskPath = Path.Combine(_testDataDir, result.RelativePath!);
@@ -391,13 +398,13 @@ public class DatasetServiceTests : IDisposable
     public async Task NormalizeAndStoreAsync_WithHowsoPreflight_ChunksLargeDatasets()
     {
         int invocationCount = 0;
-        var fakeHowso = new FakeHowsoClient
+        var fakeSurprisal = new FakeSurprisalClient
         {
             OnAudit = records =>
             {
                 invocationCount++;
                 var list = records.ToList();
-                var summary = new HowsoAuditSummary(
+                var summary = new SurprisalAuditSummary(
                     OriginalCount: list.Count,
                     CleanedCount: list.Count,
                     AblatedCount: 0,
@@ -406,7 +413,7 @@ public class DatasetServiceTests : IDisposable
                     AnomalousRecords: new List<Dictionary<string, object>>(),
                     AblatedRecords: new List<Dictionary<string, object>>()
                 );
-                return Task.FromResult<HowsoAuditResult?>(new HowsoAuditResult(summary, list));
+                return Task.FromResult<SurprisalAuditResult?>(new SurprisalAuditResult(summary, list));
             }
         };
 
@@ -417,7 +424,7 @@ public class DatasetServiceTests : IDisposable
             })
             .Build();
 
-        var service = new DatasetService(config, NullLogger<DatasetService>.Instance, fakeHowso);
+        var service = new DatasetService(config, NullLogger<DatasetService>.Instance, fakeSurprisal);
 
         // Generate 1600 valid records (exceeding MaxBatchAuditSize of 1000)
         var sb = new StringBuilder();
@@ -427,13 +434,15 @@ public class DatasetServiceTests : IDisposable
         }
         var file = CreateFormFile(sb.ToString());
 
-        var result = await service.NormalizeAndStoreAsync("job-howso-chunked", file, null, enableHowsoPreflight: true);
+        var result = await service.NormalizeAndStoreAsync("job-howso-chunked", file, null, enableSurprisalPreflight: true);
 
         Assert.True(result.IsValid);
         Assert.Equal(1600, result.RecordCount);
+        Assert.NotNull(result.SurprisalAudit);
         Assert.NotNull(result.HowsoAudit);
+        Assert.Equal("Completed", result.SurprisalPreflightStatus);
         Assert.Equal("Completed", result.HowsoPreflightStatus);
-        Assert.Equal(1600, result.HowsoAudit.OriginalCount);
+        Assert.Equal(1600, result.SurprisalAudit.OriginalCount);
         Assert.Equal(2, invocationCount); // 1000 + 600 = 2 chunks
     }
 
@@ -473,7 +482,7 @@ public class DatasetServiceTests : IDisposable
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        var fakeHowso = new FakeHowsoClient();
+        var fakeSurprisal = new FakeSurprisalClient();
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -481,11 +490,11 @@ public class DatasetServiceTests : IDisposable
             })
             .Build();
 
-        var service = new DatasetService(config, NullLogger<DatasetService>.Instance, fakeHowso);
+        var service = new DatasetService(config, NullLogger<DatasetService>.Instance, fakeSurprisal);
         var file = CreateFormFile("{\"prompt\": \"Test prompt\", \"completion\": \"Test completion\"}\n");
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            service.NormalizeAndStoreAsync("job-cancelled", file, null, enableHowsoPreflight: true, cancellationToken: cts.Token));
+            service.NormalizeAndStoreAsync("job-cancelled", file, null, enableSurprisalPreflight: true, cancellationToken: cts.Token));
     }
 }
 

@@ -1,4 +1,4 @@
-# Howso Containerized Microservice (FTaaS Data Arbiter)
+# Surprisal Containerized Microservice (FTaaS Data Arbiter)
 
 > **License**: MIT License — see root [`LICENSE`](../../LICENSE)  
 > **Authorship**: Independent Python implementation written from published equations of Hazard et al. (*arXiv:2510.22809*). Zero upstream Howso/Amalgam source code or SDK packages are included.  

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using FtaaSService.Api.Services.Surprisal;
 using FtaaSService.Api.Services.Howso;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
@@ -13,15 +14,15 @@ public sealed class DatasetService : IDatasetService
 {
     private readonly string _dataRoot;
     private readonly ILogger<DatasetService> _logger;
-    private readonly IHowsoClient? _howsoClient;
+    private readonly ISurprisalClient? _surprisalClient;
 
     public DatasetService(
         IConfiguration configuration,
         ILogger<DatasetService> logger,
-        IHowsoClient? howsoClient = null)
+        ISurprisalClient? surprisalClient = null)
     {
         _logger = logger;
-        _howsoClient = howsoClient;
+        _surprisalClient = surprisalClient;
         _dataRoot = configuration.GetValue<string>("DATA_ROOT") 
                     ?? Path.Combine(Directory.GetCurrentDirectory(), "data");
 
@@ -32,14 +33,16 @@ public sealed class DatasetService : IDatasetService
     public const int MaxRecordCount = 50_000;
     public const int MaxPreviewAuditRecords = 2_500;
     private const int MaxBatchAuditSize = 1_000;
-    private const int MaxHowsoPreflightCeiling = 5_000;
+    public const int MaxSurprisalPreflightCeiling = 5_000;
+    [Obsolete("Use MaxSurprisalPreflightCeiling instead.")]
+    public const int MaxHowsoPreflightCeiling = MaxSurprisalPreflightCeiling;
     private static readonly TimeSpan PreflightTimeout = TimeSpan.FromSeconds(90);
 
     public async Task<DatasetResult> NormalizeAndStoreAsync(
         string jobId,
         IFormFile? uploadedFile,
         string? existingPath,
-        bool enableHowsoPreflight = false,
+        bool enableSurprisalPreflight = false,
         CancellationToken cancellationToken = default)
     {
         try
@@ -52,12 +55,12 @@ public sealed class DatasetService : IDatasetService
                 return new DatasetResult(false, null, null, 0, errorMessage);
             }
 
-            HowsoAuditSummary? howsoAuditSummary = null;
-            string preflightStatus = enableHowsoPreflight ? "Skipped" : "Disabled";
+            SurprisalAuditSummary? surprisalAuditSummary = null;
+            string preflightStatus = enableSurprisalPreflight ? "Skipped" : "Disabled";
             double? preflightDurationMs = null;
             var recordsToWrite = validatedRecords;
 
-            if (enableHowsoPreflight && _howsoClient != null)
+            if (enableSurprisalPreflight && _surprisalClient != null)
             {
                 var preflightStart = Stopwatch.GetTimestamp();
                 using var preflightCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -65,24 +68,24 @@ public sealed class DatasetService : IDatasetService
 
                 try
                 {
-                    if (validatedRecords.Count > MaxHowsoPreflightCeiling)
+                    if (validatedRecords.Count > MaxSurprisalPreflightCeiling)
                     {
                         preflightStatus = "Skipped";
-                        _logger.LogWarning("Job {JobId}: Dataset record count ({Count}) exceeds Howso preflight ceiling ({Ceiling}). Skipping preflight audit to preserve ingestion latency SLA.",
-                            jobId, validatedRecords.Count, MaxHowsoPreflightCeiling);
+                        _logger.LogWarning("Job {JobId}: Dataset record count ({Count}) exceeds Surprisal preflight ceiling ({Ceiling}). Skipping preflight audit to preserve ingestion latency SLA.",
+                            jobId, validatedRecords.Count, MaxSurprisalPreflightCeiling);
                     }
                     else if (validatedRecords.Count <= MaxBatchAuditSize)
                     {
-                        _logger.LogInformation("Job {JobId}: Executing Howso information-theoretic dataset preflight audit on {RecordCount} records", jobId, validatedRecords.Count);
-                        var howsoRecords = validatedRecords.Select(r => new HowsoDatasetRecord(r.Prompt, r.Completion, r.Weight)).ToList();
-                        var auditResult = await _howsoClient.AuditDatasetAsync(howsoRecords, cancellationToken: preflightCts.Token);
+                        _logger.LogInformation("Job {JobId}: Executing Surprisal information-theoretic dataset preflight audit on {RecordCount} records", jobId, validatedRecords.Count);
+                        var surprisalRecords = validatedRecords.Select(r => new SurprisalDatasetRecord(r.Prompt, r.Completion, r.Weight)).ToList();
+                        var auditResult = await _surprisalClient.AuditDatasetAsync(surprisalRecords, cancellationToken: preflightCts.Token);
 
                         if (auditResult != null)
                         {
-                            howsoAuditSummary = auditResult.Summary;
+                            surprisalAuditSummary = auditResult.Summary;
                             preflightStatus = "Completed";
-                            _logger.LogInformation("Job {JobId}: Howso preflight audit complete. Original: {OriginalCount}, Cleaned: {CleanedCount}, Ablated: {AblatedCount}, Anomalous: {AnomalousCount}",
-                                jobId, howsoAuditSummary.OriginalCount, howsoAuditSummary.CleanedCount, howsoAuditSummary.AblatedCount, howsoAuditSummary.AnomalousCount);
+                            _logger.LogInformation("Job {JobId}: Surprisal preflight audit complete. Original: {OriginalCount}, Cleaned: {CleanedCount}, Ablated: {AblatedCount}, Anomalous: {AnomalousCount}",
+                                jobId, surprisalAuditSummary.OriginalCount, surprisalAuditSummary.CleanedCount, surprisalAuditSummary.AblatedCount, surprisalAuditSummary.AnomalousCount);
 
                             if (auditResult.CleanedRecords.Count > 0)
                             {
@@ -90,25 +93,25 @@ public sealed class DatasetService : IDatasetService
                             }
                             else
                             {
-                                howsoAuditSummary = null;
+                                surprisalAuditSummary = null;
                                 preflightStatus = "FellBack";
-                                _logger.LogWarning("Job {JobId}: Howso audit cleaned record count is 0. Retaining original validated records.", jobId);
+                                _logger.LogWarning("Job {JobId}: Surprisal audit cleaned record count is 0. Retaining original validated records.", jobId);
                             }
                         }
                         else
                         {
                             preflightStatus = "FellBack";
-                            _logger.LogWarning("Job {JobId}: Howso preflight audit returned null or failed. Falling back to standard validated records.", jobId);
+                            _logger.LogWarning("Job {JobId}: Surprisal preflight audit returned null or failed. Falling back to standard validated records.", jobId);
                         }
                     }
                     else
                     {
                         // Chunk larger datasets across MaxBatchAuditSize batches to respect service bounds while preventing memory exhaustion
                         var chunks = validatedRecords.Chunk(MaxBatchAuditSize).ToList();
-                        _logger.LogInformation("Job {JobId}: Executing chunked Howso preflight audit across {ChunkCount} batches ({TotalCount} records total)",
+                        _logger.LogInformation("Job {JobId}: Executing chunked Surprisal preflight audit across {ChunkCount} batches ({TotalCount} records total)",
                             jobId, chunks.Count, validatedRecords.Count);
 
-                        var cleanedChunkRecords = new List<HowsoDatasetRecord>();
+                        var cleanedChunkRecords = new List<SurprisalDatasetRecord>();
                         int totalOriginal = 0;
                         int totalCleaned = 0;
                         int totalAblated = 0;
@@ -122,12 +125,12 @@ public sealed class DatasetService : IDatasetService
                         {
                             var chunk = chunks[chunkIdx];
                             int indexOffset = chunkIdx * MaxBatchAuditSize;
-                            var howsoChunk = chunk.Select(r => new HowsoDatasetRecord(r.Prompt, r.Completion, r.Weight)).ToList();
-                            var chunkResult = await _howsoClient.AuditDatasetAsync(howsoChunk, cancellationToken: preflightCts.Token);
+                            var surprisalChunk = chunk.Select(r => new SurprisalDatasetRecord(r.Prompt, r.Completion, r.Weight)).ToList();
+                            var chunkResult = await _surprisalClient.AuditDatasetAsync(surprisalChunk, cancellationToken: preflightCts.Token);
                             if (chunkResult is null)
                             {
                                 preflightStatus = "FellBack";
-                                _logger.LogWarning("Job {JobId}: Howso preflight batch {ChunkIndex} returned null or failed. Aborting chunked audit and falling back to standard records.",
+                                _logger.LogWarning("Job {JobId}: Surprisal preflight batch {ChunkIndex} returned null or failed. Aborting chunked audit and falling back to standard records.",
                                     jobId, chunkIdx + 1);
                                 allSucceeded = false;
                                 break;
@@ -165,7 +168,7 @@ public sealed class DatasetService : IDatasetService
 
                         if (allSucceeded && cleanedChunkRecords.Count > 0)
                         {
-                            howsoAuditSummary = new HowsoAuditSummary(
+                            surprisalAuditSummary = new SurprisalAuditSummary(
                                 OriginalCount: totalOriginal,
                                 CleanedCount: totalCleaned,
                                 AblatedCount: totalAblated,
@@ -176,7 +179,7 @@ public sealed class DatasetService : IDatasetService
                             );
                             preflightStatus = "Completed";
                             recordsToWrite = cleanedChunkRecords.Select(r => (r.Prompt, r.Completion, r.Weight)).ToList();
-                            _logger.LogInformation("Job {JobId}: Chunked Howso preflight audit complete. Original: {OriginalCount}, Cleaned: {CleanedCount}, Ablated: {AblatedCount}, Anomalous: {AnomalousCount}",
+                            _logger.LogInformation("Job {JobId}: Chunked Surprisal preflight audit complete. Original: {OriginalCount}, Cleaned: {CleanedCount}, Ablated: {AblatedCount}, Anomalous: {AnomalousCount}",
                                 jobId, totalOriginal, totalCleaned, totalAblated, totalAnomalous);
                         }
                         else
@@ -192,12 +195,12 @@ public sealed class DatasetService : IDatasetService
                 catch (OperationCanceledException)
                 {
                     preflightStatus = "FellBack";
-                    _logger.LogWarning("Job {JobId}: Howso preflight audit timed out after {TimeoutSeconds}s. Falling back to standard validated records.", jobId, (int)PreflightTimeout.TotalSeconds);
+                    _logger.LogWarning("Job {JobId}: Surprisal preflight audit timed out after {TimeoutSeconds}s. Falling back to standard validated records.", jobId, (int)PreflightTimeout.TotalSeconds);
                 }
                 catch (Exception ex)
                 {
                     preflightStatus = "FellBack";
-                    _logger.LogWarning(ex, "Job {JobId}: Error during Howso preflight audit: {Message}. Falling back to standard validated records.", jobId, ex.Message);
+                    _logger.LogWarning(ex, "Job {JobId}: Error during Surprisal preflight audit: {Message}. Falling back to standard validated records.", jobId, ex.Message);
                 }
                 finally
                 {
@@ -253,7 +256,7 @@ public sealed class DatasetService : IDatasetService
             _logger.LogInformation("Job {JobId}: Successfully normalized {RecordCount} records (SHA: {Hash}) to {Path}",
                 jobId, recordsToWrite.Count, hashHex, relativePath);
 
-            return new DatasetResult(true, relativePath, hashHex, recordsToWrite.Count, null, howsoAuditSummary, preflightStatus, preflightDurationMs);
+            return new DatasetResult(true, relativePath, hashHex, recordsToWrite.Count, null, surprisalAuditSummary, preflightStatus, preflightDurationMs);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -266,7 +269,7 @@ public sealed class DatasetService : IDatasetService
         }
     }
 
-    public async Task<(bool IsValid, string? ErrorMessage, List<HowsoDatasetRecord>? Records)> ValidateAndExtractRecordsAsync(
+    public async Task<(bool IsValid, string? ErrorMessage, List<SurprisalDatasetRecord>? Records)> ValidateAndExtractRecordsAsync(
         IFormFile? uploadedFile,
         string? existingPath,
         CancellationToken cancellationToken = default)
@@ -277,8 +280,8 @@ public sealed class DatasetService : IDatasetService
             return (false, errorMessage, null);
         }
 
-        var howsoRecords = records.Select(r => new HowsoDatasetRecord(r.Prompt, r.Completion, r.Weight)).ToList();
-        return (true, null, howsoRecords);
+        var surprisalRecords = records.Select(r => new SurprisalDatasetRecord(r.Prompt, r.Completion, r.Weight)).ToList();
+        return (true, null, surprisalRecords);
     }
 
     private async Task<(bool IsValid, string? ErrorMessage, string? SourceResolvedPath, List<(string Prompt, string Completion, float Weight)>? Records)> ExtractRecordsInternalAsync(
@@ -618,7 +621,7 @@ public sealed class DatasetService : IDatasetService
         return fields;
     }
 
-    public static bool ValidateDirectRecords(IReadOnlyList<HowsoDatasetRecord>? records, out string? errorMessage)
+    public static bool ValidateDirectRecords(IReadOnlyList<SurprisalDatasetRecord>? records, out string? errorMessage)
     {
         if (records is null || records.Count == 0)
         {

@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using FtaaSService.Api.Domain;
 using FtaaSService.Api.Services;
+using FtaaSService.Api.Services.Surprisal;
 using FtaaSService.Api.Services.Howso;
 using FtaaSService.Api.Storage;
 using Microsoft.AspNetCore.Mvc;
@@ -21,7 +22,7 @@ public static class InferenceEndpoints
         [FromBody] InferenceCompareRequest request,
         [FromServices] IJobRepository jobRepository,
         [FromServices] IDatasetService datasetService,
-        [FromServices] IHowsoClient howsoClient,
+        [FromServices] ISurprisalClient surprisalClient,
         [FromServices] IHttpClientFactory httpClientFactory,
         [FromServices] IConfiguration configuration,
         [FromServices] IMemoryCache memoryCache,
@@ -82,8 +83,8 @@ public static class InferenceEndpoints
                 var data = await response.Content.ReadFromJsonAsync<InferenceCompareResponse>(cancellationToken: cancellationToken);
                 if (data is not null)
                 {
-                    var provenance = await VerifyProvenanceInternalAsync(howsoClient, datasetService, memoryCache, job, request.Prompt, data.FineTunedCompletion, logger, cancellationToken);
-                    return Results.Ok(data with { HowsoProvenance = provenance });
+                    var provenance = await VerifyProvenanceInternalAsync(surprisalClient, datasetService, memoryCache, job, request.Prompt, data.FineTunedCompletion, logger, cancellationToken);
+                    return Results.Ok(data with { SurprisalProvenance = provenance });
                 }
                 return Results.Ok(data);
             }
@@ -100,8 +101,8 @@ public static class InferenceEndpoints
             if (configuration.GetValue<bool>("STUDIO_PREVIEW_FALLBACK"))
             {
                 var fallback = GenerateStudioPreview(request.Prompt, request.JobId, baseModel, adapterPath);
-                var provenance = await VerifyProvenanceInternalAsync(howsoClient, datasetService, memoryCache, job, request.Prompt, fallback.FineTunedCompletion, logger, cancellationToken);
-                return Results.Ok(fallback with { HowsoProvenance = provenance });
+                var provenance = await VerifyProvenanceInternalAsync(surprisalClient, datasetService, memoryCache, job, request.Prompt, fallback.FineTunedCompletion, logger, cancellationToken);
+                return Results.Ok(fallback with { SurprisalProvenance = provenance });
             }
             return Results.Problem(
                 statusCode: StatusCodes.Status502BadGateway,
@@ -119,7 +120,7 @@ public static class InferenceEndpoints
         }
     }
 
-    private static async Task<List<HowsoDatasetRecord>?> GetDatasetRecordsAsync(
+    private static async Task<List<SurprisalDatasetRecord>?> GetDatasetRecordsAsync(
         IDatasetService datasetService,
         IMemoryCache memoryCache,
         FinetuneJob job,
@@ -127,8 +128,8 @@ public static class InferenceEndpoints
     {
         if (string.IsNullOrWhiteSpace(job.DatasetPath)) return null;
 
-        string cacheKey = $"howso_dataset_{(!string.IsNullOrWhiteSpace(job.DatasetHash) ? job.DatasetHash : job.DatasetPath)}";
-        if (memoryCache.TryGetValue(cacheKey, out List<HowsoDatasetRecord>? cached) && cached is not null)
+        string cacheKey = $"surprisal_dataset_{(!string.IsNullOrWhiteSpace(job.DatasetHash) ? job.DatasetHash : job.DatasetPath)}";
+        if (memoryCache.TryGetValue(cacheKey, out List<SurprisalDatasetRecord>? cached) && cached is not null)
         {
             return cached;
         }
@@ -146,8 +147,8 @@ public static class InferenceEndpoints
         return null;
     }
 
-    private static List<HowsoDatasetRecord> SelectRelevantRecords(
-        List<HowsoDatasetRecord> records,
+    private static List<SurprisalDatasetRecord> SelectRelevantRecords(
+        List<SurprisalDatasetRecord> records,
         string prompt,
         int maxRecords = 2000)
     {
@@ -185,8 +186,8 @@ public static class InferenceEndpoints
             .ToList();
     }
 
-    private static async Task<HowsoVerifyResult?> VerifyProvenanceInternalAsync(
-        IHowsoClient howsoClient,
+    private static async Task<SurprisalVerifyResult?> VerifyProvenanceInternalAsync(
+        ISurprisalClient surprisalClient,
         IDatasetService datasetService,
         IMemoryCache memoryCache,
         FinetuneJob? job,
@@ -197,7 +198,7 @@ public static class InferenceEndpoints
     {
         try
         {
-            List<HowsoDatasetRecord>? refRecords = null;
+            List<SurprisalDatasetRecord>? refRecords = null;
             if (job is not null)
             {
                 refRecords = await GetDatasetRecordsAsync(datasetService, memoryCache, job, cancellationToken);
@@ -212,7 +213,7 @@ public static class InferenceEndpoints
             }
 
             var selectedRecords = SelectRelevantRecords(refRecords, prompt);
-            return await howsoClient.VerifyCompletionAsync(selectedRecords, prompt, fineTunedCompletion, cancellationToken: cancellationToken);
+            return await surprisalClient.VerifyCompletionAsync(selectedRecords, prompt, fineTunedCompletion, cancellationToken: cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -220,7 +221,7 @@ public static class InferenceEndpoints
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to compute Howso completion provenance; continuing with graceful fallback.");
+            logger.LogWarning(ex, "Failed to compute Surprisal completion provenance; continuing with graceful fallback.");
             return null;
         }
     }
@@ -229,7 +230,7 @@ public static class InferenceEndpoints
         [FromBody] InferenceVerifyRequest request,
         [FromServices] IJobRepository jobRepository,
         [FromServices] IDatasetService datasetService,
-        [FromServices] IHowsoClient howsoClient,
+        [FromServices] ISurprisalClient surprisalClient,
         [FromServices] IMemoryCache memoryCache,
         CancellationToken cancellationToken)
     {
@@ -259,7 +260,7 @@ public static class InferenceEndpoints
             }
         }
 
-        List<HowsoDatasetRecord>? refRecords = request.ReferenceRecords;
+        List<SurprisalDatasetRecord>? refRecords = request.ReferenceRecords;
 
         if (refRecords is null || refRecords.Count == 0)
         {
@@ -285,7 +286,7 @@ public static class InferenceEndpoints
 
         var selectedRecords = SelectRelevantRecords(refRecords, request.Prompt);
 
-        var result = await howsoClient.VerifyCompletionAsync(
+        var result = await surprisalClient.VerifyCompletionAsync(
             selectedRecords,
             request.Prompt,
             request.CandidateCompletion,
@@ -296,8 +297,8 @@ public static class InferenceEndpoints
         {
             return Results.Problem(
                 statusCode: StatusCodes.Status503ServiceUnavailable,
-                title: "Howso Arbiter Unavailable",
-                detail: "Howso containerized provenance arbiter failed to respond or is offline."
+                title: "Surprisal Arbiter Unavailable",
+                detail: "Surprisal containerized provenance arbiter failed to respond or is offline."
             );
         }
 

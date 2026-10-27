@@ -1,38 +1,40 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace FtaaSService.Api.Services.Howso;
+namespace FtaaSService.Api.Services.Surprisal;
 
-public sealed class HowsoClient : IHowsoClient
+public class SurprisalClient : ISurprisalClient, FtaaSService.Api.Services.Howso.IHowsoClient
 {
     /// <summary>
-    /// Maximum reference records accepted by the containerized Howso verification endpoint.
-    /// Matches the max_length=2000 constraint on VerifyRequest.reference_records in howso-service.
+    /// Maximum reference records accepted by the containerized Surprisal verification endpoint.
+    /// Matches the max_length=2000 constraint on VerifyRequest.reference_records in surprisal-service.
     /// </summary>
     public const int MaxVerifyReferenceRecords = 2000;
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly string _baseUrl;
-    private readonly ILogger<HowsoClient> _logger;
+    private readonly ILogger<SurprisalClient> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
     };
 
-    public HowsoClient(
+    public SurprisalClient(
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
-        ILogger<HowsoClient> logger)
+        ILogger<SurprisalClient> logger)
     {
         _httpClientFactory = httpClientFactory;
         _logger = logger;
-        _baseUrl = (configuration.GetValue<string>("HOWSO_SERVICE_URL") 
-                    ?? configuration["Howso:BaseUrl"] 
+        _baseUrl = (configuration.GetValue<string>("SURPRISAL_SERVICE_URL")
+                    ?? configuration["Surprisal:BaseUrl"]
+                    ?? configuration.GetValue<string>("HOWSO_SERVICE_URL")
+                    ?? configuration["Howso:BaseUrl"]
                     ?? "http://localhost:5200").TrimEnd('/');
     }
 
-    public async Task<HowsoHealthResult> CheckHealthAsync(CancellationToken cancellationToken = default)
+    public async Task<SurprisalHealthResult> CheckHealthAsync(CancellationToken cancellationToken = default)
     {
         var client = _httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(3);
@@ -50,22 +52,22 @@ public sealed class HowsoClient : IHowsoClient
                     string engine = root.TryGetProperty("engine", out var e) ? e.GetString() ?? "unknown" : "unknown";
                     string license = root.TryGetProperty("license", out var l) ? l.GetString() ?? "unknown" : "unknown";
 
-                    return new HowsoHealthResult(
+                    return new SurprisalHealthResult(
                         IsLive: true,
                         Status: status,
                         Engine: engine,
                         License: license,
-                        Message: "Howso containerized data arbiter is active"
+                        Message: "Surprisal containerized data arbiter is active"
                     );
                 }
             }
 
-            return new HowsoHealthResult(
+            return new SurprisalHealthResult(
                 IsLive: false,
                 Status: "Unhealthy",
                 Engine: "None",
                 License: "Unknown",
-                Message: $"Howso service returned HTTP {(int)response.StatusCode}"
+                Message: $"Surprisal service returned HTTP {(int)response.StatusCode}"
             );
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -74,19 +76,19 @@ public sealed class HowsoClient : IHowsoClient
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Howso health check failed: {Message}", ex.Message);
-            return new HowsoHealthResult(
+            _logger.LogDebug(ex, "Surprisal health check failed: {Message}", ex.Message);
+            return new SurprisalHealthResult(
                 IsLive: false,
                 Status: "Offline",
                 Engine: "None",
                 License: "Unknown",
-                Message: "Howso containerized service is unreachable"
+                Message: "Surprisal containerized service is unreachable"
             );
         }
     }
 
-    public async Task<HowsoAuditResult?> AuditDatasetAsync(
-        IEnumerable<HowsoDatasetRecord> records,
+    public async Task<SurprisalAuditResult?> AuditDatasetAsync(
+        IEnumerable<SurprisalDatasetRecord> records,
         float ablationThreshold = 0.15f,
         float anomalyThreshold = 5.0f,
         CancellationToken cancellationToken = default)
@@ -112,18 +114,18 @@ public sealed class HowsoClient : IHowsoClient
             var response = await client.PostAsJsonAsync($"{_baseUrl}/v1/audit/dataset", payload, JsonOptions, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("Howso dataset audit rejected with HTTP {StatusCode}", (int)response.StatusCode);
+                _logger.LogWarning("Surprisal dataset audit rejected with HTTP {StatusCode}", (int)response.StatusCode);
                 return null;
             }
 
-            var result = await response.Content.ReadFromJsonAsync<HowsoAuditResultDto>(JsonOptions, cancellationToken);
+            var result = await response.Content.ReadFromJsonAsync<SurprisalAuditResultDto>(JsonOptions, cancellationToken);
             if (result?.Summary is null)
             {
                 return null;
             }
 
-            var cleaned = result.CleanedRecords.Select(r => new HowsoDatasetRecord(r.Prompt, r.Completion, r.Weight)).ToList();
-            var summary = new HowsoAuditSummary(
+            var cleaned = result.CleanedRecords.Select(r => new SurprisalDatasetRecord(r.Prompt, r.Completion, r.Weight)).ToList();
+            var summary = new SurprisalAuditSummary(
                 OriginalCount: result.Summary.OriginalCount,
                 CleanedCount: result.Summary.CleanedCount,
                 AblatedCount: result.Summary.AblatedCount,
@@ -133,7 +135,7 @@ public sealed class HowsoClient : IHowsoClient
                 AblatedRecords: result.Summary.AblatedRecords ?? new List<Dictionary<string, object>>()
             );
 
-            return new HowsoAuditResult(summary, cleaned);
+            return new SurprisalAuditResult(summary, cleaned);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -141,13 +143,13 @@ public sealed class HowsoClient : IHowsoClient
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to communicate with Howso data arbiter at {BaseUrl}: {Message}. Falling back to standard dataset.", _baseUrl, ex.Message);
+            _logger.LogWarning(ex, "Failed to communicate with Surprisal data arbiter at {BaseUrl}: {Message}. Falling back to standard dataset.", _baseUrl, ex.Message);
             return null;
         }
     }
 
-    public async Task<HowsoVerifyResult?> VerifyCompletionAsync(
-        IEnumerable<HowsoDatasetRecord> referenceRecords,
+    public async Task<SurprisalVerifyResult?> VerifyCompletionAsync(
+        IEnumerable<SurprisalDatasetRecord> referenceRecords,
         string prompt,
         string candidateCompletion,
         float maxTolerableSurprisal = 6.0f,
@@ -175,17 +177,17 @@ public sealed class HowsoClient : IHowsoClient
             var response = await client.PostAsJsonAsync($"{_baseUrl}/v1/verify/completion", payload, JsonOptions, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("Howso completion verification rejected with HTTP {StatusCode}", (int)response.StatusCode);
+                _logger.LogWarning("Surprisal completion verification rejected with HTTP {StatusCode}", (int)response.StatusCode);
                 return null;
             }
 
-            var result = await response.Content.ReadFromJsonAsync<HowsoVerifyResultDto>(JsonOptions, cancellationToken);
+            var result = await response.Content.ReadFromJsonAsync<SurprisalVerifyResultDto>(JsonOptions, cancellationToken);
             if (result is null)
             {
                 return null;
             }
 
-            var cases = result.InfluentialCases.Select(c => new HowsoInfluentialCase(
+            var cases = result.InfluentialCases.Select(c => new SurprisalInfluentialCase(
                 CaseIndex: c.CaseIndex,
                 Tag: c.Tag ?? "UNKNOWN",
                 SurprisalNats: c.SurprisalNats,
@@ -193,7 +195,7 @@ public sealed class HowsoClient : IHowsoClient
                 SourcePrompt: c.SourcePrompt ?? ""
             )).ToList();
 
-            return new HowsoVerifyResult(
+            return new SurprisalVerifyResult(
                 IsConforming: result.IsConforming,
                 MeasuredSurprisalNats: result.MeasuredSurprisalNats,
                 PredictedTag: result.PredictedTag ?? "UNKNOWN",
@@ -208,12 +210,12 @@ public sealed class HowsoClient : IHowsoClient
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Howso verify completion failed: {Message}", ex.Message);
+            _logger.LogWarning(ex, "Surprisal verify completion failed: {Message}", ex.Message);
             return null;
         }
     }
 
-    private sealed record HowsoAuditSummaryDto(
+    private sealed record SurprisalAuditSummaryDto(
         int OriginalCount,
         int CleanedCount,
         int AblatedCount,
@@ -223,18 +225,18 @@ public sealed class HowsoClient : IHowsoClient
         List<Dictionary<string, object>>? AblatedRecords
     );
 
-    private sealed record HowsoRecordDto(
+    private sealed record SurprisalRecordDto(
         string Prompt,
         string Completion,
         float Weight
     );
 
-    private sealed record HowsoAuditResultDto(
-        HowsoAuditSummaryDto Summary,
-        List<HowsoRecordDto> CleanedRecords
+    private sealed record SurprisalAuditResultDto(
+        SurprisalAuditSummaryDto Summary,
+        List<SurprisalRecordDto> CleanedRecords
     );
 
-    private sealed record HowsoInfluentialCaseDto(
+    private sealed record SurprisalInfluentialCaseDto(
         int CaseIndex,
         string? Tag,
         float SurprisalNats,
@@ -242,12 +244,12 @@ public sealed class HowsoClient : IHowsoClient
         string? SourcePrompt
     );
 
-    private sealed record HowsoVerifyResultDto(
+    private sealed record SurprisalVerifyResultDto(
         bool IsConforming,
         float MeasuredSurprisalNats,
         string? PredictedTag,
         string? CandidateTag,
-        List<HowsoInfluentialCaseDto> InfluentialCases,
+        List<SurprisalInfluentialCaseDto> InfluentialCases,
         string? Explanation
     );
 }

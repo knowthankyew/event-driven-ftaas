@@ -1,4 +1,5 @@
 using FtaaSService.Api.Domain;
+using FtaaSService.Api.Services.Surprisal;
 using FtaaSService.Api.Services.Howso;
 using FtaaSService.Api.Storage;
 using Microsoft.AspNetCore.Mvc;
@@ -36,7 +37,8 @@ public static class StudioEndpoints
         group.MapGet("/personas", GetPersonas);
         group.MapGet("/overview", GetOverviewAsync);
         group.MapGet("/engine-health", CheckEngineHealthAsync);
-        group.MapGet("/howso-health", CheckHowsoHealthAsync);
+        group.MapGet("/surprisal-health", CheckSurprisalHealthAsync);
+        group.MapGet("/howso-health", CheckSurprisalHealthAsync);
         group.MapGet("/models", GetModelCatalog);
         return group;
     }
@@ -174,10 +176,10 @@ public static class StudioEndpoints
 
     public static List<StudioPersona> GetPersonaList() => DefaultPersonas;
 
-    public static List<HowsoDatasetRecord> GetDefaultReferenceRecords(string? prompt = null)
+    public static List<SurprisalDatasetRecord> GetDefaultReferenceRecords(string? prompt = null)
     {
         return DefaultPersonas.SelectMany(p => p.SeedPairs)
-            .Select(p => new HowsoDatasetRecord(p.Prompt, p.Completion))
+            .Select(p => new SurprisalDatasetRecord(p.Prompt, p.Completion))
             .ToList();
     }
 
@@ -257,11 +259,11 @@ public static class StudioEndpoints
         }
     }
 
-    private static async Task<IResult> CheckHowsoHealthAsync(
-        [FromServices] IHowsoClient howsoClient,
+    private static async Task<IResult> CheckSurprisalHealthAsync(
+        [FromServices] ISurprisalClient surprisalClient,
         CancellationToken cancellationToken)
     {
-        var result = await howsoClient.CheckHealthAsync(cancellationToken);
+        var result = await surprisalClient.CheckHealthAsync(cancellationToken);
         return Results.Ok(new
         {
             isLive = result.IsLive,

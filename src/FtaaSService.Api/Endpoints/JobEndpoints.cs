@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using FtaaSService.Api.Domain;
 using FtaaSService.Api.Messaging;
 using FtaaSService.Api.Services;
+using FtaaSService.Api.Services.Surprisal;
 using FtaaSService.Api.Services.Howso;
 using FtaaSService.Api.Storage;
 using Microsoft.AspNetCore.Mvc;
@@ -42,7 +43,7 @@ public static class JobEndpoints
         string? datasetPath = null;
         IFormFile? uploadedFile = null;
         Hyperparameters hyperparameters = new();
-        bool enableHowsoPreflight = false;
+        bool enableSurprisalPreflight = false;
 
         if (request.HasFormContentType)
         {
@@ -61,11 +62,18 @@ public static class JobEndpoints
             if (form.TryGetValue("datasetPath", out var formPath) && !string.IsNullOrWhiteSpace(formPath))
                 datasetPath = formPath.ToString();
 
-            if (form.TryGetValue("enableHowsoPreflight", out var formPreflight) && !string.IsNullOrWhiteSpace(formPreflight))
+            if (form.TryGetValue("enableSurprisalPreflight", out var formSurprisalPreflight) && !string.IsNullOrWhiteSpace(formSurprisalPreflight))
             {
-                if (bool.TryParse(formPreflight.ToString(), out var parsedPreflight))
+                if (bool.TryParse(formSurprisalPreflight.ToString(), out var parsedPreflight))
                 {
-                    enableHowsoPreflight = parsedPreflight;
+                    enableSurprisalPreflight = parsedPreflight;
+                }
+            }
+            else if (form.TryGetValue("enableHowsoPreflight", out var formHowsoPreflight) && !string.IsNullOrWhiteSpace(formHowsoPreflight))
+            {
+                if (bool.TryParse(formHowsoPreflight.ToString(), out var parsedPreflight))
+                {
+                    enableSurprisalPreflight = parsedPreflight;
                 }
             }
 
@@ -103,13 +111,17 @@ public static class JobEndpoints
                 datasetPath = body.DatasetPath;
                 if (body.Hyperparameters is not null)
                     hyperparameters = body.Hyperparameters;
-                enableHowsoPreflight = body.EnableHowsoPreflight;
+                enableSurprisalPreflight = body.EnableSurprisalPreflight;
             }
         }
 
-        if (!enableHowsoPreflight && request.Query.TryGetValue("enableHowsoPreflight", out var queryPreflight) && bool.TryParse(queryPreflight, out var qp))
+        if (!enableSurprisalPreflight && request.Query.TryGetValue("enableSurprisalPreflight", out var querySurprisal) && bool.TryParse(querySurprisal, out var qs))
         {
-            enableHowsoPreflight = qp;
+            enableSurprisalPreflight = qs;
+        }
+        else if (!enableSurprisalPreflight && request.Query.TryGetValue("enableHowsoPreflight", out var queryHowso) && bool.TryParse(queryHowso, out var qh))
+        {
+            enableSurprisalPreflight = qh;
         }
 
         // 1. Validate hyperparameters range
@@ -140,7 +152,7 @@ public static class JobEndpoints
         }
 
         // 2. Validate and normalize dataset
-        var normResult = await datasetService.NormalizeAndStoreAsync(jobId, uploadedFile, datasetPath, enableHowsoPreflight, cancellationToken);
+        var normResult = await datasetService.NormalizeAndStoreAsync(jobId, uploadedFile, datasetPath, enableSurprisalPreflight, cancellationToken);
         if (!normResult.IsValid)
         {
             return Results.UnprocessableEntity(new
@@ -174,19 +186,25 @@ public static class JobEndpoints
             ["dataset_relative_path"] = normResult.RelativePath!
         };
 
-        if (enableHowsoPreflight)
+        if (enableSurprisalPreflight)
         {
+            spanAttrs["surprisal.preflight.enabled"] = true;
+            spanAttrs["surprisal.preflight.status"] = normResult.SurprisalPreflightStatus ?? "Disabled";
             spanAttrs["howso.preflight.enabled"] = true;
-            spanAttrs["howso.preflight.status"] = normResult.HowsoPreflightStatus ?? "Disabled";
+            spanAttrs["howso.preflight.status"] = normResult.SurprisalPreflightStatus ?? "Disabled";
             if (normResult.PreflightDurationMs.HasValue)
             {
+                spanAttrs["surprisal.preflight.duration_ms"] = normResult.PreflightDurationMs.Value;
                 spanAttrs["howso.preflight.duration_ms"] = normResult.PreflightDurationMs.Value;
             }
-            if (normResult.HowsoAudit is not null)
+            if (normResult.SurprisalAudit is not null)
             {
-                spanAttrs["howso.cases.original_count"] = normResult.HowsoAudit.OriginalCount;
-                spanAttrs["howso.cases.ablated_count"] = normResult.HowsoAudit.AblatedCount;
-                spanAttrs["howso.cases.anomalous_count"] = normResult.HowsoAudit.AnomalousCount;
+                spanAttrs["surprisal.cases.original_count"] = normResult.SurprisalAudit.OriginalCount;
+                spanAttrs["surprisal.cases.ablated_count"] = normResult.SurprisalAudit.AblatedCount;
+                spanAttrs["surprisal.cases.anomalous_count"] = normResult.SurprisalAudit.AnomalousCount;
+                spanAttrs["howso.cases.original_count"] = normResult.SurprisalAudit.OriginalCount;
+                spanAttrs["howso.cases.ablated_count"] = normResult.SurprisalAudit.AblatedCount;
+                spanAttrs["howso.cases.anomalous_count"] = normResult.SurprisalAudit.AnomalousCount;
             }
         }
 
@@ -246,8 +264,8 @@ public static class JobEndpoints
             DatasetPath = normResult.RelativePath!,
             DatasetHash = normResult.Sha256Hash!,
             CreatedAt = job.CreatedAt,
-            HowsoAudit = normResult.HowsoAudit,
-            HowsoPreflightStatus = normResult.HowsoPreflightStatus
+            SurprisalAudit = normResult.SurprisalAudit,
+            SurprisalPreflightStatus = normResult.SurprisalPreflightStatus
         };
 
         return Results.Accepted($"/api/v1/jobs/{jobId}", response);
@@ -536,12 +554,12 @@ public static class JobEndpoints
     internal static async Task<IResult> AuditDatasetPreviewAsync(
         HttpRequest request,
         [FromServices] IDatasetService datasetService,
-        [FromServices] IHowsoClient howsoClient,
+        [FromServices] ISurprisalClient surprisalClient,
         CancellationToken cancellationToken)
     {
         IFormFile? uploadedFile = null;
         string? datasetPath = null;
-        List<HowsoDatasetRecord>? directRecords = null;
+        List<SurprisalDatasetRecord>? directRecords = null;
         float ablationThreshold = 0.15f;
         float anomalyThreshold = 5.0f;
 
@@ -624,7 +642,7 @@ public static class JobEndpoints
             }
         }
 
-        List<HowsoDatasetRecord> recordsToAudit;
+        List<SurprisalDatasetRecord> recordsToAudit;
 
         if (directRecords is not null && directRecords.Count > 0)
         {
@@ -633,7 +651,7 @@ public static class JobEndpoints
                 return Results.UnprocessableEntity(new DatasetAuditResponse
                 {
                     IsValid = false,
-                    ErrorMessage = $"Direct records payload exceeds maximum preview audit limit of {DatasetService.MaxPreviewAuditRecords:N0} records. For larger datasets, submit a job with enableHowsoPreflight enabled."
+                    ErrorMessage = $"Direct records payload exceeds maximum preview audit limit of {DatasetService.MaxPreviewAuditRecords:N0} records. For larger datasets, submit a job with enableSurprisalPreflight enabled."
                 });
             }
 
@@ -667,14 +685,14 @@ public static class JobEndpoints
                 return Results.UnprocessableEntity(new DatasetAuditResponse
                 {
                     IsValid = false,
-                    ErrorMessage = $"Preview audit dataset exceeds maximum preview limit of {DatasetService.MaxPreviewAuditRecords:N0} records (contained {extractedRecords.Count:N0} records). For larger datasets, submit a training job with enableHowsoPreflight enabled."
+                    ErrorMessage = $"Preview audit dataset exceeds maximum preview limit of {DatasetService.MaxPreviewAuditRecords:N0} records (contained {extractedRecords.Count:N0} records). For larger datasets, submit a training job with enableSurprisalPreflight enabled."
                 });
             }
 
             recordsToAudit = extractedRecords;
         }
 
-        var auditResult = await howsoClient.AuditDatasetAsync(
+        var auditResult = await surprisalClient.AuditDatasetAsync(
             recordsToAudit,
             ablationThreshold: ablationThreshold,
             anomalyThreshold: anomalyThreshold,
@@ -684,8 +702,8 @@ public static class JobEndpoints
         {
             return Results.Problem(
                 statusCode: StatusCodes.Status503ServiceUnavailable,
-                title: "Howso Arbiter Unavailable",
-                detail: "Howso containerized audit service failed to respond or is offline."
+                title: "Surprisal Arbiter Unavailable",
+                detail: "Surprisal containerized audit service failed to respond or is offline."
             );
         }
 

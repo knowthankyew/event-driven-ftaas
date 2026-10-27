@@ -1,12 +1,12 @@
-namespace FtaaSService.Api.Services.Howso;
+namespace FtaaSService.Api.Services.Surprisal;
 
-public record HowsoDatasetRecord(
+public record SurprisalDatasetRecord(
     string Prompt,
     string Completion,
     float Weight = 1.0f
 );
 
-public record HowsoAuditSummary(
+public record SurprisalAuditSummary(
     int OriginalCount,
     int CleanedCount,
     int AblatedCount,
@@ -16,12 +16,12 @@ public record HowsoAuditSummary(
     List<Dictionary<string, object>> AblatedRecords
 );
 
-public record HowsoAuditResult(
-    HowsoAuditSummary Summary,
-    List<HowsoDatasetRecord> CleanedRecords
+public record SurprisalAuditResult(
+    SurprisalAuditSummary Summary,
+    List<SurprisalDatasetRecord> CleanedRecords
 );
 
-public record HowsoInfluentialCase(
+public record SurprisalInfluentialCase(
     int CaseIndex,
     string Tag,
     float SurprisalNats,
@@ -29,16 +29,16 @@ public record HowsoInfluentialCase(
     string SourcePrompt
 );
 
-public record HowsoVerifyResult(
+public record SurprisalVerifyResult(
     bool IsConforming,
     float MeasuredSurprisalNats,
     string PredictedTag,
     string CandidateTag,
-    List<HowsoInfluentialCase> InfluentialCases,
+    List<SurprisalInfluentialCase> InfluentialCases,
     string Explanation
 );
 
-public record HowsoHealthResult(
+public record SurprisalHealthResult(
     bool IsLive,
     string Status,
     string Engine,
@@ -46,18 +46,18 @@ public record HowsoHealthResult(
     string Message
 );
 
-public interface IHowsoClient
+public interface ISurprisalClient
 {
-    Task<HowsoHealthResult> CheckHealthAsync(CancellationToken cancellationToken = default);
+    Task<SurprisalHealthResult> CheckHealthAsync(CancellationToken cancellationToken = default);
 
-    Task<HowsoAuditResult?> AuditDatasetAsync(
-        IEnumerable<HowsoDatasetRecord> records,
+    Task<SurprisalAuditResult?> AuditDatasetAsync(
+        IEnumerable<SurprisalDatasetRecord> records,
         float ablationThreshold = 0.15f,
         float anomalyThreshold = 5.0f,
         CancellationToken cancellationToken = default);
 
-    Task<HowsoVerifyResult?> VerifyCompletionAsync(
-        IEnumerable<HowsoDatasetRecord> referenceRecords,
+    Task<SurprisalVerifyResult?> VerifyCompletionAsync(
+        IEnumerable<SurprisalDatasetRecord> referenceRecords,
         string prompt,
         string candidateCompletion,
         float maxTolerableSurprisal = 6.0f,

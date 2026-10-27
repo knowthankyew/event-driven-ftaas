@@ -32,8 +32,8 @@ flowchart TD
     end
 
     subgraph DataArbiter["Data Arbiter & Verification (Independent MIT Microservice)"]
-        API <-->|Preflight dataset ablation & surprisal audit :5200| HOWSO["howso-service :5200<br/><code>src/howso-service/service.py</code>"]
-        API <-->|Verify completion provenance & attribution :5200| HOWSO
+        API <-->|Preflight dataset ablation & surprisal audit :5200| SURPRISAL["surprisal-service :5200<br/><code>src/surprisal-service/service.py</code>"]
+        API <-->|Verify completion provenance & attribution :5200| SURPRISAL
     end
 
     subgraph Broker["Messaging Layer (RabbitMQ AMQP)"]
@@ -107,7 +107,7 @@ Supported input: `multipart/form-data` with dataset file or JSON body with `data
   "jobName": "financial-sentiment-analysis",
   "baseModel": "HuggingFaceTB/SmolLM2-135M",
   "datasetPath": "datasets/financial-sentiment-train.jsonl",
-  "enableHowsoPreflight": true,
+  "enableSurprisalPreflight": true,
   "hyperparameters": {
     "epochs": 3,
     "batchSize": 4,
@@ -129,14 +129,14 @@ Supported input: `multipart/form-data` with dataset file or JSON body with `data
   "datasetPath": "datasets/f47ac10b58cc4372a5670e02b2c3d479.jsonl",
   "datasetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "createdAt": "2026-09-14T20:10:00Z",
-  "howsoAudit": {
+  "surprisalAudit": {
     "originalCount": 25,
     "cleanedCount": 22,
     "ablatedCount": 2,
     "anomalousCount": 1,
     "meanSurprisal": 1.42
   },
-  "howsoPreflightStatus": "Audited"
+  "surprisalPreflightStatus": "Audited"
 }
 ```
 
@@ -336,7 +336,7 @@ stateDiagram-v2
 
 **State Transition Rules:**
 - **Pre-Persistence Validation (`Validating` $\rightarrow$ `Rejected422` or `Queued`)**: Dataset schema, token heuristics, and PII guardrails run strictly in-memory prior to SQLite persistence. Invalid or non-compliant datasets return `422 Unprocessable Entity` with zero bytes written to disk.
-- `Validating` $\rightarrow$ `Queued`: Job record is persisted in SQLite (`JobStatus.Queued`) only after dataset normalization (and optional Howso preflight audit) succeeds.
+- `Validating` $\rightarrow$ `Queued`: Job record is persisted in SQLite (`JobStatus.Queued`) only after dataset normalization (and optional Surprisal preflight audit) succeeds.
 - `Queued` $\rightarrow$ `Training`: Worker consumer acquires AMQP message and starts loading weights.
 - `Training` $\rightarrow$ `Succeeded`: Adapter weights are written (`adapter_config.json`, `adapter_model.safetensors`) and MLflow run closes cleanly.
 - **Idempotent Terminal Guard**: Stale (`sequenceNumber <= current`) or post-terminal (`Succeeded`, `Failed`) status events are idempotently ignored by `SqliteJobRepository.UpdateStatusIdempotentAsync`.
@@ -456,7 +456,7 @@ Dynamic Inference Server   SageMaker Multi-Model / Triton Inference    Vertex AI
 
 ```plaintext
 ml/
-├── docker-compose.yml            # RabbitMQ, MLflow, and Howso Data Arbiter services
+├── docker-compose.yml            # RabbitMQ, MLflow, and Surprisal Data Arbiter services
 ├── README.md                     # Executive summary, trade-offs & runbook
 ├── NOTICE.md                     # Legal disclosures, privacy invariants & attribution
 ├── docs/                         # Engineering documentation & benchmark records
@@ -480,10 +480,10 @@ ml/
 │   ├── run_bitnet_benchmark.py   # Standalone BitNet live benchmark runner
 │   └── seed_dataset.py           # Domain dataset generator
 ├── tests/
-│   ├── FtaaSService.Api.Tests/   # .NET 10 integration, domain, & controller test suite (incl. Howso)
+│   ├── FtaaSService.Api.Tests/   # .NET 10 integration, domain, & controller test suite (incl. Surprisal)
 │   ├── test_bitnet_engine.py     # Python BitNet C++ subprocess serving tests
 │   ├── test_claims_linter.py     # Empirical claims registry & Wilson interval tests
-│   ├── test_howso_service.py     # Howso data arbiter subprocess HTTP, ablation, and surprisal tests
+│   ├── test_surprisal_service.py # Surprisal data arbiter subprocess HTTP, ablation, and surprisal tests
 │   ├── test_trainer_model_selection.py # Python PEFT/LoRA training & sample-weighted loss unit tests
 │   └── qa-screenshots/           # Playwright UI visual baseline checkpoints
 ├── data/
@@ -495,7 +495,7 @@ ml/
 │   │   ├── Domain/               # Job state machine, entities, validation, SupportedModels
 │   │   ├── Endpoints/            # Minimal API endpoints (Jobs, Inference, Studio, Health)
 │   │   ├── Messaging/            # RabbitMQ producer & status consumer
-│   │   ├── Services/             # Dataset normalization & Howso client integration
+│   │   ├── Services/             # Dataset normalization & Surprisal client integration
 │   │   ├── Storage/              # SQLite repository
 │   │   ├── wwwroot/              # FTaaS Studio Single Page App (index.html, studio.js)
 │   │   ├── appsettings.json      # Service configuration & preview fallback settings
@@ -513,8 +513,8 @@ ml/
 │   │   ├── app.py                # FastAPI dynamic serving endpoint & routing
 │   │   ├── bitnet_engine.py      # Native BitNet C++ AVX2 SIMD serving engine
 │   │   └── requirements.txt
-│   └── howso-service/            # Containerized Independent Reference Information Engine (MIT HTTP Boundary)
+│   └── surprisal-service/        # Containerized Independent Reference Information Engine (MIT HTTP Boundary)
 │       ├── Dockerfile            # Standalone container specification (port 5200)
 │       ├── service.py            # Independent Laplace-LK information-theoretic ablation & attribution engine
-│       └── requirements.txt      # FastAPI, Uvicorn, and Pydantic dependencies (zero upstream Howso/Amalgam packages)
+│       └── requirements.txt      # FastAPI, Uvicorn, and Pydantic dependencies (zero upstream packages)
 ```

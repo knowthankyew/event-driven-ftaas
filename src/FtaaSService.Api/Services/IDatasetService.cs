@@ -1,3 +1,4 @@
+using FtaaSService.Api.Services.Surprisal;
 using FtaaSService.Api.Services.Howso;
 using Microsoft.AspNetCore.Http;
 
@@ -9,10 +10,26 @@ public sealed record DatasetResult(
     string? Sha256Hash,
     int RecordCount,
     string? ErrorMessage,
-    HowsoAuditSummary? HowsoAudit = null,
-    string? HowsoPreflightStatus = null,
+    SurprisalAuditSummary? SurprisalAudit = null,
+    string? SurprisalPreflightStatus = null,
     double? PreflightDurationMs = null
-);
+)
+{
+    // Backward-compatibility getters
+    [Obsolete("Use SurprisalAudit instead.")]
+    public HowsoAuditSummary? HowsoAudit => SurprisalAudit is null ? null : new HowsoAuditSummary(
+        SurprisalAudit.OriginalCount,
+        SurprisalAudit.CleanedCount,
+        SurprisalAudit.AblatedCount,
+        SurprisalAudit.AnomalousCount,
+        SurprisalAudit.MeasuredDeviations,
+        SurprisalAudit.AnomalousRecords,
+        SurprisalAudit.AblatedRecords
+    );
+
+    [Obsolete("Use SurprisalPreflightStatus instead.")]
+    public string? HowsoPreflightStatus => SurprisalPreflightStatus;
+}
 
 public interface IDatasetService
 {
@@ -20,11 +37,11 @@ public interface IDatasetService
         string jobId,
         IFormFile? uploadedFile,
         string? existingPath,
-        bool enableHowsoPreflight = false,
+        bool enableSurprisalPreflight = false,
         CancellationToken cancellationToken = default
     );
 
-    Task<(bool IsValid, string? ErrorMessage, List<HowsoDatasetRecord>? Records)> ValidateAndExtractRecordsAsync(
+    Task<(bool IsValid, string? ErrorMessage, List<SurprisalDatasetRecord>? Records)> ValidateAndExtractRecordsAsync(
         IFormFile? uploadedFile,
         string? existingPath,
         CancellationToken cancellationToken = default

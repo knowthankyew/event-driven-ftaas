@@ -41,11 +41,11 @@ services:
       start_period: 15s
     restart: unless-stopped
 
-  howso:
+  surprisal-service:
     build:
-      context: ./src/howso-service
+      context: ./src/surprisal-service
       dockerfile: Dockerfile
-    container_name: ftaas-howso
+    container_name: ftaas-surprisal
     ports:
       - "127.0.0.1:5200:5200"
     healthcheck:

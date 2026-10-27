@@ -135,7 +135,7 @@ Use this tab to create or modify custom rules for your team:
 If you need to explain the system to an executive, engineering director, or client, this tab provides an animated visual diagram:
 
 1. **Business Lead (You)**: Submits 20–50 policy examples through the web interface.
-2. **Ingestion Gateway (.NET 10) & Data Arbiter (`howso-service`)**: Instantly validates schema & PII rules in memory, optionally runs information-theoretic redundancy ablation and anomaly screening via the isolated Data Arbiter sidecar (`:5200`), and accepts the job in milliseconds so the web browser never hangs waiting on machine learning compute.
+2. **Ingestion Gateway (.NET 10) & Data Arbiter (`surprisal-service`)**: Instantly validates schema & PII rules in memory, optionally runs information-theoretic redundancy ablation and anomaly screening via the isolated Data Arbiter sidecar (`:5200`), and accepts the job in milliseconds so the web browser never hangs waiting on machine learning compute.
 3. **Message Broker (RabbitMQ)**: Sends a lightweight pointer to the dataset, preventing system bottlenecks.
 4. **ML Worker (PyTorch / LoRA)**: Trains a tiny **~1.8 MB adapter file** (for SmolLM2) or **~12.2 MB adapter** (for Gemma 2B) with sample-weighted probability mass preservation instead of duplicating massive multi-gigabyte models.
    - *Training Time*: ~2–3 minutes for SmolLM2 (or ~7 minutes for Gemma 2B) on Apple Silicon (M1–M4) / NVIDIA GPU.

@@ -527,10 +527,10 @@
       }
     }
 
-    // Render Howso Mathematical Provenance Card
-    if (data.howsoProvenance && elements.howsoProvenancePanel) {
+    // Render Surprisal Mathematical Provenance Card
+    const prov = data.surprisalProvenance || data.howsoProvenance;
+    if (prov && elements.howsoProvenancePanel) {
       elements.howsoProvenancePanel.style.display = 'block';
-      const prov = data.howsoProvenance;
 
       if (elements.howsoNatsVal) {
         elements.howsoNatsVal.textContent = `${prov.measuredSurprisalNats.toFixed(2)} nats`;
@@ -670,10 +670,10 @@
     }
   }
 
-  // Active Howso Data Arbiter Health Probe
+  // Active Surprisal Data Arbiter Health Probe
   async function checkHowsoHealth() {
     try {
-      const res = await fetch('/api/v1/studio/howso-health');
+      const res = await fetch('/api/v1/studio/surprisal-health');
       if (res.ok) {
         const data = await res.json();
         if (data.isLive) {
@@ -682,7 +682,7 @@
             elements.howsoStatusIndicator.style.boxShadow = '0 0 8px #10b981';
           }
           if (elements.howsoStatusText) {
-            elements.howsoStatusText.innerHTML = `Howso Arbiter: <strong style="color: #34d399;">Live (${escapeHtml(data.engine || 'Active')})</strong>`;
+            elements.howsoStatusText.innerHTML = `Surprisal Arbiter: <strong style="color: #34d399;">Live (${escapeHtml(data.engine || 'Active')})</strong>`;
           }
           return;
         }
@@ -699,7 +699,7 @@
       elements.howsoStatusIndicator.style.boxShadow = 'none';
     }
     if (elements.howsoStatusText) {
-      elements.howsoStatusText.innerHTML = `Howso Arbiter: <strong style="color: #94a3b8;">Offline</strong>`;
+      elements.howsoStatusText.innerHTML = `Surprisal Arbiter: <strong style="color: #94a3b8;">Offline</strong>`;
     }
   }
 
@@ -871,6 +871,7 @@
     const selectedModel = (elements.baseModelSelect && elements.baseModelSelect.value) || state.activeBaseModel || 'google/gemma-2-2b-it';
     formData.append('baseModel', selectedModel);
     const enablePreflight = elements.chkEnableHowso ? elements.chkEnableHowso.checked : true;
+    formData.append('enableSurprisalPreflight', enablePreflight ? 'true' : 'false');
     formData.append('enableHowsoPreflight', enablePreflight ? 'true' : 'false');
     formData.append('hyperparameters', JSON.stringify({
       epochs: 3,
@@ -892,15 +893,17 @@
       }
 
       const jobData = await res.json();
-      if (jobData.howsoPreflightStatus === 'FellBack') {
-        showToast(`Job "${jobData.jobName}" accepted, but Howso preflight audit timed out or failed. Continuing with original dataset.`, 'warning');
-      } else if (jobData.howsoPreflightStatus === 'Skipped' && formData.get('enableHowsoPreflight') === 'true') {
+      const preflightStatus = jobData.surprisalPreflightStatus || jobData.howsoPreflightStatus;
+      const auditSummary = jobData.surprisalAudit || jobData.howsoAudit;
+      if (preflightStatus === 'FellBack') {
+        showToast(`Job "${jobData.jobName}" accepted, but Surprisal preflight audit timed out or failed. Continuing with original dataset.`, 'warning');
+      } else if (preflightStatus === 'Skipped' && (formData.get('enableSurprisalPreflight') === 'true' || formData.get('enableHowsoPreflight') === 'true')) {
         showToast(`Job "${jobData.jobName}" accepted. Preflight audit skipped (dataset exceeds ceiling or service unavailable).`, 'warning');
-      } else if (jobData.howsoAudit && (jobData.howsoAudit.ablatedCount > 0 || jobData.howsoAudit.anomalousCount > 0)) {
+      } else if (auditSummary && (auditSummary.ablatedCount > 0 || auditSummary.anomalousCount > 0)) {
         const parts = [];
-        if (jobData.howsoAudit.ablatedCount > 0) parts.push(`ablated ${jobData.howsoAudit.ablatedCount} redundant case(s)`);
-        if (jobData.howsoAudit.anomalousCount > 0) parts.push(`quarantined ${jobData.howsoAudit.anomalousCount} anomaly(ies)`);
-        showToast(`Job "${jobData.jobName}" queued! Howso preflight ${parts.join(' and ')}.`, 'success');
+        if (auditSummary.ablatedCount > 0) parts.push(`ablated ${auditSummary.ablatedCount} redundant case(s)`);
+        if (auditSummary.anomalousCount > 0) parts.push(`quarantined ${auditSummary.anomalousCount} anomaly(ies)`);
+        showToast(`Job "${jobData.jobName}" queued! Surprisal preflight ${parts.join(' and ')}.`, 'success');
       } else {
         showToast(`Job "${jobData.jobName}" accepted (ID: ${jobData.jobId.substring(0, 8)}...)!`, 'success');
       }
@@ -952,7 +955,7 @@
       }
 
       renderHowsoAuditSummary(data.summary);
-      showToast('Howso information-theoretic audit complete!', 'success');
+      showToast('Surprisal information-theoretic audit complete!', 'success');
     } catch (err) {
       showToast(`Audit failed: ${err.message}`, 'error');
     } finally {
@@ -966,7 +969,7 @@
     elements.howsoAuditCard.style.display = 'block';
     elements.howsoAuditCard.innerHTML = `
       <div style="font-size: 0.8rem; font-weight: 600; color: #c7d2fe; margin-bottom: 0.6rem; display: flex; align-items: center; justify-content: space-between;">
-        <span>📐 Howso Information Metric Audit Preview</span>
+        <span>📐 Surprisal Information Metric Audit Preview</span>
         <span style="font-size: 0.725rem; color: #34d399;">Lukaszyk-Karmowski Laplace Norm</span>
       </div>
       <div class="audit-metrics-grid">

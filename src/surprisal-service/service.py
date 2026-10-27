@@ -57,11 +57,12 @@ from pydantic import BaseModel, Field
 
 # Implementation flag: zero upstream Howso/Amalgam packages are imported or linked.
 NATIVE_HOWSO_AVAILABLE = False
+NATIVE_ENGINE_AVAILABLE = False
 
 ENGINE_IDENTIFIER = "Independent Reference Information Engine (Hazard et al. Laplace-LK Surprisal)"
 
 app = FastAPI(
-    title="FTaaS Howso Data Arbiter",
+    title="FTaaS Surprisal Data Arbiter",
     description="Containerized Independent Information-Theoretic Dataset Auditing & Provenance Service",
     version="1.0.0"
 )
@@ -115,7 +116,7 @@ class VerifyResponse(BaseModel):
     explanation: str
 
 # -------------------------------------------------------------------
-# HOWSO INFORMATION THEORY ALGORITHMS (Preprint Equations 4, 6, 8, 10, 17)
+# INFORMATION THEORY ALGORITHMS (Inspired by Hazard et al. Equations 4, 6, 7, 8, 10)
 # -------------------------------------------------------------------
 
 def token_jaccard_similarity(s1: Any, s2: Any) -> float:
@@ -206,7 +207,8 @@ def case_surprisal(c1: Dict[str, Any], c2: Dict[str, Any], deviations: Dict[str,
 def health():
     return {
         "status": "healthy",
-        "service": "howso-data-arbiter",
+        "service": "surprisal-data-arbiter",
+        "native_surprisal_available": False,
         "native_howso_available": NATIVE_HOWSO_AVAILABLE,
         "engine": ENGINE_IDENTIFIER,
         "license": "MIT"

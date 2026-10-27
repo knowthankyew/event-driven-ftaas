@@ -4,6 +4,7 @@ using System.Text.Json;
 using FtaaSService.Api.Domain;
 using FtaaSService.Api.Endpoints;
 using FtaaSService.Api.Services;
+using FtaaSService.Api.Services.Surprisal;
 using FtaaSService.Api.Services.Howso;
 using FtaaSService.Api.Storage;
 using Microsoft.AspNetCore.Http;
@@ -70,7 +71,7 @@ public class InferenceProvenanceTests
 
     private sealed class FakeDatasetService : IDatasetService
     {
-        public List<HowsoDatasetRecord>? RecordsToReturn { get; set; }
+        public List<SurprisalDatasetRecord>? RecordsToReturn { get; set; }
         public bool ReturnValid { get; set; } = true;
         public string? ErrorToReturn { get; set; }
 
@@ -78,13 +79,13 @@ public class InferenceProvenanceTests
             string jobId,
             IFormFile? uploadedFile,
             string? existingPath,
-            bool enableHowsoPreflight = false,
+            bool enableSurprisalPreflight = false,
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new DatasetResult(true, "path/test.jsonl", "hash", 10, null));
         }
 
-        public Task<(bool IsValid, string? ErrorMessage, List<HowsoDatasetRecord>? Records)> ValidateAndExtractRecordsAsync(
+        public Task<(bool IsValid, string? ErrorMessage, List<SurprisalDatasetRecord>? Records)> ValidateAndExtractRecordsAsync(
             IFormFile? uploadedFile,
             string? existingPath,
             CancellationToken cancellationToken = default)
@@ -93,41 +94,41 @@ public class InferenceProvenanceTests
         }
     }
 
-    private sealed class FakeHowsoClient : IHowsoClient
+    private sealed class FakeHowsoClient : ISurprisalClient, IHowsoClient
     {
-        public HowsoHealthResult HealthToReturn { get; set; } = new(true, "Healthy", "Amalgam-Hazard-LK", "MIT", "Service is operational");
-        public HowsoAuditResult? AuditToReturn { get; set; }
-        public HowsoVerifyResult? VerifyToReturn { get; set; }
+        public SurprisalHealthResult HealthToReturn { get; set; } = new(true, "Healthy", "Surprisal-Hazard-LK", "MIT", "Service is operational");
+        public SurprisalAuditResult? AuditToReturn { get; set; }
+        public SurprisalVerifyResult? VerifyToReturn { get; set; }
         public bool ShouldThrow { get; set; }
-        public List<HowsoDatasetRecord>? LastReferenceRecords { get; private set; }
+        public List<SurprisalDatasetRecord>? LastReferenceRecords { get; private set; }
         public string? LastPrompt { get; private set; }
         public string? LastCandidateCompletion { get; private set; }
         public float LastMaxTolerableSurprisal { get; private set; }
 
-        public Task<HowsoHealthResult> CheckHealthAsync(CancellationToken cancellationToken = default)
+        public Task<SurprisalHealthResult> CheckHealthAsync(CancellationToken cancellationToken = default)
         {
-            if (ShouldThrow) throw new HttpRequestException("Howso offline");
+            if (ShouldThrow) throw new HttpRequestException("Surprisal offline");
             return Task.FromResult(HealthToReturn);
         }
 
-        public Task<HowsoAuditResult?> AuditDatasetAsync(
-            IEnumerable<HowsoDatasetRecord> records,
+        public Task<SurprisalAuditResult?> AuditDatasetAsync(
+            IEnumerable<SurprisalDatasetRecord> records,
             float ablationThreshold = 0.15f,
             float anomalyThreshold = 5,
             CancellationToken cancellationToken = default)
         {
-            if (ShouldThrow) throw new HttpRequestException("Howso offline");
+            if (ShouldThrow) throw new HttpRequestException("Surprisal offline");
             return Task.FromResult(AuditToReturn);
         }
 
-        public Task<HowsoVerifyResult?> VerifyCompletionAsync(
-            IEnumerable<HowsoDatasetRecord> referenceRecords,
+        public Task<SurprisalVerifyResult?> VerifyCompletionAsync(
+            IEnumerable<SurprisalDatasetRecord> referenceRecords,
             string prompt,
             string candidateCompletion,
             float maxTolerableSurprisal = 6,
             CancellationToken cancellationToken = default)
         {
-            if (ShouldThrow) throw new HttpRequestException("Howso offline");
+            if (ShouldThrow) throw new HttpRequestException("Surprisal offline");
             LastReferenceRecords = referenceRecords.ToList();
             LastPrompt = prompt;
             LastCandidateCompletion = candidateCompletion;
@@ -174,12 +175,12 @@ public class InferenceProvenanceTests
         var datasetService = new FakeDatasetService();
         var howsoClient = new FakeHowsoClient
         {
-            VerifyToReturn = new HowsoVerifyResult(
+            VerifyToReturn = new SurprisalVerifyResult(
                 IsConforming: true,
                 MeasuredSurprisalNats: 0.85f,
                 PredictedTag: "MSA-SEC8-NONREF",
                 CandidateTag: "MSA-SEC8-NONREF",
-                InfluentialCases: new List<HowsoInfluentialCase>
+                InfluentialCases: new List<SurprisalInfluentialCase>
                 {
                     new(1, "MSA-SEC8-NONREF", 0.85f, 95.0f, "What is the policy for cancellation after 45 days?")
                 },
@@ -197,11 +198,12 @@ public class InferenceProvenanceTests
 
         var okResult = Assert.IsType<Ok<InferenceCompareResponse>>(result);
         Assert.NotNull(okResult.Value);
+        Assert.NotNull(okResult.Value.SurprisalProvenance);
         Assert.NotNull(okResult.Value.HowsoProvenance);
-        Assert.True(okResult.Value.HowsoProvenance.IsConforming);
-        Assert.Equal(0.85f, okResult.Value.HowsoProvenance.MeasuredSurprisalNats);
-        Assert.Equal("MSA-SEC8-NONREF", okResult.Value.HowsoProvenance.PredictedTag);
-        Assert.Single(okResult.Value.HowsoProvenance.InfluentialCases);
+        Assert.True(okResult.Value.SurprisalProvenance.IsConforming);
+        Assert.Equal(0.85f, okResult.Value.SurprisalProvenance.MeasuredSurprisalNats);
+        Assert.Equal("MSA-SEC8-NONREF", okResult.Value.SurprisalProvenance.PredictedTag);
+        Assert.Single(okResult.Value.SurprisalProvenance.InfluentialCases);
     }
 
     [Fact]
@@ -213,12 +215,12 @@ public class InferenceProvenanceTests
         var datasetService = new FakeDatasetService();
         var howsoClient = new FakeHowsoClient
         {
-            VerifyToReturn = new HowsoVerifyResult(
+            VerifyToReturn = new SurprisalVerifyResult(
                 IsConforming: true,
                 MeasuredSurprisalNats: 1.10f,
                 PredictedTag: "ACH-HELD-VERIFY",
                 CandidateTag: "ACH-HELD-VERIFY",
-                InfluentialCases: new List<HowsoInfluentialCase>(),
+                InfluentialCases: new List<SurprisalInfluentialCase>(),
                 Explanation: "Conforming studio preview"
             )
         };
@@ -234,8 +236,9 @@ public class InferenceProvenanceTests
         var okResult = Assert.IsType<Ok<InferenceCompareResponse>>(result);
         Assert.NotNull(okResult.Value);
         Assert.True(okResult.Value.IsSimulated);
+        Assert.NotNull(okResult.Value.SurprisalProvenance);
         Assert.NotNull(okResult.Value.HowsoProvenance);
-        Assert.True(okResult.Value.HowsoProvenance.IsConforming);
+        Assert.True(okResult.Value.SurprisalProvenance.IsConforming);
     }
 
     [Fact]
@@ -298,7 +301,7 @@ public class InferenceProvenanceTests
         };
         jobRepo.AddJob(job);
 
-        var customRecords = new List<HowsoDatasetRecord>
+        var customRecords = new List<SurprisalDatasetRecord>
         {
             new("Custom prompt 1", "Custom completion 1 [TAG-1]"),
             new("Custom prompt 2", "Custom completion 2 [TAG-2]")
@@ -330,7 +333,7 @@ public class InferenceProvenanceTests
         var clientFactory = new MockHttpClientFactory(handler);
         var howsoClient = new FakeHowsoClient
         {
-            VerifyToReturn = new HowsoVerifyResult(true, 0.45f, "TAG-1", "TAG-1", new List<HowsoInfluentialCase>(), "Valid")
+            VerifyToReturn = new SurprisalVerifyResult(true, 0.45f, "TAG-1", "TAG-1", new List<SurprisalInfluentialCase>(), "Valid")
         };
 
         var request = new InferenceCompareRequest
@@ -412,12 +415,12 @@ public class InferenceProvenanceTests
         var datasetService = new FakeDatasetService();
         var howsoClient = new FakeHowsoClient
         {
-            VerifyToReturn = new HowsoVerifyResult(
+            VerifyToReturn = new SurprisalVerifyResult(
                 IsConforming: true,
                 MeasuredSurprisalNats: 1.25f,
                 PredictedTag: "SEC-NO-ADVISORY",
                 CandidateTag: "SEC-NO-ADVISORY",
-                InfluentialCases: new List<HowsoInfluentialCase>
+                InfluentialCases: new List<SurprisalInfluentialCase>
                 {
                     new(0, "SEC-NO-ADVISORY", 1.25f, 98.0f, "Should I invest my 401k into Bitcoin?")
                 },
@@ -463,7 +466,7 @@ public class InferenceProvenanceTests
 
         var problemResult = Assert.IsType<ProblemHttpResult>(result);
         Assert.Equal(StatusCodes.Status503ServiceUnavailable, problemResult.StatusCode);
-        Assert.Equal("Howso Arbiter Unavailable", problemResult.ProblemDetails.Title);
+        Assert.Equal("Surprisal Arbiter Unavailable", problemResult.ProblemDetails.Title);
     }
 
     [Theory]
@@ -508,7 +511,7 @@ public class InferenceProvenanceTests
         };
         jobRepo.AddJob(job);
 
-        var records = new List<HowsoDatasetRecord>
+        var records = new List<SurprisalDatasetRecord>
         {
             new("Question A", "Answer A [TAG-A]"),
             new("Question B", "Answer B [TAG-B]")
@@ -522,7 +525,7 @@ public class InferenceProvenanceTests
 
         var howsoClient = new FakeHowsoClient
         {
-            VerifyToReturn = new HowsoVerifyResult(true, 0.5f, "TAG-A", "TAG-A", new List<HowsoInfluentialCase>(), "Ok")
+            VerifyToReturn = new SurprisalVerifyResult(true, 0.5f, "TAG-A", "TAG-A", new List<SurprisalInfluentialCase>(), "Ok")
         };
 
         var request = new InferenceVerifyRequest
@@ -549,7 +552,7 @@ public class InferenceProvenanceTests
         var datasetService = new FakeDatasetService();
         var howsoClient = new FakeHowsoClient
         {
-            VerifyToReturn = new HowsoVerifyResult(true, 0.8f, "TAG", "TAG", new List<HowsoInfluentialCase>(), "Ok")
+            VerifyToReturn = new SurprisalVerifyResult(true, 0.8f, "TAG", "TAG", new List<SurprisalInfluentialCase>(), "Ok")
         };
 
         var request = new InferenceVerifyRequest
@@ -598,7 +601,7 @@ public class InferenceProvenanceTests
         {
             Prompt = "Valid prompt",
             CandidateCompletion = "Valid completion",
-            ReferenceRecords = new List<HowsoDatasetRecord>
+            ReferenceRecords = new List<SurprisalDatasetRecord>
             {
                 new("Customer SSN is 123-45-6789", "Processed", 1.0f)
             }
@@ -614,7 +617,7 @@ public class InferenceProvenanceTests
         {
             Prompt = "Valid prompt",
             CandidateCompletion = "Valid completion",
-            ReferenceRecords = new List<HowsoDatasetRecord>
+            ReferenceRecords = new List<SurprisalDatasetRecord>
             {
                 new("Valid prompt 1", "Valid completion 1", -0.5f)
             }
@@ -627,7 +630,7 @@ public class InferenceProvenanceTests
         Assert.Equal(StatusCodes.Status400BadRequest, badRequestWeight.StatusCode);
 
         var oversizedRecords = Enumerable.Range(0, DatasetService.MaxPreviewAuditRecords + 1)
-            .Select(i => new HowsoDatasetRecord($"Prompt {i}", $"Completion {i}"))
+            .Select(i => new SurprisalDatasetRecord($"Prompt {i}", $"Completion {i}"))
             .ToList();
 
         var requestOversized = new InferenceVerifyRequest
@@ -662,7 +665,7 @@ public class InferenceProvenanceTests
         };
         jobRepo.AddJob(job);
 
-        var records = new List<HowsoDatasetRecord>
+        var records = new List<SurprisalDatasetRecord>
         {
             new("Cached question 1", "Cached answer 1 [TAG-1]"),
             new("Cached question 2", "Cached answer 2 [TAG-2]")
@@ -672,7 +675,7 @@ public class InferenceProvenanceTests
         var trackingDatasetService = new TrackingDatasetService(records, () => extractCalls++);
         var howsoClient = new FakeHowsoClient
         {
-            VerifyToReturn = new HowsoVerifyResult(true, 0.5f, "TAG-1", "TAG-1", new List<HowsoInfluentialCase>(), "Ok")
+            VerifyToReturn = new SurprisalVerifyResult(true, 0.5f, "TAG-1", "TAG-1", new List<SurprisalInfluentialCase>(), "Ok")
         };
 
         var isolatedCache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 100_000 });
@@ -739,7 +742,7 @@ public class InferenceProvenanceTests
         var datasetService = new FakeDatasetService
         {
             ReturnValid = true,
-            RecordsToReturn = new List<HowsoDatasetRecord>() // Empty
+            RecordsToReturn = new List<SurprisalDatasetRecord>() // Empty
         };
         var howsoClient = new FakeHowsoClient();
 
@@ -759,22 +762,22 @@ public class InferenceProvenanceTests
 
     private sealed class TrackingDatasetService : IDatasetService
     {
-        private readonly List<HowsoDatasetRecord> _records;
+        private readonly List<SurprisalDatasetRecord> _records;
         private readonly Action _onExtract;
 
-        public TrackingDatasetService(List<HowsoDatasetRecord> records, Action onExtract)
+        public TrackingDatasetService(List<SurprisalDatasetRecord> records, Action onExtract)
         {
             _records = records;
             _onExtract = onExtract;
         }
 
-        public Task<DatasetResult> NormalizeAndStoreAsync(string jobId, IFormFile? uploadedFile, string? existingPath, bool enableHowsoPreflight = false, CancellationToken cancellationToken = default)
+        public Task<DatasetResult> NormalizeAndStoreAsync(string jobId, IFormFile? uploadedFile, string? existingPath, bool enableSurprisalPreflight = false, CancellationToken cancellationToken = default)
             => Task.FromResult(new DatasetResult(true, "p", "h", 1, null));
 
-        public Task<(bool IsValid, string? ErrorMessage, List<HowsoDatasetRecord>? Records)> ValidateAndExtractRecordsAsync(IFormFile? uploadedFile, string? existingPath, CancellationToken cancellationToken = default)
+        public Task<(bool IsValid, string? ErrorMessage, List<SurprisalDatasetRecord>? Records)> ValidateAndExtractRecordsAsync(IFormFile? uploadedFile, string? existingPath, CancellationToken cancellationToken = default)
         {
             _onExtract();
-            return Task.FromResult((true, (string?)null, (List<HowsoDatasetRecord>?)_records));
+            return Task.FromResult((true, (string?)null, (List<SurprisalDatasetRecord>?)_records));
         }
     }
 }
