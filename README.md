@@ -74,7 +74,7 @@ FTaaS follows the portfolio governance standard documented in [PRIVACY_TELEMETRY
         │
         ▼ (POST /api/v1/jobs multipart or datasetPath)
  [Ingestion Gateway (.NET 10)] ──► Validates JSONL, Computes SHA-256 Hash, Stores on Disk
-        │                      ◄─► [howso-service (:5200)] (Clean-Room AGPL-3.0 Data Arbiter:
+        │                      ◄─► [howso-service (:5200)] (Independent MIT Data Arbiter:
         │                           Laplace-LK Surprisal Ablation & Completion Provenance)
         ▼ (Job Request Event with datasetPath & datasetHash)
  [Async Queue / Message Broker (RabbitMQ)]

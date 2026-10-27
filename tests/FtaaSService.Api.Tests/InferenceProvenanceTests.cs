@@ -95,7 +95,7 @@ public class InferenceProvenanceTests
 
     private sealed class FakeHowsoClient : IHowsoClient
     {
-        public HowsoHealthResult HealthToReturn { get; set; } = new(true, "Healthy", "Amalgam-Hazard-LK", "AGPL-3.0", "Service is operational");
+        public HowsoHealthResult HealthToReturn { get; set; } = new(true, "Healthy", "Amalgam-Hazard-LK", "MIT", "Service is operational");
         public HowsoAuditResult? AuditToReturn { get; set; }
         public HowsoVerifyResult? VerifyToReturn { get; set; }
         public bool ShouldThrow { get; set; }

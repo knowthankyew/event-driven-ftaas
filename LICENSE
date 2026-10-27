@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 The FTaaS Contributors
+Copyright (c) 2026 knowthankyew
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,16 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-### Subdirectory Ring-Fence Exception (`src/howso-service/`)
-
-All source code, scripts, and documentation in this repository are licensed under
-the MIT License above, **EXCEPT** for the isolated microservice subdirectory
-`src/howso-service/`, which is ring-fenced under the GNU Affero General Public
-License v3.0 (`src/howso-service/LICENSE-AGPL.txt`) and communicates strictly over
-an out-of-process HTTP/REST network boundary. No AGPL-3.0 code or binary is
-linked or imported in-process into the MIT-licensed `.NET` API, Python Worker,
-Inference runtime, or root test suite. See `NOTICE.md` for full clean-room
-provenance, academic citation, and trademark disclosures.

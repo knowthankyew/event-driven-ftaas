@@ -1,13 +1,13 @@
 # Howso Containerized Microservice (FTaaS Data Arbiter)
 
-> **License**: GNU Affero General Public License v3.0 (AGPL-3.0) — see [`LICENSE-AGPL.txt`](./LICENSE-AGPL.txt)  
-> **Authorship**: Original clean-room Python implementation of published equations from Hazard et al. (*arXiv:2505.00859*). Zero upstream Howso/Amalgam source code or SDK packages are included.  
-> **Container Boundary**: Strictly isolated out-of-process HTTP/REST execution environment (port `5200`). Zero in-process linking or importing with `event-driven-ftaas` (MIT).
+> **License**: MIT License — see root [`LICENSE`](../../LICENSE)  
+> **Authorship**: Independent Python implementation written from published equations of Hazard et al. (*arXiv:2510.22809*). Zero upstream Howso/Amalgam source code or SDK packages are included.  
+> **Container Boundary**: Isolated out-of-process HTTP/REST execution environment (port `5200`).
 
 ## Overview
-This service provides containerized, information-theoretic dataset auditing and completion provenance based on the mathematical derivations published in *"A Theory of the Mechanics of Information: Generalization Through Measurement of Uncertainty (Learning is Measuring)"* by Dr. Christopher J. Hazard et al. (*arXiv:2505.00859*).
+This service provides containerized, information-theoretic dataset auditing and completion provenance based on the mathematical derivations published in *"A Theory of the Mechanics of Information: Generalization Through Measurement of Uncertainty (Learning is Measuring)"* by Dr. Christopher J. Hazard et al. (*arXiv:2510.22809*).
 
-## Clean-Room Equation-to-Code Mapping
+## Equation-to-Code Mapping
 Every mathematical routine in [`service.py`](./service.py) is written from scratch using the Python standard library (`math`, `re`, `statistics`):
 
 | Preprint Reference | Mathematical Concept | Implementation in `service.py` |
@@ -25,7 +25,7 @@ Every mathematical routine in [`service.py`](./service.py) is written from scrat
 2. **Anomaly & Poisoning Detection (Section 9.4)**: Detects out-of-distribution or adversarial prompts by measuring $k$-NN neighborhood surprisal contours.
 3. **Attribution & Compliance Verification (Equations 8 & 10)**: Measures information distance between generated LLM responses and reference policy cases using Łukaszyk–Karmowski expected difference and empirical substitutability deviations ($\delta$).
 
-## Double-Layer Ring-Fence & Trademark Notice
-1. **Layer 1 (Clean-Room Copyright Independence)**: [`service.py`](./service.py) is an original clean-room implementation of published mathematical formulas. [`requirements.txt`](./requirements.txt) depends solely on `fastapi`, `uvicorn`, and `pydantic`.
-2. **Layer 2 (Defensive AGPL-3.0 Process Isolation)**: To preserve the MIT License of the primary `event-driven-ftaas` platform regardless of third-party license interpretations, this service runs as an independent network microservice over HTTP/REST with JSON serialization, and its test suite (`tests/test_howso_service.py`) executes against an isolated subprocess server without importing `service.py` into the MIT test runner process.
-3. **Trademark Disclaimer**: *Howso®* and *Amalgam™* are trademarks or registered trademarks of Howso Incorporated. This clean-room reference implementation is not affiliated with, endorsed by, or sponsored by Howso Incorporated.
+## Independent Implementation, Fidelity & Trademark Notice
+1. **Provenance**: [`service.py`](./service.py) is an independent implementation of published mathematical formulas. [`requirements.txt`](./requirements.txt) depends solely on `fastapi`, `uvicorn`, and `pydantic`. Zero Howso or Amalgam packages are installed or imported.
+2. **Fidelity**: This is an adaptation, not a validated reproduction of the paper's methods. It adds practical heuristics (for example, token-overlap prefilters, keyword features, candidate caps, and fixed thresholds). Results should not be attributed to the paper's authors or to Howso.
+3. **Trademark Disclaimer**: *Howso®* and *Amalgam™* are trademarks or registered trademarks of Howso Incorporated. This independent reference implementation is not affiliated with, endorsed by, or sponsored by Howso Incorporated.

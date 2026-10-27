@@ -1,33 +1,45 @@
 """
-FTaaS Data Arbiter — Clean-Room Information-Theoretic Microservice
+FTaaS Data Arbiter — Independent Information-Theoretic Microservice
 ==================================================================
-Copyright (C) 2026 knowthankyew / The Event-Driven FTaaS Contributors
-SPDX-License-Identifier: AGPL-3.0-only
+Copyright (C) 2026 knowthankyew
+SPDX-License-Identifier: MIT
 
-This program is free software: you can redistribute it and/or modify it under
-the terms of the GNU Affero General Public License version 3 as published by
-the Free Software Foundation (see `src/howso-service/LICENSE-AGPL.txt`).
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-This program is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-Clean-Room Provenance & Academic Citation:
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+
+Provenance & Academic Citation:
 ------------------------------------------
-This module is an original, clean-room Python implementation written directly
-from the published mathematical equations (Equations 4, 6, 7, 8, 10 and
-Sections 8.1, 9.4) in:
+This module is an independent Python implementation written from the published
+equations and sections (Equations 4, 6, 7, 8, 10 and Sections 8.1, 9.4) in:
   Christopher J. Hazard et al., "A Theory of the Mechanics of Information:
   Generalization Through Measurement of Uncertainty (Learning is Measuring)",
-  arXiv:2505.00859.
+  arXiv:2510.22809.
 
-Zero lines of source code, functions, or files were copied or derived from
-upstream Howso or Amalgam repositories.
+Zero source code, functions, or files from Howso or Amalgam repositories are
+included.
+
+Fidelity & Heuristics Disclaimer:
+---------------------------------
+This is an adaptation, not a validated reproduction of the paper's methods.
+It adds practical heuristics (for example, token-overlap prefilters, keyword
+features, candidate caps, and fixed thresholds). Results should not be
+attributed to the paper's authors or to Howso.
 
 Trademark & Non-Affiliation Disclaimer:
 ---------------------------------------
 Howso(R) and Amalgam(TM) are trademarks or registered trademarks of Howso
-Incorporated. This clean-room reference implementation is not affiliated with,
+Incorporated. This independent reference implementation is not affiliated with,
 endorsed by, or sponsored by Howso Incorporated.
 
 Endpoints:
@@ -43,14 +55,14 @@ from typing import Any, Dict, List
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-# Clean-room implementation flag: zero upstream Howso/Amalgam packages are imported or linked.
+# Implementation flag: zero upstream Howso/Amalgam packages are imported or linked.
 NATIVE_HOWSO_AVAILABLE = False
 
-ENGINE_IDENTIFIER = "Clean-Room Reference Information Engine (Hazard et al. Laplace-LK Surprisal)"
+ENGINE_IDENTIFIER = "Independent Reference Information Engine (Hazard et al. Laplace-LK Surprisal)"
 
 app = FastAPI(
     title="FTaaS Howso Data Arbiter",
-    description="Containerized Clean-Room Information-Theoretic Dataset Auditing & Provenance Service",
+    description="Containerized Independent Information-Theoretic Dataset Auditing & Provenance Service",
     version="1.0.0"
 )
 
@@ -197,7 +209,7 @@ def health():
         "service": "howso-data-arbiter",
         "native_howso_available": NATIVE_HOWSO_AVAILABLE,
         "engine": ENGINE_IDENTIFIER,
-        "license": "AGPL-3.0"
+        "license": "MIT"
     }
 
 @app.post("/v1/audit/dataset", response_model=AuditResponse)

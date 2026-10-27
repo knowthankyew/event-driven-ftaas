@@ -31,7 +31,7 @@ flowchart TD
         API -->|POST /api/v1/inference/compare| INF["Inference Engine :8000<br/><code>src/FtaaSService.Inference/app.py</code>"]
     end
 
-    subgraph DataArbiter["Data Arbiter & Verification (Clean-Room AGPL-3.0 Microservice)"]
+    subgraph DataArbiter["Data Arbiter & Verification (Independent MIT Microservice)"]
         API <-->|Preflight dataset ablation & surprisal audit :5200| HOWSO["howso-service :5200<br/><code>src/howso-service/service.py</code>"]
         API <-->|Verify completion provenance & attribution :5200| HOWSO
     end
@@ -513,9 +513,8 @@ ml/
 │   │   ├── app.py                # FastAPI dynamic serving endpoint & routing
 │   │   ├── bitnet_engine.py      # Native BitNet C++ AVX2 SIMD serving engine
 │   │   └── requirements.txt
-│   └── howso-service/            # Containerized Clean-Room Reference Information Engine (AGPL-3.0 HTTP Boundary)
+│   └── howso-service/            # Containerized Independent Reference Information Engine (MIT HTTP Boundary)
 │       ├── Dockerfile            # Standalone container specification (port 5200)
-│       ├── service.py            # Clean-room Laplace-LK information-theoretic ablation & attribution engine
-│       ├── requirements.txt      # FastAPI, Uvicorn, and Pydantic dependencies (zero upstream Howso/Amalgam packages)
-│       └── LICENSE-AGPL.txt      # AGPL-3.0 license disclosure
+│       ├── service.py            # Independent Laplace-LK information-theoretic ablation & attribution engine
+│       └── requirements.txt      # FastAPI, Uvicorn, and Pydantic dependencies (zero upstream Howso/Amalgam packages)
 ```

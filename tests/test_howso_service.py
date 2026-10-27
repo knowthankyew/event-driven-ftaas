@@ -20,7 +20,7 @@ def _find_free_port() -> int:
 class _SubprocessHttpClient:
     """
     Lightweight HTTP client communicating with the isolated howso-service
-    subprocess over loopback TCP/JSON without importing AGPL modules in-process.
+    subprocess over loopback TCP/JSON.
     """
 
     def __init__(self, base_url: str):
@@ -51,8 +51,8 @@ class _SubprocessHttpClient:
 
 class TestHowsoService(unittest.TestCase):
     """
-    Tests howso-service over an isolated out-of-process HTTP boundary so that
-    zero AGPL-3.0 code is ever imported into the MIT test runner process.
+    Tests howso-service over an isolated out-of-process HTTP boundary to ensure
+    clean microservice interface isolation.
     """
 
     proc: subprocess.Popen | None = None
@@ -112,14 +112,14 @@ class TestHowsoService(unittest.TestCase):
                 cls.proc.stderr.close()
             cls.proc = None
 
-    def test_zero_in_process_agpl_import(self):
+    def test_zero_in_process_service_import(self):
         """Verify that `service` from src/howso-service is NOT loaded in sys.modules."""
         for mod_name, mod in list(sys.modules.items()):
             mod_file = getattr(mod, "__file__", None) or ""
             self.assertNotIn(
                 "howso-service",
                 str(mod_file),
-                f"AGPL module '{mod_name}' ({mod_file}) must not be imported in-process.",
+                f"Subprocess module '{mod_name}' ({mod_file}) must not be imported in-process.",
             )
 
     def test_howso_service_health(self):
@@ -127,9 +127,9 @@ class TestHowsoService(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(data["status"], "healthy")
         self.assertEqual(data["service"], "howso-data-arbiter")
-        self.assertEqual(data["license"], "AGPL-3.0")
+        self.assertEqual(data["license"], "MIT")
         self.assertFalse(data["native_howso_available"])
-        self.assertIn("Clean-Room Reference Information Engine", data["engine"])
+        self.assertIn("Reference Information Engine", data["engine"])
 
     def test_howso_audit_ablation_and_anomaly(self):
         # Load actual sample dataset

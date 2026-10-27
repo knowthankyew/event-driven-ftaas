@@ -272,7 +272,7 @@ public class DatasetServiceTests : IDisposable
         public Func<IEnumerable<HowsoDatasetRecord>, Task<HowsoAuditResult?>>? OnAudit { get; set; }
 
         public Task<HowsoHealthResult> CheckHealthAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new HowsoHealthResult(true, "Healthy", "Clean-Room Reference Information Engine (Hazard et al. Laplace-LK Surprisal)", "AGPL-3.0", "OK"));
+            => Task.FromResult(new HowsoHealthResult(true, "Healthy", "Independent Reference Information Engine (Hazard et al. Laplace-LK Surprisal)", "MIT", "OK"));
 
         public Task<HowsoAuditResult?> AuditDatasetAsync(
             IEnumerable<HowsoDatasetRecord> records,
