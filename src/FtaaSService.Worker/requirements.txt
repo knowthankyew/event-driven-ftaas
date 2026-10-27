@@ -17,7 +17,7 @@ mlflow>=3.17.2
 # Messaging & Serving Utilities
 pika>=1.4.4
 pydantic>=2.14.1
-fastapi>=0.159.1
+fastapi>=0.162.0
 uvicorn>=0.54.0
 
 # Observability & Telemetry
