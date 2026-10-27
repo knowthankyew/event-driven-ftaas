@@ -38,6 +38,18 @@ updates:
         patterns:
           - "*"
 
+  # Python Howso Data Arbiter Service
+  - package-ecosystem: "pip"
+    directory: "/src/howso-service"
+    schedule:
+      interval: "weekly"
+    assignees:
+      - "knowthankyew"
+    groups:
+      python-howso-dependencies:
+        patterns:
+          - "*"
+
   # Docker Container Images
   - package-ecosystem: "docker"
     directory: "/src/FtaaSService.Api"
@@ -48,6 +60,16 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/src/FtaaSService.Worker"
+    schedule:
+      interval: "weekly"
+    assignees:
+      - "knowthankyew"
+    ignore:
+      - dependency-name: "python"
+        versions: [">= 3.13.0"]
+
+  - package-ecosystem: "docker"
+    directory: "/src/howso-service"
     schedule:
       interval: "weekly"
     assignees:
