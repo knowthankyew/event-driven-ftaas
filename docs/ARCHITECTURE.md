@@ -31,7 +31,7 @@ flowchart TD
         API -->|POST /api/v1/inference/compare| INF["Inference Engine :8000<br/><code>src/FtaaSService.Inference/app.py</code>"]
     end
 
-    subgraph DataArbiter["Data Arbiter & Verification (AGPL-3.0 Isolated Microservice)"]
+    subgraph DataArbiter["Data Arbiter & Verification (Clean-Room AGPL-3.0 Microservice)"]
         API <-->|Preflight dataset ablation & surprisal audit :5200| HOWSO["howso-service :5200<br/><code>src/howso-service/service.py</code>"]
         API <-->|Verify completion provenance & attribution :5200| HOWSO
     end
@@ -53,14 +53,14 @@ flowchart TD
     subgraph Compute["Training Compute Worker (Python)"]
         RMQ -->|3. Consume job| PW["Python Training Worker<br/><code>src/FtaaSService.Worker/consumer.py</code>"]
         PW -->|Load JSONL via datasetPath| DISK
-        PW -->|Apply LoRA & Train| HF["SmolLM2 / Gemma / BitNet<br/><code>src/FtaaSService.Inference/bitnet_engine.py</code>"]
-        PW -->|4. Stream step loss & hardware metrics| MLF
-        PW -->|Save adapter weights| ART
+        PW -->|Apply LoRA & Sample-Weighted Loss| TR["PyTorch PEFT LoRA Trainer<br/><code>src/FtaaSService.Worker/trainer.py</code>"]
+        TR -->|4. Stream step loss & hardware metrics| MLF
+        TR -->|Save adapter weights| ART
     end
 
     subgraph Serving["Dynamic Model Serving"]
         API -->|Proxy or Call| INF
-        INF -->|Load Base Weights (SmolLM2, Gemma, or BitNet)| HF
+        INF -->|Load Base Weights| HF["SmolLM2 / Gemma (PyTorch) & BitNet C++ Engine<br/><code>src/FtaaSService.Inference/bitnet_engine.py</code>"]
         INF -->|Mount LoRA Adapter by JobId or URI| ART
         INF -->|Return Side-by-Side Completions| API
     end
@@ -87,7 +87,7 @@ flowchart TD
    - Step-level loss curves, learning rate, and duration recorded in MLflow.
 5. **Resilience & Dead Lettering**:
    - Worker implements message acknowledgment (`ack`/`nack`) with retry policies and DLQ routing for poison messages.
-   - Explicit state transitions with validation (`Pending` $\rightarrow$ `Queued` $\rightarrow$ `Training` $\rightarrow$ `Succeeded` / `Failed`).
+   - Pre-persistence schema & PII validation rejects malformed inputs in-memory (`HTTP 422` with zero disk write), while persisted jobs follow explicit monotonic state transitions (`Queued` $\rightarrow$ `Training` $\rightarrow$ `Succeeded` / `Failed`).
 6. **Non-Technical Democratization & Presentation Layer**:
    - Solves the gap between complex ML infrastructure and business value.
    - **Side-by-Side Comparison Arena**: Directly showcases the business contrast between a generic foundational model and a team-tuned LoRA adapter (e.g. enforcing Reg CC, FDIC, or internal SLAs).
@@ -100,13 +100,14 @@ flowchart TD
 ## 3. Data Contracts & Event Schemas
 
 ### A. Job Submission API (`POST /api/v1/jobs`)
-Supported input: `multipart/form-data` with dataset file or JSON body with `datasetPath`.
+Supported input: `multipart/form-data` with dataset file or JSON body with `datasetPath`. When `baseModel` is omitted, `google/gemma-2-2b-it` is selected by default (`SupportedModels.Gemma2_2B_IT`).
 
 ```json
 {
   "jobName": "financial-sentiment-analysis",
   "baseModel": "HuggingFaceTB/SmolLM2-135M",
   "datasetPath": "datasets/financial-sentiment-train.jsonl",
+  "enableHowsoPreflight": true,
   "hyperparameters": {
     "epochs": 3,
     "batchSize": 4,
@@ -121,12 +122,21 @@ Supported input: `multipart/form-data` with dataset file or JSON body with `data
 **Response (`202 Accepted`):**
 ```json
 {
-  "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "jobId": "f47ac10b58cc4372a5670e02b2c3d479",
   "jobName": "financial-sentiment-analysis",
   "status": "Queued",
   "baseModel": "HuggingFaceTB/SmolLM2-135M",
+  "datasetPath": "datasets/f47ac10b58cc4372a5670e02b2c3d479.jsonl",
   "datasetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  "createdAt": "2026-09-14T20:10:00Z"
+  "createdAt": "2026-09-14T20:10:00Z",
+  "howsoAudit": {
+    "originalCount": 25,
+    "cleanedCount": 22,
+    "ablatedCount": 2,
+    "anomalousCount": 1,
+    "meanSurprisal": 1.42
+  },
+  "howsoPreflightStatus": "Audited"
 }
 ```
 
@@ -134,10 +144,10 @@ Supported input: `multipart/form-data` with dataset file or JSON body with `data
 Sent to exchange `ftaas.direct`, routing key `job.requested`.
 ```json
 {
-  "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "jobId": "f47ac10b58cc4372a5670e02b2c3d479",
   "jobName": "financial-sentiment-analysis",
   "baseModel": "HuggingFaceTB/SmolLM2-135M",
-  "datasetPath": "datasets/f47ac10b.jsonl",
+  "datasetPath": "datasets/f47ac10b58cc4372a5670e02b2c3d479.jsonl",
   "datasetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "hyperparameters": {
     "epochs": 3,
@@ -155,11 +165,11 @@ Sent to exchange `ftaas.direct`, routing key `job.requested`.
 
 ### C. Status Event Contract (`finetune.job.updated`)
 Sent to exchange `ftaas.direct`, routing key `job.updated`.
-> **Throttling Policy**: While MLflow receives telemetry on every step, RabbitMQ status events are throttled to epoch boundaries (or every 10 steps) plus state transitions (`Training`, `Succeeded`, `Failed`) to prevent queue chattiness.
+> **Throttling Policy**: While MLflow receives telemetry on every step, RabbitMQ status events are throttled to every 25% of total steps (`max(2, total_steps // 4)`) and final step completion plus state transitions (`Training`, `Succeeded`, `Failed`) to prevent queue chattiness.
 
 ```json
 {
-  "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "jobId": "f47ac10b58cc4372a5670e02b2c3d479",
   "status": "Training",
   "sequenceNumber": 4,
   "progressPercent": 45.0,
@@ -177,19 +187,19 @@ Sent to exchange `ftaas.direct`, routing key `job.updated`.
 ```
 
 **Allowed `status` enum values**:
-- `"Pending"`: Job recorded, dataset undergoing normalization and validation.
-- `"Queued"`: Dataset validated, persisted to `DATA_ROOT`, and message published to AMQP.
+- `"Pending"`: Defined in `JobStatus` enum for pre-queue initialization; in-memory validation executes synchronously prior to SQLite persistence.
+- `"Queued"`: Dataset validated, normalized, persisted to `DATA_ROOT`, and message published to AMQP.
 - `"Training"`: Worker has dequeued message and commenced model training.
 - `"Succeeded"`: Training complete, adapter exported, run closed in MLflow.
-- `"Failed"`: Fatal error encountered (validation failure, OOM, or unrecoverable exception).
+- `"Failed"`: Fatal error encountered (broker publish failure, OOM, or unrecoverable worker exception).
 
 **Idempotency & Ordering Guard**:
-The .NET status consumer validates `updatedAt` / `sequenceNumber` against the current entity state. Stale or out-of-order events arriving after terminal states (`Succeeded` or `Failed`) are discarded safely.
+`SqliteJobRepository.UpdateStatusIdempotentAsync` validates `sequenceNumber` and terminal status against the current entity state. Out-of-order events (`sequenceNumber <= current`) or events arriving after terminal states (`Succeeded` or `Failed`) are idempotently ignored.
 
 ### D. Inference Comparison API (`POST /api/v1/inference/compare`)
 ```json
 {
-  "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "jobId": "f47ac10b58cc4372a5670e02b2c3d479",
   "prompt": "Analyze quarterly report: Gross margin expanded 320 bps to 41.5% with inventory down 8% YoY.",
   "maxTokens": 64,
   "temperature": 0.2
@@ -199,9 +209,9 @@ The .NET status consumer validates `updatedAt` / `sequenceNumber` against the cu
 **Response (`200 OK`):**
 ```json
 {
-  "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "jobId": "f47ac10b58cc4372a5670e02b2c3d479",
   "baseModel": "HuggingFaceTB/SmolLM2-135M",
-  "adapterUri": "mlflow-artifacts:/1/9b1deb4d/artifacts/model_adapters",
+  "adapterPath": "data/artifacts/f47ac10b58cc4372a5670e02b2c3d479/adapter",
   "prompt": "Analyze quarterly report: Gross margin expanded 320 bps to 41.5% with inventory down 8% YoY.",
   "baseCompletion": " The company reported financial results for the quarter with numbers and data regarding margin...",
   "fineTunedCompletion": "SENTIMENT: Positive | KEY_METRICS: Gross margin +320bps, Inventory -8% | ASSESSMENT: Operational efficiency and pricing leverage intact.",
@@ -230,35 +240,41 @@ If an adapter was trained on a model different from the currently running base m
 ### E. Studio Presentation Contracts
 
 #### 1. Supported Models Catalog (`GET /api/v1/studio/models`)
-Returns the dynamic model catalog, parameter specifications, and hardware disclaimers:
+Returns the dynamic model catalog (`SupportedModels.Catalog`), parameter specifications, and hardware disclaimers:
 ```json
 [
   {
-    "modelId": "HuggingFaceTB/SmolLM2-135M",
-    "displayName": "SmolLM2 135M (Default • Fast / Zero-Cost)",
-    "parameterCount": "135M",
-    "contextLength": 2048,
-    "minVramGb": 0.5,
-    "requiresAuth": false,
-    "disclaimer": null
+    "modelId": "google/gemma-2-2b-it",
+    "displayName": "Gemma 2 2B IT",
+    "parameterCount": "2B",
+    "contextLength": 8192,
+    "minGpuVramGb": 8.0,
+    "requiresHfAuth": true,
+    "hardwareDisclaimer": "Requires ~8 GB GPU VRAM for training and ~5 GB for inference. Accept the Gemma license at huggingface.co/google/gemma-2-2b-it and set the HF_TOKEN environment variable before starting the worker.",
+    "isExperimental": false,
+    "tooltip": null
   },
   {
-    "modelId": "google/gemma-2-2b-it",
-    "displayName": "Gemma 2 2B IT (Reasoning Tier • Gated)",
-    "parameterCount": "2.6B",
-    "contextLength": 8192,
-    "minVramGb": 8.0,
-    "requiresAuth": true,
-    "disclaimer": "Requires HF_TOKEN with access granted at huggingface.co/google/gemma-2-2b-it. Minimum 8GB VRAM (or Apple Silicon MPS float16) recommended."
+    "modelId": "HuggingFaceTB/SmolLM2-135M",
+    "displayName": "SmolLM2-135M",
+    "parameterCount": "135M",
+    "contextLength": 2048,
+    "minGpuVramGb": 0.5,
+    "requiresHfAuth": false,
+    "hardwareDisclaimer": null,
+    "isExperimental": false,
+    "tooltip": null
   },
   {
     "modelId": "microsoft/BitNet-b1.58-2B-4T",
-    "displayName": "BitNet b1.58 2B-4T (Ternary Weight Tier • Open)",
+    "displayName": "BitNet b1.58 2B-4T (Experimental)",
     "parameterCount": "2.4B",
     "contextLength": 4096,
-    "minVramGb": 0.0,
-    "requiresAuth": false,
-    "disclaimer": "1.58-bit ternary model operating on CPU via AVX2 SIMD integer operations (zero GPU VRAM required). Inference requires bitnet.cpp runtime."
+    "minGpuVramGb": 0.0,
+    "requiresHfAuth": false,
+    "hardwareDisclaimer": "1.58-bit ternary weight model. Executes natively on CPU using AVX2 SIMD integer operations (zero GPU VRAM required). Inference requires the bitnet.cpp C++ runtime.",
+    "isExperimental": true,
+    "tooltip": "Experimental Research Architecture: 1.58-bit ternary CPU execution. Embedding context bounded to <= 240 tokens (upstream AVX2 batch ceiling); generation bounded to <= 16 prompt tokens (context breakdown boundary). Production statutory retrieval operates in Retrieval-Only mode."
   }
 ]
 ```
@@ -287,7 +303,7 @@ Returns curated business personas, sample customer tickets, compliance checklist
 ]
 ```
 
-#### 2. System & Adapter Overview (`GET /api/v1/studio/overview`)
+#### 3. System & Adapter Overview (`GET /api/v1/studio/overview`)
 Provides aggregate stats for non-technical dashboard rendering.
 ```json
 {
@@ -306,21 +322,24 @@ Provides aggregate stats for non-technical dashboard rendering.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Pending: Job Received
-    Pending --> Queued: Dataset Validated & Persisted
-    Pending --> Failed: Invalid Dataset / Schema Failure
+    [*] --> Validating: POST /api/v1/jobs (In-Memory)
+    Validating --> Rejected422: Invalid Schema / PII (HTTP 422, Zero Disk Write)
+    Validating --> Queued: Dataset Normalized & Persisted to SQLite
+    Queued --> Failed: AMQP Broker Publish Failure (HTTP 503)
     Queued --> Training: Worker Picks Up Job
     Training --> Succeeded: Training & Adapter Saved
     Training --> Failed: Error / Crash / Out of Memory
+    Rejected422 --> [*]
     Succeeded --> [*]
     Failed --> [*]
 ```
 
 **State Transition Rules:**
-- `Pending` $\rightarrow$ `Queued` only after JSONL verification (schema conformity, non-empty pairs, prompt/completion presence).
-- `Queued` $\rightarrow$ `Training` when consumer acquires message and starts loading weights.
-- `Training` $\rightarrow$ `Succeeded` only when adapter weights are written and MLflow run closes cleanly.
-- Transitioning from terminal states (`Succeeded`, `Failed`) returns `409 Conflict`.
+- **Pre-Persistence Validation (`Validating` $\rightarrow$ `Rejected422` or `Queued`)**: Dataset schema, token heuristics, and PII guardrails run strictly in-memory prior to SQLite persistence. Invalid or non-compliant datasets return `422 Unprocessable Entity` with zero bytes written to disk.
+- `Validating` $\rightarrow$ `Queued`: Job record is persisted in SQLite (`JobStatus.Queued`) only after dataset normalization (and optional Howso preflight audit) succeeds.
+- `Queued` $\rightarrow$ `Training`: Worker consumer acquires AMQP message and starts loading weights.
+- `Training` $\rightarrow$ `Succeeded`: Adapter weights are written (`adapter_config.json`, `adapter_model.safetensors`) and MLflow run closes cleanly.
+- **Idempotent Terminal Guard**: Stale (`sequenceNumber <= current`) or post-terminal (`Succeeded`, `Failed`) status events are idempotently ignored by `SqliteJobRepository.UpdateStatusIdempotentAsync`.
 
 ---
 
@@ -384,7 +403,7 @@ stateDiagram-v2
 - Ternary weights $W \in \{-1, 0, +1\}$ executing on CPU via AVX2 SIMD integer operations (zero GPU VRAM required).
 - Native prompt formatting (`User: <prompt><|eot_id|>\nAssistant: <completion><|eot_id|>`).
 - Live CPU scaling benchmarks documented in [`BITNET_PROTOTYPE_RESULTS.md`](BITNET_PROTOTYPE_RESULTS.md) achieving up to 23.54 tokens/sec on Intel Core i9 CPU.
-- Full 7-phase execution roadmap documented in [`ROADMAP.md`](ROADMAP.md).
+- Full 11-phase execution roadmap documented in [`ROADMAP.md`](ROADMAP.md).
 - Baseline edge model profile documented in [`SMOL_PROTOTYPE_RESULTS.md`](SMOL_PROTOTYPE_RESULTS.md).
 
 ### Phase 8: 1-Bit Dense Embedding Subsystem (`bitnet-embedding-270m`)
@@ -406,7 +425,7 @@ stateDiagram-v2
 
 ## 6. Production Cloud & FinOps Architecture Mapping
 
-The local polyglot architecture is designed with 100% cloud parity, allowing immediate mapping to enterprise cloud environments:
+The local polyglot architecture is designed with full cloud parity, allowing immediate mapping to enterprise cloud environments:
 
 ```plaintext
 Local Component            AWS Production Architecture                 GCP Production Architecture
@@ -437,7 +456,7 @@ Dynamic Inference Server   SageMaker Multi-Model / Triton Inference    Vertex AI
 
 ```plaintext
 ml/
-├── docker-compose.yml            # RabbitMQ + MLflow server
+├── docker-compose.yml            # RabbitMQ, MLflow, and Howso Data Arbiter services
 ├── README.md                     # Executive summary, trade-offs & runbook
 ├── NOTICE.md                     # Legal disclosures, privacy invariants & attribution
 ├── docs/                         # Engineering documentation & benchmark records
@@ -464,8 +483,8 @@ ml/
 │   ├── FtaaSService.Api.Tests/   # .NET 10 integration, domain, & controller test suite (incl. Howso)
 │   ├── test_bitnet_engine.py     # Python BitNet C++ subprocess serving tests
 │   ├── test_claims_linter.py     # Empirical claims registry & Wilson interval tests
-│   ├── test_howso_service.py     # Howso data arbiter ablation, surprisal, and health tests
-│   ├── test_trainer.py           # Python PEFT/LoRA training unit tests
+│   ├── test_howso_service.py     # Howso data arbiter subprocess HTTP, ablation, and surprisal tests
+│   ├── test_trainer_model_selection.py # Python PEFT/LoRA training & sample-weighted loss unit tests
 │   └── qa-screenshots/           # Playwright UI visual baseline checkpoints
 ├── data/
 │   ├── datasets/                 # Ingested and sample JSONL datasets
@@ -473,7 +492,7 @@ ml/
 │   └── storage/                  # SQLite db files
 ├── src/
 │   ├── FtaaSService.Api/         # .NET 10 Ingestion Gateway & Control Plane
-│   │   ├── Domain/               # Job state machine, entities, validation, ModelCatalog
+│   │   ├── Domain/               # Job state machine, entities, validation, SupportedModels
 │   │   ├── Endpoints/            # Minimal API endpoints (Jobs, Inference, Studio, Health)
 │   │   ├── Messaging/            # RabbitMQ producer & status consumer
 │   │   ├── Services/             # Dataset normalization & Howso client integration
@@ -486,7 +505,7 @@ ml/
 │   │   ├── config.py             # Settings & device detection
 │   │   ├── model_registry.py     # Multi-model registry, specs & chat templates
 │   │   ├── consumer.py           # RabbitMQ consumer & DLQ logic
-│   │   ├── trainer.py            # LoRA fine-tuning & MLflow telemetry
+│   │   ├── trainer.py            # LoRA fine-tuning, sample-weighted loss & MLflow telemetry
 │   │   ├── exporter.py           # Edge ONNX manifest & adapter exporter
 │   │   ├── evaluator.py          # Benchmark metric calculation
 │   │   └── requirements.txt
@@ -494,9 +513,9 @@ ml/
 │   │   ├── app.py                # FastAPI dynamic serving endpoint & routing
 │   │   ├── bitnet_engine.py      # Native BitNet C++ AVX2 SIMD serving engine
 │   │   └── requirements.txt
-│   └── howso-service/            # Containerized Howso Data Arbiter (AGPL-3.0 HTTP Boundary)
+│   └── howso-service/            # Containerized Clean-Room Reference Information Engine (AGPL-3.0 HTTP Boundary)
 │       ├── Dockerfile            # Standalone container specification (port 5200)
-│       ├── service.py            # Information-theoretic ablation & attribution engine
-│       ├── requirements.txt      # FastAPI, Amalgam, and numeric dependencies
+│       ├── service.py            # Clean-room Laplace-LK information-theoretic ablation & attribution engine
+│       ├── requirements.txt      # FastAPI, Uvicorn, and Pydantic dependencies (zero upstream Howso/Amalgam packages)
 │       └── LICENSE-AGPL.txt      # AGPL-3.0 license disclosure
 ```

@@ -21,7 +21,7 @@ BitNet b1.58 replaces conventional floating-point matrix multiplications (MACs) 
 +----------------------+--------------------------+---------------------------------------+
 | Weight Precision     | Ternary {-1, 0, +1}      | Stored as 2-bit signed integer (i2_s) |
 | Active Parameters    | 2.41 Billion             | Pretrained on 4.0 Trillion tokens     |
-| Physical RAM Footprint| 1.10 GiB                 | Fits comfortably on commodity edge hardware |
+| Disk Weights / RSS   | 1.10 GiB / 1369.79 MB    | On-disk GGUF (i2_s) / Peak RSS on CPU |
 | Compute Primitive    | Integer SIMD / LUT       | AVX2 SIMD vector-matrix kernels       |
 | Hardware Offloading  | Zero GPU for Inference   | Pure CPU execution (AVX2 integer kernels)  |
 | Max Throughput (CPU) | 23.54 tokens/sec         | 8-thread decode on Intel Core i9      |
@@ -85,9 +85,9 @@ Benchmarked using `llama-bench` targeting `models/BitNet-b1.58-2B-4T/ggml-model-
 ```
 
 ### Key Scaling Observations
-1. **Thread Scaling on Physical Cores**: Scaling from 1 thread to 2 threads yields a **1.76×** speedup in decode throughput (8.13 t/s $\to$ 14.34 t/s). Scaling to 4 threads reaches **19.96 t/s** (2.45× over single-core).
+1. **Thread Scaling on Physical Cores**: Scaling from 1 thread to 2 threads yields a **1.76×** speedup in `llama-bench` (`-b 1 -ub 1`) decode throughput (8.13 t/s $\to$ 14.34 t/s). Scaling to 4 threads reaches **19.96 t/s** in `llama-bench` (`-b 1 -ub 1`) and **<!-- claim:threads_4_decode_tok_per_sec -->19.5<!-- /claim --> t/s** decode (**<!-- claim:threads_4_prefill_tok_per_sec -->114.5<!-- /claim --> t/s** prefill) under standard `llama-cli` `/dev/stdin` serving (`docs/empirical_speed_memory.json`).
 2. **Multi-Core Scaling & Bottlenecks**: Scaling from 4 to 8 threads across all 8 physical cores yields **23.54 t/s** (+18% throughput improvement). This sub-linear scaling gain may reflect a shared hardware bottleneck such as memory bandwidth across cores, though memory bus utilization was not explicitly profiled.
-3. **Prompt Prefill Speed**: Single-prompt prefill bursts at **100.3 to 107.2 tokens/second** on 8 threads during direct `llama-cli` interactive passes.
+3. **Prompt Prefill Speed**: Single-prompt prefill reaches **<!-- claim:threads_4_prefill_tok_per_sec -->114.5<!-- /claim --> tokens/second** on 4 threads (`docs/empirical_speed_memory.json`) and **100.3 to 107.2 tokens/second** on 8 threads during direct `llama-cli` interactive passes.
 
 ---
 
@@ -102,7 +102,7 @@ Testing qualitative generation using `llama-cli` revealed critical architectural
 
 ### B. The Need for Task Fine-Tuning (FTaaS Value Proposition)
 This empirical observation directly reinforces the core mission of **Event-Driven FTaaS**:
-> High-efficiency edge foundation models (like BitNet b1.58) provide the raw reasoning substrate at 1.1 GB RAM footprint, but **require domain-specific LoRA fine-tuning** to adhere to enterprise JSON schemas, financial compliance policies, and strict API output boundaries.
+> High-efficiency edge foundation models (like BitNet b1.58) provide the raw reasoning substrate with 1.10 GiB on-disk weights (<!-- claim:bitnet_2b_peak_rss_mb -->1369.79<!-- /claim --> MB peak RSS), but **require domain-specific LoRA fine-tuning** to adhere to enterprise JSON schemas, financial compliance policies, and strict API output boundaries.
 
 ---
 
@@ -112,12 +112,12 @@ Fine-tuning BitNet b1.58 using Low-Rank Adaptation (LoRA) is mathematically soun
 
 $$h = W_0 \cdot x + \frac{\alpha}{r} (B \cdot A) \cdot x$$
 
-1. **Frozen Ternary Weights**: The base weight matrix $W_0 \in \{-1, 0, +1\}$ is 100% frozen ($\nabla_{W_0} \mathcal{L} = 0$). No floating-point gradient updates mutate the ternary integer properties of the base model.
+1. **Frozen Ternary Weights**: The base weight matrix $W_0 \in \{-1, 0, +1\}$ is completely frozen ($\nabla_{W_0} \mathcal{L} = 0$). No floating-point gradient updates mutate the ternary integer properties of the base model.
 2. **Continuous Low-Rank Adapters**: Trainable rank decomposition matrices $A \in \mathbb{R}^{r \times d_{\text{in}}}$ and $B \in \mathbb{R}^{d_{\text{out}} \times r}$ train in standard float (`float32` on MPS), capturing nuanced domain representations.
 3. **Deployment Strategy**:
-   - **Multi-Tenant Edge Serving**: Base BitNet weights stay in memory as 1.1 GB ternary integers; request-time forward passes execute ternary SIMD additions on CPU in parallel with tiny float LoRA adapter projections.
+   - **Multi-Tenant Edge Serving**: Base BitNet weights (1.10 GiB on-disk GGUF, <!-- claim:bitnet_2b_peak_rss_mb -->1369.79<!-- /claim --> MB peak process RSS) stay resident in memory as ternary integers; request-time forward passes execute ternary SIMD additions on CPU in parallel with tiny float LoRA adapter projections.
 4. **Runtime Separation (Training vs Inference)**:
-   - **`bitnet.cpp` (Inference)**: C++ AVX2 lookup-table runtime optimized exclusively for forward-pass token decode. Memory footprint is close to the 1.10 GiB model weights, with an active-process peak RSS of approximately 1,150 MB (reported in MODEL_PERFORMANCE_COMPARISON.md).
+   - **`bitnet.cpp` (Inference)**: C++ AVX2 lookup-table runtime optimized exclusively for forward-pass token decode. Model weights on disk are 1.10 GiB (`1,187.8 MB`), with a measured `/usr/bin/time -l` peak resident set size (RSS) of **<!-- claim:bitnet_2b_peak_rss_mb -->1369.79<!-- /claim --> MB** (`docs/empirical_speed_memory.json`).
    - **PyTorch `BitLinear` + PEFT (Training)**: Forward/backward autograd graph execution stores activation tensors and float32 adapter gradients, running under Apple Silicon Metal (MPS) device acceleration or CPU without requiring dedicated high-end server clusters.
 
 ---
@@ -146,7 +146,7 @@ LoRA fine-tuning was executed end-to-end on `microsoft/BitNet-b1.58-2B-4T` targe
 
 ### Technical Observations on Fine-Tuning Mechanics
 1. **The 53-Minute Training Duration (Hypothesized Contributors)**: While BitNet b1.58 C++ inference is 2.1× faster than Gemma on CPU, LoRA fine-tuning was substantially slower (53m 39s vs 7m 03s for Gemma). Likely contributing factors include the precision delta (BitNet was trained in `float32` on Metal to prevent underflow, whereas Gemma ran in `float16`), the lack of fused 1-bit autograd kernels in Hugging Face (incurring custom `BitLinear` tensor dispatch overhead during backpropagation), and the official model card warning that standard `transformers` does not support BitNet architectural speedups.
-2. **Floating-Point LoRA Arithmetic Invariant**: During LoRA training, the base model $W_0 \in \{-1, 0, +1\}$ is 100% frozen ($\nabla_{W_0} \mathcal{L} = 0$). Only the rank decomposition matrices $A$ and $B$ receive gradients in `float32`. The integer addition benefit applies strictly to compiled C++ forward-pass inference (`bitnet.cpp`); fine-tuning itself remains a standard floating-point backpropagation operation.
+2. **Floating-Point LoRA Arithmetic Invariant**: During LoRA training, the base model $W_0 \in \{-1, 0, +1\}$ is completely frozen ($\nabla_{W_0} \mathcal{L} = 0$). Only the rank decomposition matrices $A$ and $B$ receive gradients in `float32`. The integer addition benefit applies strictly to compiled C++ forward-pass inference (`bitnet.cpp`); fine-tuning itself remains a standard floating-point backpropagation operation.
 3. **Loss Progression**: Step loss converged from $4.8921$ to $3.2038$ (-34.5%) across 30 steps, successfully adapting the base model to the structured financial sentiment schema.
 
 ---

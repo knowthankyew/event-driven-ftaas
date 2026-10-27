@@ -186,13 +186,14 @@ class TestRecomputeHardening(unittest.TestCase):
         # Add ranked_ids and relevant_ids where derived rank doesn't match top1_hit
         art["full_corpus_benchmark"]["query_details"][0]["relevant_ids"] = ["target_chunk"]
         art["full_corpus_benchmark"]["query_details"][0]["rankings"]["bm25"]["ranked_ids"] = ["other_chunk", "target_chunk"]
-        # Stored says top1_hit=True, but ranked_ids has target at rank 2
+        # Stored says top1_hit=True, but ranked_ids has target at rank 2 -> must fail closed
         buf = io.StringIO()
         with contextlib.redirect_stderr(buf):
             ok, errs = self._check(art)
-        self.assertTrue(ok)
+        self.assertFalse(ok)
         self.assertIn("[WARN]", buf.getvalue())
         self.assertIn("disagree with derived rank 2", buf.getvalue())
+        self.assertTrue(any("disagree with derived rank 2" in e for e in errs))
 
 
 class TestClaimTermsValidation(unittest.TestCase):

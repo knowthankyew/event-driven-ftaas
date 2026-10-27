@@ -272,7 +272,7 @@ public class DatasetServiceTests : IDisposable
         public Func<IEnumerable<HowsoDatasetRecord>, Task<HowsoAuditResult?>>? OnAudit { get; set; }
 
         public Task<HowsoHealthResult> CheckHealthAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new HowsoHealthResult(true, "Healthy", "Amalgam", "AGPL-3.0", "OK"));
+            => Task.FromResult(new HowsoHealthResult(true, "Healthy", "Clean-Room Reference Information Engine (Hazard et al. Laplace-LK Surprisal)", "AGPL-3.0", "OK"));
 
         public Task<HowsoAuditResult?> AuditDatasetAsync(
             IEnumerable<HowsoDatasetRecord> records,
@@ -315,8 +315,8 @@ public class DatasetServiceTests : IDisposable
                 );
                 var cleaned = new List<HowsoDatasetRecord>
                 {
-                    new("Prompt 1", "Completion 1"),
-                    new("Prompt 2", "Completion 2")
+                    new("Prompt 1", "Completion 1", 2.0f),
+                    new("Prompt 2", "Completion 2", 1.0f)
                 };
                 return Task.FromResult<HowsoAuditResult?>(new HowsoAuditResult(summary, cleaned));
             }
@@ -349,6 +349,8 @@ public class DatasetServiceTests : IDisposable
         var diskPath = Path.Combine(_testDataDir, result.RelativePath!);
         var lines = await File.ReadAllLinesAsync(diskPath);
         Assert.Equal(2, lines.Length);
+        Assert.Contains("\"weight\":2", lines[0]);
+        Assert.DoesNotContain("\"weight\"", lines[1]);
     }
 
     [Fact]

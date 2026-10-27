@@ -191,6 +191,66 @@ def evaluate_clause_set(clauses, tok, model, name="clauses"):
     }
 
 
+def build_embedder_validation_conclusion(
+    teacher_name: str,
+    teacher_precision: str,
+    quant_label: str,
+    num_pairs: int,
+    strength_str: str,
+    significance_str: str,
+    full_rho: float,
+    full_r_sq: float,
+    full_var_pct: float,
+    full_spearman_p_fmt: str,
+    full_pearson_p_fmt: str,
+    short_rho: float,
+    short_r: float,
+    short_r_sq: float,
+    short_var_pct: float,
+    short_spearman_p_fmt: str,
+    var_min: float,
+    var_max: float,
+    loses_signal: bool,
+    short_lower_than_full: bool,
+    r_squared_label: str,
+) -> str:
+    """
+    Template function building conclusion text with zero hardcoded digits.
+    All numeric values and exponent labels must be interpolated from parameters.
+    """
+    if loses_signal:
+        retention_str = (
+            f"explaining {var_min}% to {var_max}% of semantic variance indicates that {quant_label} dense embeddings "
+            f"retain coarse topical clustering but lose significant discriminative signal relative to the {teacher_precision} teacher"
+        )
+    else:
+        retention_str = (
+            f"explaining {var_min}% to {var_max}% of semantic variance indicates that {quant_label} dense embeddings "
+            f"retain substantial discriminative signal relative to the {teacher_precision} teacher"
+        )
+
+    if short_lower_than_full:
+        short_comp_str = (
+            f"The lower rank correlation on short sequences (rho={short_rho} vs rho={full_rho}) demonstrates that "
+            f"concise statutory clauses lose discriminative signal when quantized to ternary weights (as corroborated by short-chunk retrieval results documented in docs/empirical_retrieval_benchmark.json)."
+        )
+    else:
+        short_comp_str = (
+            f"The rank correlation on short sequences (rho={short_rho} vs rho={full_rho}) indicates that "
+            f"concise statutory clauses maintain relational alignment when quantized to ternary weights."
+        )
+
+    return (
+        f"Pairwise similarity correlation against the official unquantized teacher ({teacher_name}) across {num_pairs} off-diagonal pairs "
+        f"demonstrates {strength_str}, {significance_str} relational rank correlation: rho={full_rho} "
+        f"({r_squared_label}={full_r_sq}, explaining {full_var_pct}% of variance, spearman p={full_spearman_p_fmt}) on full legal clauses, "
+        f"and rho={short_rho}, r={short_r} ({r_squared_label}={short_r_sq}, "
+        f"explaining {short_var_pct}% of variance, spearman p={short_spearman_p_fmt}) on short clauses. "
+        f"While {significance_str} (spearman p={full_spearman_p_fmt}, pearson p={full_pearson_p_fmt}), {retention_str}. "
+        f"{short_comp_str}"
+    )
+
+
 def main():
     print(f"Validating bitnet-embedding-270m against reference teacher...")
     print(f"Platform: {platform.platform()}, CPU: {platform.processor()}")
@@ -298,37 +358,29 @@ def main():
     # Derive signal retention wording based on variance explained
     var_min = min(full_eval['variance_explained_pct'], short_eval['variance_explained_pct'])
     var_max = max(full_eval['variance_explained_pct'], short_eval['variance_explained_pct'])
-    if var_max < 50.0:
-        retention_str = (
-            f"explaining {var_min}% to {var_max}% of semantic variance indicates that {quant_label} dense embeddings "
-            f"retain coarse topical clustering but lose significant discriminative signal relative to the {teacher_precision} teacher"
-        )
-    else:
-        retention_str = (
-            f"explaining {var_min}% to {var_max}% of semantic variance indicates that {quant_label} dense embeddings "
-            f"retain substantial discriminative signal relative to the {teacher_precision} teacher"
-        )
 
-    # Generate short sequence comparison only when short_eval rho is less than full_eval rho
-    if short_eval['spearman_rho'] < full_eval['spearman_rho']:
-        short_comp_str = (
-            f"The lower rank correlation on short sequences (rho={short_eval['spearman_rho']} vs rho={full_eval['spearman_rho']}) demonstrates that "
-            f"concise statutory clauses lose discriminative signal when quantized to ternary weights (as corroborated by short-chunk retrieval results documented in docs/empirical_retrieval_benchmark.json)."
-        )
-    else:
-        short_comp_str = (
-            f"The rank correlation on short sequences (rho={short_eval['spearman_rho']} vs rho={full_eval['spearman_rho']}) indicates that "
-            f"concise statutory clauses maintain relational alignment when quantized to ternary weights."
-        )
-
-    conclusion = (
-        f"Pairwise similarity correlation against the official unquantized teacher ({teacher_name}) across {full_eval['num_pairs']} off-diagonal pairs "
-        f"demonstrates {strength_str}, {significance_str} relational rank correlation: rho={full_eval['spearman_rho']} "
-        f"(R^2={full_eval['r_squared']}, explaining {full_eval['variance_explained_pct']}% of variance, spearman p={full_eval['spearman_pvalue']:.2e}) on full legal clauses, "
-        f"and rho={short_eval['spearman_rho']}, r={short_eval['pearson_r']} (R^2={short_eval['r_squared']}, "
-        f"explaining {short_eval['variance_explained_pct']}% of variance, spearman p={short_eval['spearman_pvalue']:.2e}) on short clauses. "
-        f"While {significance_str} (spearman p={full_eval['spearman_pvalue']:.2e}, pearson p={full_eval['pearson_pvalue']:.2e}), {retention_str}. "
-        f"{short_comp_str}"
+    conclusion = build_embedder_validation_conclusion(
+        teacher_name=teacher_name,
+        teacher_precision=teacher_precision,
+        quant_label=quant_label,
+        num_pairs=full_eval['num_pairs'],
+        strength_str=strength_str,
+        significance_str=significance_str,
+        full_rho=full_eval['spearman_rho'],
+        full_r_sq=full_eval['r_squared'],
+        full_var_pct=full_eval['variance_explained_pct'],
+        full_spearman_p_fmt=f"{full_eval['spearman_pvalue']:.2e}",
+        full_pearson_p_fmt=f"{full_eval['pearson_pvalue']:.2e}",
+        short_rho=short_eval['spearman_rho'],
+        short_r=short_eval['pearson_r'],
+        short_r_sq=short_eval['r_squared'],
+        short_var_pct=short_eval['variance_explained_pct'],
+        short_spearman_p_fmt=f"{short_eval['spearman_pvalue']:.2e}",
+        var_min=var_min,
+        var_max=var_max,
+        loses_signal=(var_max < 50.0),
+        short_lower_than_full=(short_eval['spearman_rho'] < full_eval['spearman_rho']),
+        r_squared_label="R^2",
     )
 
     output_path = os.path.abspath(os.path.join(repo_root, "docs/empirical_270m_embedder_validation.json"))

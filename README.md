@@ -74,7 +74,8 @@ FTaaS follows the portfolio governance standard documented in [PRIVACY_TELEMETRY
         │
         ▼ (POST /api/v1/jobs multipart or datasetPath)
  [Ingestion Gateway (.NET 10)] ──► Validates JSONL, Computes SHA-256 Hash, Stores on Disk
-        │
+        │                      ◄─► [howso-service (:5200)] (Clean-Room AGPL-3.0 Data Arbiter:
+        │                           Laplace-LK Surprisal Ablation & Completion Provenance)
         ▼ (Job Request Event with datasetPath & datasetHash)
  [Async Queue / Message Broker (RabbitMQ)]
         │
@@ -197,7 +198,7 @@ All technical design documents, prototype evaluations, and implementation roadma
 | Document | Purpose |
 | :--- | :--- |
 | **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** | End-to-end system architecture, polyglot microservice boundaries, AMQP messaging contracts, and cloud mapping. |
-| **[`docs/ROADMAP.md`](docs/ROADMAP.md)** | 7-phase BitNet b1.58 ternary integration roadmap, execution status, and upstream contribution tracking. |
+| **[`docs/ROADMAP.md`](docs/ROADMAP.md)** | 11-phase BitNet b1.58 ternary integration roadmap, execution status, and upstream contribution tracking. |
 | **[`docs/STUDIO_GUIDE.md`](docs/STUDIO_GUIDE.md)** | Non-technical visual walkthrough and operational runbook for the FTaaS Enterprise Studio web application. |
 | **[`docs/MODEL_PERFORMANCE_COMPARISON.md`](docs/MODEL_PERFORMANCE_COMPARISON.md)** | Symmetrical cross-architecture benchmark differentials across SmolLM2-135M, Gemma 2 2B IT, and BitNet b1.58. |
 | **[`docs/SMOL_PROTOTYPE_RESULTS.md`](docs/SMOL_PROTOTYPE_RESULTS.md)** | Ultra-compact baseline (135M) empirical LoRA training metrics, ONNX export profile, and in-browser WASM execution. |

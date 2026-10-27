@@ -74,7 +74,7 @@ public sealed class DatasetService : IDatasetService
                     else if (validatedRecords.Count <= MaxBatchAuditSize)
                     {
                         _logger.LogInformation("Job {JobId}: Executing Howso information-theoretic dataset preflight audit on {RecordCount} records", jobId, validatedRecords.Count);
-                        var howsoRecords = validatedRecords.Select(r => new HowsoDatasetRecord(r.Prompt, r.Completion)).ToList();
+                        var howsoRecords = validatedRecords.Select(r => new HowsoDatasetRecord(r.Prompt, r.Completion, r.Weight)).ToList();
                         var auditResult = await _howsoClient.AuditDatasetAsync(howsoRecords, cancellationToken: preflightCts.Token);
 
                         if (auditResult != null)
@@ -86,7 +86,7 @@ public sealed class DatasetService : IDatasetService
 
                             if (auditResult.CleanedRecords.Count > 0)
                             {
-                                recordsToWrite = auditResult.CleanedRecords.Select(r => (r.Prompt, r.Completion)).ToList();
+                                recordsToWrite = auditResult.CleanedRecords.Select(r => (r.Prompt, r.Completion, r.Weight)).ToList();
                             }
                             else
                             {
@@ -122,7 +122,7 @@ public sealed class DatasetService : IDatasetService
                         {
                             var chunk = chunks[chunkIdx];
                             int indexOffset = chunkIdx * MaxBatchAuditSize;
-                            var howsoChunk = chunk.Select(r => new HowsoDatasetRecord(r.Prompt, r.Completion)).ToList();
+                            var howsoChunk = chunk.Select(r => new HowsoDatasetRecord(r.Prompt, r.Completion, r.Weight)).ToList();
                             var chunkResult = await _howsoClient.AuditDatasetAsync(howsoChunk, cancellationToken: preflightCts.Token);
                             if (chunkResult is null)
                             {
@@ -175,7 +175,7 @@ public sealed class DatasetService : IDatasetService
                                 AblatedRecords: allAblated
                             );
                             preflightStatus = "Completed";
-                            recordsToWrite = cleanedChunkRecords.Select(r => (r.Prompt, r.Completion)).ToList();
+                            recordsToWrite = cleanedChunkRecords.Select(r => (r.Prompt, r.Completion, r.Weight)).ToList();
                             _logger.LogInformation("Job {JobId}: Chunked Howso preflight audit complete. Original: {OriginalCount}, Cleaned: {CleanedCount}, Ablated: {AblatedCount}, Anomalous: {AnomalousCount}",
                                 jobId, totalOriginal, totalCleaned, totalAblated, totalAnomalous);
                         }
@@ -208,14 +208,16 @@ public sealed class DatasetService : IDatasetService
             var relativePath = Path.Combine("datasets", $"{jobId}.jsonl");
             var targetDiskPath = Path.Combine(_dataRoot, relativePath);
 
-            // Pass 2: Write strictly sanitized normalized { prompt, completion } records to disk
+            // Pass 2: Write strictly sanitized normalized { prompt, completion[, weight] } records to disk
             using var outStream = File.Create(targetDiskPath);
             using var writer = new StreamWriter(outStream, new UTF8Encoding(false));
             using var sha256 = SHA256.Create();
 
-            foreach (var (prompt, completion) in recordsToWrite)
+            foreach (var (prompt, completion, weight) in recordsToWrite)
             {
-                var normalizedJson = JsonSerializer.Serialize(new { prompt, completion });
+                var normalizedJson = Math.Abs(weight - 1.0f) > 1e-6f
+                    ? JsonSerializer.Serialize(new { prompt, completion, weight })
+                    : JsonSerializer.Serialize(new { prompt, completion });
                 await writer.WriteLineAsync(normalizedJson);
             }
 
@@ -275,11 +277,11 @@ public sealed class DatasetService : IDatasetService
             return (false, errorMessage, null);
         }
 
-        var howsoRecords = records.Select(r => new HowsoDatasetRecord(r.Prompt, r.Completion)).ToList();
+        var howsoRecords = records.Select(r => new HowsoDatasetRecord(r.Prompt, r.Completion, r.Weight)).ToList();
         return (true, null, howsoRecords);
     }
 
-    private async Task<(bool IsValid, string? ErrorMessage, string? SourceResolvedPath, List<(string Prompt, string Completion)>? Records)> ExtractRecordsInternalAsync(
+    private async Task<(bool IsValid, string? ErrorMessage, string? SourceResolvedPath, List<(string Prompt, string Completion, float Weight)>? Records)> ExtractRecordsInternalAsync(
         string? jobId,
         IFormFile? uploadedFile,
         string? existingPath,
@@ -331,7 +333,7 @@ public sealed class DatasetService : IDatasetService
         using (inputStream)
         {
             using var reader = new StreamReader(inputStream, Encoding.UTF8);
-            var validatedRecords = new List<(string Prompt, string Completion)>();
+            var validatedRecords = new List<(string Prompt, string Completion, float Weight)>();
             int recordCount = 0;
             string? line;
             bool isFirstLine = true;
@@ -339,6 +341,7 @@ public sealed class DatasetService : IDatasetService
                          || existingPath?.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) == true;
             int promptColIdx = 0;
             int compColIdx = 1;
+            int weightColIdx = -1;
 
             // Pass 1: Stream-scan input entirely in-memory — zero files created on disk prior to 100% compliance pass
             while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
@@ -364,6 +367,7 @@ public sealed class DatasetService : IDatasetService
 
                 string prompt = "";
                 string completion = "";
+                float weight = 1.0f;
 
                 if (isCsv)
                 {
@@ -381,10 +385,12 @@ public sealed class DatasetService : IDatasetService
                         var headerLower = cols.Select(c => c.Trim().ToLowerInvariant().Trim('"', '\'')).ToList();
                         var pIdx = headerLower.FindIndex(h => h is "prompt" or "question" or "inquiry");
                         var cIdx = headerLower.FindIndex(h => h is "completion" or "response" or "answer");
+                        var wIdx = headerLower.FindIndex(h => h is "weight" or "sample_weight");
                         if (pIdx != -1 && cIdx != -1)
                         {
                             promptColIdx = pIdx;
                             compColIdx = cIdx;
+                            weightColIdx = wIdx;
                             continue;
                         }
                     }
@@ -393,6 +399,21 @@ public sealed class DatasetService : IDatasetService
                     {
                         prompt = cols[promptColIdx].Trim();
                         completion = cols[compColIdx].Trim();
+                        if (weightColIdx != -1 && cols.Count > weightColIdx)
+                        {
+                            var rawWeightCell = cols[weightColIdx].Trim();
+                            if (!string.IsNullOrEmpty(rawWeightCell))
+                            {
+                                if (!float.TryParse(rawWeightCell, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var csvWeight) ||
+                                    float.IsNaN(csvWeight) || float.IsInfinity(csvWeight) || csvWeight <= 0f)
+                                {
+                                    return (false,
+                                        $"CSV line {recordCount + 1} has an invalid or non-positive 'weight' value '{rawWeightCell}'.",
+                                        null, null);
+                                }
+                                weight = csvWeight;
+                            }
+                        }
                     }
                     else if (cols.Count >= 2)
                     {
@@ -432,6 +453,17 @@ public sealed class DatasetService : IDatasetService
                             return (false, $"Line {recordCount + 1} is missing required string 'completion' property.", null, null);
                         }
 
+                        if (root.TryGetProperty("weight", out var weightElem) && weightElem.ValueKind != JsonValueKind.Null)
+                        {
+                            if (weightElem.ValueKind != JsonValueKind.Number ||
+                                !weightElem.TryGetSingle(out var parsedWeight) ||
+                                float.IsNaN(parsedWeight) || float.IsInfinity(parsedWeight) || parsedWeight <= 0f)
+                            {
+                                return (false, $"Line {recordCount + 1} has an invalid or non-positive 'weight' property.", null, null);
+                            }
+                            weight = parsedWeight;
+                        }
+
                         prompt = promptElem.GetString()?.Trim() ?? "";
                         completion = compElem.GetString()?.Trim() ?? "";
                     }
@@ -447,7 +479,7 @@ public sealed class DatasetService : IDatasetService
                     return (false, $"Line {recordCount + 1} exceeds maximum permitted length of 10,000 characters per field.", null, null);
                 }
 
-                validatedRecords.Add((prompt, completion));
+                validatedRecords.Add((prompt, completion, weight));
                 recordCount++;
 
                 if (recordCount > MaxRecordCount)

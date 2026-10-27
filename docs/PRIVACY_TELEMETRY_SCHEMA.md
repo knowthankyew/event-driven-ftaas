@@ -8,7 +8,7 @@
 Every application in the portfolio conforms to the **Consumer-Safe, Zero-Fork Enterprise Overlay** standard:
 1. **Consumer Default (Safe & Burnable):** Promises zero outbound telemetry export (`deny`), in-memory telemetry (`memory_only`), zero cloud retention, and complete memory wipe upon triggering "Burn Local Data". Internal application and service traffic essential for local operations (such as API-to-Inference proxy calls, RabbitMQ broker messaging, and local MLflow tracking) remains permitted, while all external telemetry egress is strictly denied.
 2. **Enterprise Overlay (Opt-In Observability):** An enterprise operator can attach standard OpenTelemetry collectors (`otlp`) and configure audit retention without modifying source code or maintaining a separate fork.
-3. **Strict Allowlist Invariant:** To prevent short clause leaks or sensitive snippets from slipping through under unanticipated key names (e.g., `matchedText`, `snippet`, `excerpt`, `clause_text`), attribute sanitizers operate on a **strict allowlist**, not a denylist. Only explicitly registered metadata keys (`rule_id`, `rule_ids`, `clause_count`, `flagged_count`, `duration_ms`, `job_id`, `status`, `jurisdiction`, `device`, `adapter_size_bytes`, `dataset_hash`) are permitted. All unrecognized or arbitrary keys are automatically redacted as `[REDACTED_NOT_IN_ALLOWLIST]`.
+3. **Strict Allowlist Invariant:** To prevent short clause leaks or sensitive snippets from slipping through under unanticipated key names (e.g., `matchedText`, `snippet`, `excerpt`, `clause_text`), attribute sanitizers operate on a **strict allowlist**, not a denylist. Only explicitly registered metadata keys are permitted across portfolio applications (`rule_id`, `rule_ids`, `clause_count`, `flagged_count`, `duration_ms`, `duration_sec`, `job_id`, `status`, `jurisdiction`, `device`, `adapter_path`, `adapter_size_bytes`, `dataset_hash`, `dataset_relative_path`, `base_model`, `current_step`, `total_steps`, `progress_pct`, `loss`, `exchange`, `routing_key`, `howso.preflight.enabled`, `howso.preflight.status`, `howso.preflight.duration_ms`, `howso.cases.original_count`, `howso.cases.ablated_count`, `howso.cases.anomalous_count`). All unrecognized or arbitrary keys are automatically redacted as `[REDACTED_NOT_IN_ALLOWLIST]`.
 
 ---
 
@@ -187,7 +187,7 @@ To prevent false privacy claims sitting adjacent to honest telemetry indicators:
 
 1. **Unified Privacy Claims Function:**
    All client-side applications must derive user-facing claims from a single helper (`getPrivacyClaims(report)`).
-   - **Consumer Mode (`isLocalOnlyHonest === true`):** Asserts `100% Client-Side Local Execution • Zero Network Transmission`.
+   - **Consumer Mode (`isLocalOnlyHonest === true`):** Asserts `Strictly Client-Side Local Execution • Zero Network Transmission`.
    - **Enterprise Mode (`isLocalOnlyHonest === false`):** Must dynamically adjust all UI copy (dropzones, disclaimers, headers, footers) to reflect operational metadata export while emphasizing that document text is redacted via allowlist.
 2. **Prominent Enterprise Differentiation:**
    When built with an external exporter (`otlp`), the UI must render an unmistakable persistent top banner (e.g. `enterprise-persistent-banner`) and an `[ENTERPRISE]` title badge so that non-default builds cannot be mistaken for default consumer builds at a glance.

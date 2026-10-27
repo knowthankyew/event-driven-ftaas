@@ -117,6 +117,96 @@ def classify_output(text: str, expected_pattern: str = r'\$?6,?725') -> dict:
     }
 
 
+def build_raw_outputs_conclusion(
+    rope_desc: str,
+    max_passing_default: int | None,
+    min_failing_default: int | None,
+    failure_desc: str,
+    corrupted_count: int,
+    has_b16_runs: bool,
+    b16_runs_count: int,
+    max_b16_pass: int | None,
+    min_b16_fail: int | None,
+    long_correct_count: int,
+    long_runs_count: int,
+    toggle_diffs: list[str],
+    has_hf_eval_runs: bool,
+    hf_all_correct: bool,
+    suppression_desc: str,
+    b1_result_desc: str,
+    safe_cap: int,
+    default_prefill_label: str,
+    micro_batch_label: str,
+    kv_cache_flags_label: str,
+) -> str:
+    """
+    Template function building conclusion text with zero hardcoded digits.
+    All numeric values and flag labels must be interpolated from parameters.
+    """
+    conclusion_parts = [
+        f"Empirical context-length bisection demonstrates that failure in bitnet.cpp is context-length-dependent "
+        f"(exact root cause mechanism unknown; {rope_desc})."
+    ]
+
+    if max_passing_default is not None and min_failing_default is not None and max_passing_default < min_failing_default:
+        conclusion_parts.append(
+            f"Under default prefill ({default_prefill_label}), factual extraction succeeds up to {max_passing_default} tokens and fails at >= {min_failing_default} tokens {failure_desc} "
+            f"(total corrupted runs={corrupted_count})."
+        )
+    elif max_passing_default is not None:
+        conclusion_parts.append(
+            f"Under default prefill ({default_prefill_label}), factual extraction succeeds up to {max_passing_default} tokens (total corrupted runs={corrupted_count})."
+        )
+
+    if has_b16_runs:
+        if max_b16_pass is not None and min_b16_fail is not None:
+            conclusion_parts.append(
+                f"Under micro-batching ({micro_batch_label}), prompt context succeeds up to {max_b16_pass} tokens and fails at >= {min_b16_fail} tokens "
+                f"(degenerating into repetition or premature EOS without factual retrieval; long context correct={long_correct_count}/{long_runs_count})."
+            )
+        elif min_b16_fail is not None:
+            conclusion_parts.append(
+                f"Under micro-batching ({micro_batch_label}), prompt context at >= {min_b16_fail} tokens degenerates into repetition or premature EOS without factual retrieval "
+                f"(long context correct={long_correct_count}/{long_runs_count})."
+            )
+        else:
+            conclusion_parts.append(
+                f"Under micro-batching ({micro_batch_label}), prompt context evaluated across {b16_runs_count} runs "
+                f"(long context correct={long_correct_count}/{long_runs_count})."
+            )
+
+    if toggle_diffs:
+        conclusion_parts.append(
+            f"KV cache precision flags ({kv_cache_flags_label}) and Flash Attention toggles (-fa on/off) alter classification: {', '.join(toggle_diffs)}."
+        )
+    else:
+        conclusion_parts.append(
+            f"KV cache precision flags ({kv_cache_flags_label}) and Flash Attention toggles (-fa on/off) do not alter the failure boundary."
+        )
+
+    if has_hf_eval_runs:
+        conclusion_parts.append(
+            f"Hugging Face PyTorch reference achieves {'full' if hf_all_correct else 'partial'} factual correctness across evaluated samplers{suppression_desc}."
+        )
+
+    if b1_result_desc:
+        conclusion_parts.append(b1_result_desc)
+
+    if max_passing_default is not None:
+        conclusion_parts.append(
+            f"Conclusion: Verified-correct factual generation in bitnet.cpp is strictly confined to prompts <= {max_passing_default} tokens. "
+            f"A verified safe operational ceiling is clamped to {safe_cap} tokens. "
+            f"Long-context RAG factual generation cannot safely operate on the current bitnet.cpp runtime."
+        )
+    else:
+        conclusion_parts.append(
+            f"Conclusion: A verified safe operational ceiling is clamped to {safe_cap} tokens. "
+            f"Long-context RAG factual generation cannot safely operate on the current bitnet.cpp runtime."
+        )
+
+    return " ".join(conclusion_parts)
+
+
 def main():
     model_id = "microsoft/BitNet-b1.58-2B-4T"
     out_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../docs/empirical_long_context_isolation_results.json"))
@@ -469,11 +559,7 @@ def main():
         else "RoPE parameters diverge from reference configuration"
     )
 
-    conclusion_parts = [
-        f"Empirical context-length bisection demonstrates that failure in bitnet.cpp is context-length-dependent "
-        f"(exact root cause mechanism unknown; {rope_desc})."
-    ]
-
+    failure_desc = "with degradation"
     if max_passing_default is not None and min_failing_default is not None and max_passing_default < min_failing_default:
         failing_boundary_runs = [v for v in failing_runs if v["prompt_tokens"] >= min_failing_default]
         modes = []
@@ -485,37 +571,11 @@ def main():
             modes.append("premature EOS")
         failure_desc = f"with {' and '.join(modes)}" if modes else "with degradation"
 
-        conclusion_parts.append(
-            f"Under default prefill (b=512), factual extraction succeeds up to {max_passing_default} tokens and fails at >= {min_failing_default} tokens {failure_desc} "
-            f"(total corrupted runs={corrupted_count})."
-        )
-    elif max_passing_default is not None:
-        conclusion_parts.append(
-            f"Under default prefill (b=512), factual extraction succeeds up to {max_passing_default} tokens (total corrupted runs={corrupted_count})."
-        )
-
     b16_runs = {k: v for k, v in bitnet_runs.items() if "batch_16_ub_16" in k}
     b16_passing = [v["prompt_tokens"] for v in b16_runs.values() if v.get("factual_correctness")]
     b16_failing = [v["prompt_tokens"] for v in b16_runs.values() if not v.get("factual_correctness")]
     max_b16_pass = max(b16_passing) if b16_passing else None
     min_b16_fail = min(b16_failing) if b16_failing else None
-
-    if b16_runs:
-        if max_b16_pass is not None and min_b16_fail is not None:
-            conclusion_parts.append(
-                f"Under micro-batching (b=16), prompt context succeeds up to {max_b16_pass} tokens and fails at >= {min_b16_fail} tokens "
-                f"(degenerating into repetition or premature EOS without factual retrieval; long context correct={long_correct_count}/{len(long_runs)})."
-            )
-        elif min_b16_fail is not None:
-            conclusion_parts.append(
-                f"Under micro-batching (b=16), prompt context at >= {min_b16_fail} tokens degenerates into repetition or premature EOS without factual retrieval "
-                f"(long context correct={long_correct_count}/{len(long_runs)})."
-            )
-        else:
-            conclusion_parts.append(
-                f"Under micro-batching (b=16), prompt context evaluated across {len(b16_runs)} runs "
-                f"(long context correct={long_correct_count}/{len(long_runs)})."
-            )
 
     t4_run = bitnet_runs.get("long_ctx_default_b512_t4")
     t4_class = t4_run.get("classification") if t4_run else None
@@ -525,41 +585,34 @@ def main():
             if bitnet_runs[k].get("classification") != t4_class:
                 toggle_diffs.append(f"{k} differs ({bitnet_runs[k].get('classification')} vs {t4_class})")
 
-    if toggle_diffs:
-        conclusion_parts.append(
-            f"KV cache precision flags (-ctk f32 -ctv f32) and Flash Attention toggles (-fa on/off) alter classification: {', '.join(toggle_diffs)}."
-        )
-    else:
-        conclusion_parts.append(
-            "KV cache precision flags (-ctk f32 -ctv f32) and Flash Attention toggles (-fa on/off) do not alter the failure boundary."
-        )
+    suppression_desc = ""
+    if hf_eval_runs and delta_29 is not None and delta_30 is not None:
+        corrupt_id = logits_info.get("prompt_29_tokens", {}).get("corrupt_token_id")
+        tok_str = f" (ID {corrupt_id})" if corrupt_id is not None else ""
+        suppression_desc = f", with corrupt token{tok_str} suppressed by {delta_29} to {delta_30} logits"
 
-    if hf_eval_runs:
-        suppression_desc = ""
-        if delta_29 is not None and delta_30 is not None:
-            corrupt_id = logits_info.get("prompt_29_tokens", {}).get("corrupt_token_id")
-            tok_str = f" (ID {corrupt_id})" if corrupt_id is not None else ""
-            suppression_desc = f", with corrupt token{tok_str} suppressed by {delta_29} to {delta_30} logits"
-        conclusion_parts.append(
-            f"Hugging Face PyTorch reference achieves {'full' if hf_all_correct else 'partial'} factual correctness across evaluated samplers{suppression_desc}."
-        )
-
-    if b1_result_desc:
-        conclusion_parts.append(b1_result_desc)
-
-    if max_passing_default is not None:
-        conclusion_parts.append(
-            f"Conclusion: Verified-correct factual generation in bitnet.cpp is strictly confined to prompts <= {max_passing_default} tokens. "
-            f"A verified safe operational ceiling is clamped to {safe_cap} tokens. "
-            f"Long-context RAG factual generation cannot safely operate on the current bitnet.cpp runtime."
-        )
-    else:
-        conclusion_parts.append(
-            f"Conclusion: A verified safe operational ceiling is clamped to {safe_cap} tokens. "
-            f"Long-context RAG factual generation cannot safely operate on the current bitnet.cpp runtime."
-        )
-
-    conclusion = " ".join(conclusion_parts)
+    conclusion = build_raw_outputs_conclusion(
+        rope_desc=rope_desc,
+        max_passing_default=max_passing_default,
+        min_failing_default=min_failing_default,
+        failure_desc=failure_desc,
+        corrupted_count=corrupted_count,
+        has_b16_runs=bool(b16_runs),
+        b16_runs_count=len(b16_runs),
+        max_b16_pass=max_b16_pass,
+        min_b16_fail=min_b16_fail,
+        long_correct_count=long_correct_count,
+        long_runs_count=len(long_runs),
+        toggle_diffs=toggle_diffs,
+        has_hf_eval_runs=bool(hf_eval_runs),
+        hf_all_correct=hf_all_correct,
+        suppression_desc=suppression_desc,
+        b1_result_desc=b1_result_desc,
+        safe_cap=safe_cap,
+        default_prefill_label="b=512",
+        micro_batch_label="b=16",
+        kv_cache_flags_label="-ctk f32 -ctv f32",
+    )
 
     payload = {
         "metadata": {

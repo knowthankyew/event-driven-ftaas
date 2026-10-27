@@ -1,9 +1,34 @@
 """
-Howso Containerized Microservice (FTaaS Data Arbiter)
-=====================================================
-Provides isolated information-theoretic dataset auditing, redundancy ablation,
-anomaly detection, and post-inference compliance verification without linking
-AGPL code into the FTaaS MIT codebase.
+FTaaS Data Arbiter — Clean-Room Information-Theoretic Microservice
+==================================================================
+Copyright (C) 2026 knowthankyew / The Event-Driven FTaaS Contributors
+SPDX-License-Identifier: AGPL-3.0-only
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License version 3 as published by
+the Free Software Foundation (see `src/howso-service/LICENSE-AGPL.txt`).
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+Clean-Room Provenance & Academic Citation:
+------------------------------------------
+This module is an original, clean-room Python implementation written directly
+from the published mathematical equations (Equations 4, 6, 7, 8, 10 and
+Sections 8.1, 9.4) in:
+  Christopher J. Hazard et al., "A Theory of the Mechanics of Information:
+  Generalization Through Measurement of Uncertainty (Learning is Measuring)",
+  arXiv:2505.00859.
+
+Zero lines of source code, functions, or files were copied or derived from
+upstream Howso or Amalgam repositories.
+
+Trademark & Non-Affiliation Disclaimer:
+---------------------------------------
+Howso(R) and Amalgam(TM) are trademarks or registered trademarks of Howso
+Incorporated. This clean-room reference implementation is not affiliated with,
+endorsed by, or sponsored by Howso Incorporated.
 
 Endpoints:
 - GET  /health
@@ -14,22 +39,18 @@ Endpoints:
 import math
 import re
 import statistics
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-# Check if native Howso engine is available in environment
+# Clean-room implementation flag: zero upstream Howso/Amalgam packages are imported or linked.
 NATIVE_HOWSO_AVAILABLE = False
-try:
-    from howso import engine
-    from howso.utilities import infer_feature_attributes
-    NATIVE_HOWSO_AVAILABLE = True
-except Exception:
-    NATIVE_HOWSO_AVAILABLE = False
+
+ENGINE_IDENTIFIER = "Clean-Room Reference Information Engine (Hazard et al. Laplace-LK Surprisal)"
 
 app = FastAPI(
     title="FTaaS Howso Data Arbiter",
-    description="Containerized Information-Theoretic Dataset Auditing & Provenance Service",
+    description="Containerized Clean-Room Information-Theoretic Dataset Auditing & Provenance Service",
     version="1.0.0"
 )
 
@@ -175,7 +196,7 @@ def health():
         "status": "healthy",
         "service": "howso-data-arbiter",
         "native_howso_available": NATIVE_HOWSO_AVAILABLE,
-        "engine": "Howso Reference Information Engine (Laplace-LK Surprisal)",
+        "engine": ENGINE_IDENTIFIER,
         "license": "AGPL-3.0"
     }
 
@@ -190,6 +211,7 @@ def audit_dataset(req: AuditRequest):
     # 1. Redundancy Ablation (Section 8.1)
     # Bucket by tag so pairwise comparisons only evaluate records within the same category
     weights = [r.weight for r in req.records]
+    absorbed_counts = [0 for _ in req.records]
     pruned_indices = set()
     ablated_details = []
     input_keys = [k for k in deviations.keys()]
@@ -249,6 +271,7 @@ def audit_dataset(req: AuditRequest):
                     target = min(i, j)
                     victim = max(i, j)
                     weights[target] += weights[victim]
+                    absorbed_counts[target] += 1 + absorbed_counts[victim]
                     pruned_indices.add(victim)
                     ablated_details.append({
                         "ablated_index": victim,
@@ -273,14 +296,19 @@ def audit_dataset(req: AuditRequest):
     anomalous_details = []
     quarantined_indices = set()
     MAX_ANOMALY_CANDIDATES = 120
+    structural_keys = [
+        k for k in input_keys
+        if not (k.startswith("prompt_kw_") or k.startswith("completion_kw_"))
+    ]
 
     for idx in surviving_indices:
         c_i = extracted[idx]
         peers = tag_survivors.get(c_i["tag"], [])
         candidate_indices = [o for o in peers if o != idx]
+        same_tag_neighborhood = len(candidate_indices) >= 3
 
-        # If not enough peers in same tag, supplement from global pool
-        if len(candidate_indices) < 3:
+        # If not enough peers in same tag, supplement from global pool using structural contours
+        if not same_tag_neighborhood:
             candidate_indices = [o for o in surviving_indices if o != idx]
 
         # Bound pairwise calculations per record to MAX_ANOMALY_CANDIDATES
@@ -288,9 +316,14 @@ def audit_dataset(req: AuditRequest):
             step = len(candidate_indices) / MAX_ANOMALY_CANDIDATES
             candidate_indices = [candidate_indices[int(i * step)] for i in range(MAX_ANOMALY_CANDIDATES)]
 
-        surprisals = []
+        # Records that absorbed near-duplicate neighbors during Section 8.1 ablation
+        # have corroborated peers at ~0 surprisal within their own tag neighborhood.
+        # Use absorbed_counts (rather than client-supplied weights) capped at k=3.
+        extra_self_neighbors = min(3, max(0, absorbed_counts[idx]))
+        surprisals = [0.0] * extra_self_neighbors
+        active_keys = input_keys if same_tag_neighborhood else structural_keys
         for other_idx in candidate_indices:
-            s = case_surprisal(c_i, extracted[other_idx], deviations, input_keys)
+            s = case_surprisal(c_i, extracted[other_idx], deviations, active_keys)
             surprisals.append(s)
 
         if len(surprisals) > 0:

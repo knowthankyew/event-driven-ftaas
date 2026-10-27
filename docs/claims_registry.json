@@ -431,7 +431,11 @@
       "source_artifact": "docs/empirical_speed_memory.json",
       "json_path": "summary.bitnet_2b_peak_rss_mb",
       "format_rule": "{value:.2f}",
-      "used_in": ["docs/ROADMAP.md"],
+      "used_in": [
+        "docs/ROADMAP.md",
+        "docs/MODEL_PERFORMANCE_COMPARISON.md",
+        "docs/BITNET_PROTOTYPE_RESULTS.md"
+      ],
       "description": "BitNet 2B peak RSS in MB"
     },
     "bitnet_270m_peak_rss_mb": {
@@ -445,28 +449,42 @@
       "source_artifact": "docs/empirical_speed_memory.json",
       "json_path": "summary.gemma2_fp16_reference_rss_mb",
       "format_rule": "{value:.1f}",
-      "used_in": ["docs/ROADMAP.md"],
+      "used_in": [
+        "docs/ROADMAP.md",
+        "docs/MODEL_PERFORMANCE_COMPARISON.md"
+      ],
       "description": "Gemma 2 2B FP16 published reference RSS in MB"
     },
     "compression_ratio_vs_fp16": {
       "source_artifact": "docs/empirical_speed_memory.json",
       "json_path": "summary.compression_ratio_vs_fp16",
       "format_rule": "{value:.2f}",
-      "used_in": ["docs/ROADMAP.md"],
+      "used_in": [
+        "docs/ROADMAP.md",
+        "docs/MODEL_PERFORMANCE_COMPARISON.md"
+      ],
       "description": "Compression ratio vs FP16 baseline"
     },
     "threads_4_decode_tok_per_sec": {
       "source_artifact": "docs/empirical_speed_memory.json",
       "json_path": "summary.threads_4_decode_tok_per_sec",
       "format_rule": "{value:.1f}",
-      "used_in": ["docs/ROADMAP.md"],
+      "used_in": [
+        "docs/ROADMAP.md",
+        "docs/MODEL_PERFORMANCE_COMPARISON.md",
+        "docs/BITNET_PROTOTYPE_RESULTS.md"
+      ],
       "description": "BitNet 2B decode throughput at 4 threads"
     },
     "threads_4_prefill_tok_per_sec": {
       "source_artifact": "docs/empirical_speed_memory.json",
       "json_path": "summary.threads_4_prefill_tok_per_sec",
       "format_rule": "{value:.1f}",
-      "used_in": ["docs/ROADMAP.md"],
+      "used_in": [
+        "docs/ROADMAP.md",
+        "docs/MODEL_PERFORMANCE_COMPARISON.md",
+        "docs/BITNET_PROTOTYPE_RESULTS.md"
+      ],
       "description": "BitNet 2B prefill throughput at 4 threads"
     },
     "threads_4_ttft_ms": {

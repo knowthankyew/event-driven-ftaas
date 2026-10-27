@@ -246,12 +246,13 @@ def independent_recompute_metrics(benchmark_path: Path) -> tuple[bool, list[str]
                     exp_t3 = (derived_rank is not None and derived_rank <= 3)
                     exp_rr = (1.0 / derived_rank) if derived_rank else 0.0
                     if t1 != exp_t1 or t3 != exp_t3 or abs(rr - exp_rr) > 5e-4:
-                        print(
-                            f"[WARN] [{sec_name}] Method '{m}' query {q.get('id', '?')!r}: stored flags "
+                        msg = (
+                            f"[{sec_name}] Method '{m}' query {q.get('id', '?')!r}: stored flags "
                             f"(top1={t1}, top3={t3}, rr={rr}) disagree with derived rank {derived_rank} "
-                            f"(expected top1={exp_t1}, top3={exp_t3}, rr={exp_rr:.4f})",
-                            file=sys.stderr,
+                            f"(expected top1={exp_t1}, top3={exp_t3}, rr={exp_rr:.4f})"
                         )
+                        print(f"[WARN] {msg}", file=sys.stderr)
+                        errors.append(msg)
 
                 top1_hits += t1
                 top3_hits += t3
@@ -284,16 +285,25 @@ def independent_recompute_metrics(benchmark_path: Path) -> tuple[bool, list[str]
     return len(errors) == 0, errors
 
 
+REQUIRED_CONCLUSION_SCRIPTS = (
+    "record_context_boundary_bisection.py",
+    "record_hf_vs_bitnet_raw_outputs.py",
+    "record_speed_memory.py",
+    "validate_270m_embedder.py",
+)
+
+
 def lint_script_conclusions(scripts_dir: Path) -> tuple[bool, list[str]]:
     """
     AST check that functions building conclusion text contain no numeric or
-    digit-bearing string literals except through interpolation.
+    digit-bearing string literals except through interpolation, and that all
+    empirical benchmark scripts that emit conclusions define a governed builder.
     """
     errors = []
     if not scripts_dir.is_dir():
         return True, []
 
-    for py_file in scripts_dir.glob("*.py"):
+    for py_file in sorted(scripts_dir.glob("*.py")):
         if py_file.name in ("sync_docs.py", "sync_benchmark_docs.py"):
             continue
         try:
@@ -302,36 +312,54 @@ def lint_script_conclusions(scripts_dir: Path) -> tuple[bool, list[str]]:
             errors.append(f"Failed to parse AST for {py_file.name}: {e}")
             continue
 
+        found_conclusion_fn = False
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 if "conclusion" in node.name.lower() or "build_conclusion" in node.name.lower():
+                    found_conclusion_fn = True
                     # Identify docstring node if present so it can be skipped during literal check
                     docstring_node = (
                         node.body[0].value
                         if (node.body and isinstance(node.body[0], ast.Expr))
                         else None
                     )
-                    # Walk inside function AST
-                    for child in ast.walk(node):
-                        # Standalone constant string
-                        if isinstance(child, ast.Constant) and isinstance(child.value, str):
-                            # Ignore docstring
-                            if child is docstring_node or child == docstring_node:
-                                continue
-                            if re.search(r"\d", child.value):
+                    # Walk inside function body statements (excludes argument defaults)
+                    for stmt in node.body:
+                        for child in ast.walk(stmt):
+                            # Standalone constant string
+                            if isinstance(child, ast.Constant) and isinstance(child.value, str):
+                                # Ignore docstring
+                                if child is docstring_node or child == docstring_node:
+                                    continue
+                                if re.search(r"\d", child.value):
+                                    errors.append(
+                                        f"Script AST lint: {py_file.name}::{node.name} line {getattr(child, 'lineno', '?')} "
+                                        f"contains hardcoded numeric literal in string: {child.value!r}"
+                                    )
+                            elif (
+                                isinstance(child, ast.Constant)
+                                and isinstance(child.value, (int, float))
+                                and not isinstance(child.value, bool)
+                            ):
                                 errors.append(
                                     f"Script AST lint: {py_file.name}::{node.name} line {getattr(child, 'lineno', '?')} "
-                                    f"contains hardcoded numeric literal in string: {child.value!r}"
+                                    f"contains hardcoded numeric literal: {child.value!r}"
                                 )
-                        elif isinstance(child, ast.JoinedStr):
-                            # Inside f-string: verify ast.Constant parts don't contain digits
-                            for part in child.values:
-                                if isinstance(part, ast.Constant) and isinstance(part.value, str):
-                                    if re.search(r"\d", part.value):
-                                        errors.append(
-                                            f"Script AST lint: {py_file.name}::{node.name} line {getattr(part, 'lineno', '?')} "
-                                            f"f-string contains hardcoded digits in constant fragment: {part.value!r}"
-                                        )
+                            elif isinstance(child, ast.JoinedStr):
+                                # Inside f-string: verify ast.Constant parts don't contain digits
+                                for part in child.values:
+                                    if isinstance(part, ast.Constant) and isinstance(part.value, str):
+                                        if re.search(r"\d", part.value):
+                                            errors.append(
+                                                f"Script AST lint: {py_file.name}::{node.name} line {getattr(part, 'lineno', '?')} "
+                                                f"f-string contains hardcoded digits in constant fragment: {part.value!r}"
+                                            )
+
+        if py_file.name in REQUIRED_CONCLUSION_SCRIPTS and not found_conclusion_fn:
+            errors.append(
+                f"Script AST lint: {py_file.name} must define a conclusion builder function "
+                f"(*conclusion*) governed by AST lint."
+            )
 
     return len(errors) == 0, errors
 
@@ -504,6 +532,20 @@ def sync_document(
                     f"expected {expected_val!r}, found {current_val!r}"
                 )
 
+    try:
+        doc_rel = str(doc_path.resolve().relative_to(repo_root.resolve())).replace("\\", "/")
+    except ValueError:
+        doc_rel = None
+
+    if doc_rel:
+        for claim_id, claim_cfg in claims.items():
+            used_in = [u.replace("\\", "/") for u in claim_cfg.get("used_in", [])]
+            if doc_rel in used_in and claim_id not in found_claims:
+                errors.append(
+                    f"Missing required claim marker '<!-- claim:{claim_id} -->' in {doc_rel} "
+                    f"(registered in claims_registry.json 'used_in')"
+                )
+
     if write:
         def repl(match):
             cid = match.group(1)
@@ -555,8 +597,8 @@ def main():
     parser.add_argument(
         "--doc",
         type=Path,
-        default=DEFAULT_ROADMAP_PATH,
-        help="Path to markdown document to check/sync",
+        default=None,
+        help="Path to markdown document to check/sync (defaults to all documents listed in claims_registry.json 'used_in')",
     )
 
     args = parser.parse_args()
@@ -587,15 +629,31 @@ def main():
         print("[PASS] Script conclusion AST check passed (zero hardcoded literal numbers in conclusion functions).")
 
     # 3. Document sync & linter
-    doc_ok, doc_msgs = sync_document(args.doc, args.registry, write=do_write, repo_root=REPO_ROOT)
-    if not doc_ok:
-        overall_success = False
-        for err in doc_msgs:
-            print(f"[FAIL] {err}", file=sys.stderr)
+    if args.doc is not None:
+        target_docs = [args.doc]
     else:
-        for msg in doc_msgs:
-            print(f"[INFO] {msg}")
-        print(f"[PASS] Document claims and empirical constraints verified for {args.doc.name}.")
+        target_docs = [DEFAULT_ROADMAP_PATH]
+        if args.registry.is_file():
+            try:
+                reg_data = json.loads(args.registry.read_text(encoding="utf-8"))
+                for c_cfg in reg_data.get("claims", {}).values():
+                    for rel_p in c_cfg.get("used_in", []):
+                        candidate = REPO_ROOT / rel_p
+                        if candidate not in target_docs:
+                            target_docs.append(candidate)
+            except Exception:
+                pass
+
+    for doc_target in target_docs:
+        doc_ok, doc_msgs = sync_document(doc_target, args.registry, write=do_write, repo_root=REPO_ROOT)
+        if not doc_ok:
+            overall_success = False
+            for err in doc_msgs:
+                print(f"[FAIL] {err}", file=sys.stderr)
+        else:
+            for msg in doc_msgs:
+                print(f"[INFO] {msg}")
+            print(f"[PASS] Document claims and empirical constraints verified for {doc_target.name}.")
 
     if overall_success:
         print("\nAll claims and empirical guardrails verified successfully.")

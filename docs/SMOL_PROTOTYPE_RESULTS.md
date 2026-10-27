@@ -85,15 +85,15 @@ SmolLM2-135M is the cornerstone of the platform's **FTaaS Bridge Exporter** (Por
 ```mermaid
 flowchart LR
     A["Trained SmolLM2 LoRA Adapter (1.84 MB)"] --> B["FTaaS Edge Exporter\n(exporter.py / scripts/export_edge_adapter.py)"]
-    B --> C["ONNX Graph Fusion & Dynamic INT8 Quantization"]
-    C --> D["Export Package\n• model_quantized.onnx (~140 MB)\n• edge_model_manifest.json (SHA-256)\n• tokenizer.json"]
+    B --> C["LoRA Weight Merge & ONNX Graph Tracing\n(+ Optional INT8 Quantization for >300 MB Models)"]
+    C --> D["Export Package\n• model.onnx (~270 MB FP32) or model_int8.onnx\n• edge_model_manifest.json (SHA-256)\n• tokenizer.json"]
     D --> E["Browser Client\n(onnxruntime-web via WebGPU / WASM)"]
-    E --> F["Client-Side Inference\n⚡ Sub-150ms Latency\n🛡️ 100% Offline Air-Gap\n💰 Zero Server Cloud Egress"]
+    E --> F["Client-Side Inference\n⚡ Sub-150ms Latency\n🛡️ Full Offline Air-Gap\n💰 Zero Server Cloud Egress"]
 ```
 
 ### Packaging & Integrity Invariants
 1. **Single-Input ONNX Signature**: The exported ONNX model graph accepts a single contiguous tensor `input_ids` with dynamic sequence dimension (`batch_size=1`, `seq_len`), simplifying browser WASM memory allocation.
-2. **Dynamic INT8 Quantization**: Post-training quantization compresses the combined base-and-adapter graph from 270 MB to **~140 MB**, reducing network download payloads by ~48%.
+2. **ONNX Packaging & Optional Dynamic INT8 Quantization**: By default, `exporter.py` merges the LoRA adapter into the base graph and exports `model.onnx` (`fp32`, ~270 MB for SmolLM2-135M). When `--quantize` is enabled on models exceeding the 300 MB threshold in `exporter.py`, dynamic INT8 quantization outputs `model_int8.onnx` (`int8`), reducing network download payloads by ~48%.
 3. **Cryptographic Manifest**: Every export bundle includes `edge_model_manifest.json` containing SHA-256 integrity checksums for all component files, protecting client runtimes against tampering or partial transfer corruption.
 4. **Zero-Egress Air-Gap**: Once loaded into `onnxruntime-web`, token generation executes locally in browser WebAssembly. Sensitive inquiries and compliance data never transit external networks.
 
@@ -127,7 +127,7 @@ How SmolLM2-135M performs on standardized regulatory compliance prompts:
 | :--- | :--- | :--- | :--- |
 | **Compute Cost** | **\$0.00** (Runs on client hardware) | Medium/High (Requires GPU) | Low (Runs on commodity CPU) |
 | **Latency Target** | **<150 ms** (Instant edge completion) | 1.0 – 2.0 s (GPU generation) | 1.5 – 3.0 s (CPU generation) |
-| **Data Privacy** | **100% Client Air-Gap** (No egress) | Server-side VPC deployment | Server-side / Edge CPU |
+| **Data Privacy** | **Complete Client Air-Gap** (No egress) | Server-side VPC deployment | Server-side / Edge CPU |
 | **Task Complexity** | Tagging, Classification, Formatting | Nuanced Multi-Step Legal Analysis | Operational Guidance & Forms |
 | **Deployment Target**| Web Browser (WASM/WebGPU), Mobile | Dedicated Cloud Container (Triton) | Edge Server, POS Terminal, Branch Box |
 | **Adapter Distribution**| **1.84 MB** (Instant over-the-air sync)| 12.21 MB (Moderate payload) | 15.26 MB (Moderate payload) |

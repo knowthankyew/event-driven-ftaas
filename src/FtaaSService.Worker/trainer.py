@@ -90,6 +90,46 @@ def create_instruction_mask(input_ids: list[int], prompt_len: int, attention_mas
     ]
 
 
+def compute_weighted_causal_lm_loss(
+    logits: torch.Tensor,
+    labels: torch.Tensor,
+    sample_weights: Optional[torch.Tensor] = None,
+    mean_weight: float = 1.0,
+) -> torch.Tensor:
+    """
+    Computes Causal LM cross-entropy loss weighted by per-sample probability mass
+    weights (Hazard et al. Section 8.1 redundancy ablation mass transfer).
+    Normalizes by the active sample count and dataset-level mean weight (mean_weight)
+    rather than the current micro-batch's weight sum so sample weights remain
+    effective when per_device_train_batch_size == 1.
+    """
+    shift_logits = logits[..., :-1, :].contiguous().float()
+    shift_labels = labels[..., 1:].contiguous()
+    vocab_size = shift_logits.size(-1)
+
+    loss_fct = torch.nn.CrossEntropyLoss(reduction="none", ignore_index=-100)
+    token_losses = loss_fct(
+        shift_logits.view(-1, vocab_size),
+        shift_labels.view(-1)
+    ).view(shift_labels.size())
+
+    valid_mask = (shift_labels != -100).to(token_losses.dtype)
+    tokens_per_sample = valid_mask.sum(dim=-1)
+
+    if sample_weights is None:
+        denom = valid_mask.sum().clamp(min=1.0)
+        return (token_losses * valid_mask).sum() / denom
+
+    weights = sample_weights.to(device=token_losses.device, dtype=token_losses.dtype).view(-1)
+    sample_loss_sums = (token_losses * valid_mask).sum(dim=-1)
+    per_sample_mean_loss = sample_loss_sums / tokens_per_sample.clamp(min=1.0)
+    active_samples = (tokens_per_sample > 0).to(token_losses.dtype)
+    effective_weights = weights * active_samples
+    norm_factor = max(float(mean_weight), 1e-8)
+    denom = (active_samples.sum() * norm_factor).clamp(min=1e-8)
+    return (per_sample_mean_loss * effective_weights).sum() / denom
+
+
 def train_job(
     job_id: str,
     job_name: str,
@@ -235,9 +275,18 @@ def train_job(
         if getattr(peft_model, "hf_quantizer", None) is not None:
             type(peft_model.hf_quantizer).is_trainable = property(lambda self: True)
 
-        # 6. Prepare Hugging Face Dataset with Instruction Masking
+        # 6. Prepare Hugging Face Dataset with Instruction Masking & Section 8.1 Sample Weights
         prompt_texts = [format_inference_prompt(base_model_name, r["prompt"]) for r in records]
         formatted_texts = [format_training_prompt(base_model_name, r["prompt"], r["completion"]) for r in records]
+        sample_weights = [float(r.get("weight", 1.0)) for r in records]
+        mean_dataset_weight = (
+            sum(sample_weights) / len(sample_weights)
+            if sample_weights else 1.0
+        )
+        has_non_unit_weights = any(abs(w - 1.0) > 1e-6 for w in sample_weights)
+        if has_non_unit_weights:
+            mlflow.log_param("weighted_probability_mass", True)
+            mlflow.log_param("total_probability_mass", round(sum(sample_weights), 4))
         
         def tokenize_batch(examples):
             tokenized = tokenizer(
@@ -258,13 +307,20 @@ def train_job(
                 seq_labels = create_instruction_mask(input_id_seq, prompt_len, att_mask)
                 labels.append(seq_labels)
             tokenized["labels"] = labels
+            if "weight" in examples:
+                tokenized["weight"] = [float(w) for w in examples["weight"]]
             return tokenized
 
         raw_dataset = Dataset.from_dict({
             "text": formatted_texts,
-            "prompt_text": prompt_texts
+            "prompt_text": prompt_texts,
+            "weight": sample_weights,
         })
         tokenized_dataset = raw_dataset.map(tokenize_batch, batched=True)
+        if has_non_unit_weights and hasattr(tokenized_dataset, "column_names"):
+            drop_cols = [c for c in ("text", "prompt_text") if c in tokenized_dataset.column_names]
+            if drop_cols:
+                tokenized_dataset = tokenized_dataset.remove_columns(drop_cols)
 
         # Ensure MPS memory high watermark doesn't choke on 2B+ models
         if DEVICE.type == "mps":
@@ -296,7 +352,8 @@ def train_job(
             save_strategy="no",
             report_to=[],  # We log manually to MLflow via our callback
             use_cpu=(DEVICE.type == "cpu"),
-            disable_tqdm=True
+            disable_tqdm=True,
+            remove_unused_columns=not has_non_unit_weights,
         )
 
         status_callback_handler = StatusReportingCallback(
@@ -312,6 +369,24 @@ def train_job(
             train_dataset=tokenized_dataset,
             callbacks=[status_callback_handler]
         )
+
+        if has_non_unit_weights:
+            import types
+
+            def _weighted_compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+                inputs_copy = dict(inputs)
+                batch_weights = inputs_copy.pop("weight", None)
+                batch_labels = inputs_copy.pop("labels")
+                outputs = model(**inputs_copy)
+                loss = compute_weighted_causal_lm_loss(
+                    outputs.logits,
+                    batch_labels,
+                    batch_weights,
+                    mean_weight=mean_dataset_weight,
+                )
+                return (loss, outputs) if return_outputs else loss
+
+            trainer.compute_loss = types.MethodType(_weighted_compute_loss, trainer)
 
         # 8. Train!
         logger.info(f"Commencing training execution for {total_steps} steps...")

@@ -36,8 +36,8 @@ To maintain clear open-source attribution and scientific transparency:
 | **Primary Architecture** | Ultra-compact Edge WASM | Deep Context & Reasoning | Pure-CPU Ternary Scale |
 | **Native Precision** | FP16 / BF16 | FP16 / BF16 | Ternary {-1, 0, +1} |
 | **Parameter Count** | 134.5 Million | 2.61 Billion | 2.41 Billion |
-| **Model Storage (Disk)** | ~270 MB | ~5.20 GB | ~1.10 GB (GGUF `i2_s`) |
-| **Active Inference RAM** | ~310 MB | ~5,600 MB (FP16 CPU) | ~1,150 MB (C++ AVX2) |
+| **Model Storage (Disk)** | ~270 MB | ~5.20 GB | ~1.10 GiB (`1,187.8 MB` GGUF `i2_s`) |
+| **Active Inference RAM** | ~310 MB | ~<!-- claim:gemma2_fp16_reference_rss_mb -->5600.0<!-- /claim --> MB (FP16 CPU) | **<!-- claim:bitnet_2b_peak_rss_mb -->1369.79<!-- /claim --> MB** (Peak RSS, C++ AVX2) |
 | **Inference Compute** | Floating-Point MAC | Floating-Point MAC | Integer SIMD / LUT (No Float MACs) |
 | **Inference Hardware** | Any CPU / MPS / WASM | Recommended: GPU / Metal (CPU: ~11 t/s) | Zero GPU (Pure CPU) |
 | **LoRA Training Hardware**| macOS Metal (MPS) / CPU | macOS Metal (MPS float16) | macOS Metal (MPS float32) |
@@ -55,7 +55,7 @@ flowchart TD
     end
 
     subgraph Ternary["3. Green Compute / CPU Scaling Tier"]
-        M3["BitNet b1.58 2B-4T\n• 1.1 GB Footprint (i2_s)\n• Runs on commodity CPU (AVX2)\n• Integer SIMD / LUT (No Float MACs)"]
+        M3["BitNet b1.58 2B-4T\n• 1.1 GB Disk Weights (i2_s)\n• Runs on commodity CPU (AVX2)\n• Integer SIMD / LUT (No Float MACs)"]
     end
 ```
 
@@ -70,9 +70,9 @@ Measured natively on host hardware (Intel Core i9-9880H 8-core CPU @ 2.3 GHz, 16
 | Metric | SmolLM2-135M | Gemma 2 2B IT (FP16 Baseline) | BitNet b1.58 2B-4T (`i2_s`) | Differential Notes |
 | :--- | :--- | :--- | :--- | :--- |
 | **Active Parameters** | 134.5M | 2.61B | 2.41B | BitNet has 18× more capacity than SmolLM2 |
-| **Prefill Speed (Prompt t/s)** | ~180.0 t/s (CPU) | ~14.2 t/s (CPU FP16) | **100.3 – 107.2 t/s (CPU)** | 7.1–7.5× faster prefill in interactive `llama-cli` runs vs Gemma FP16 (distinguished from `llama-bench` pp64 at 8 threads with -b 1: 23.44 t/s) |
+| **Prefill Speed (Prompt t/s)** | ~180.0 t/s (CPU) | ~14.2 t/s (CPU FP16) | **<!-- claim:threads_4_prefill_tok_per_sec -->114.5<!-- /claim --> t/s (4t CPU)** | 8.1× faster prefill in `llama-cli` (`docs/empirical_speed_memory.json`) vs Gemma FP16 (distinguished from `llama-bench` pp64 at 8 threads with `-b 1`: 23.44 t/s) |
 | **Decode Speed (Single Thread)**| ~52.0 t/s (CPU) | ~3.8 t/s (CPU FP16) | **8.13 t/s (CPU)** | 2.1× faster single-thread decode |
-| **Decode Speed (4 Threads)** | ~85.0 t/s (CPU) | ~8.4 t/s (CPU FP16) | **19.96 t/s (CPU)** | 2.4× faster multi-thread decode |
+| **Decode Speed (4 Threads)** | ~85.0 t/s (CPU) | ~8.4 t/s (CPU FP16) | **<!-- claim:threads_4_decode_tok_per_sec -->19.5<!-- /claim --> t/s (CPU)** | 2.3× faster multi-thread decode (`19.96 t/s` in `llama-bench -b 1`) |
 | **Decode Speed (8 Threads)** | ~98.0 t/s (CPU) | ~11.1 t/s (CPU FP16) | **23.54 t/s (CPU)** | 2.1× faster 8-thread decode |
 | **Time per Token (8-Core CPU)** | 10.2 ms / token | 90.1 ms / token | **42.4 ms / token** | 53% lower latency than Gemma FP16 |
 | **Inference Hardware Offload** | Optional | Recommended for low latency | **Zero GPU (Pure CPU AVX2)**| Eliminates entry-level cloud GPU dependency |
@@ -88,8 +88,8 @@ A natural question for practitioners is how BitNet's 23.5 t/s decode compares ag
 
 | Dimension | SmolLM2-135M | Gemma 2 2B IT | BitNet b1.58 2B-4T | Differential Rationale |
 | :--- | :--- | :--- | :--- | :--- |
-| **Weights on Disk** | 270 MB | 5,240 MB (FP16) | **1,130 MB (`i2_s` GGUF)** | 78% storage reduction vs Gemma FP16 |
-| **Active Process RAM (Inference)**| ~310 MB | ~5,600 MB (FP16) | **~1,150 MB (C++ AVX2)** | 4.8× density improvement over FP16 |
+| **Weights on Disk** | 270 MB | 5,240 MB (FP16) | **1,187.8 MB (`1.10 GiB` `i2_s` GGUF)** | 77% storage reduction vs Gemma FP16 |
+| **Active Process RAM (Inference)**| ~310 MB | ~<!-- claim:gemma2_fp16_reference_rss_mb -->5600.0<!-- /claim --> MB (FP16) | **<!-- claim:bitnet_2b_peak_rss_mb -->1369.79<!-- /claim --> MB (Peak RSS, C++ AVX2)** | <!-- claim:compression_ratio_vs_fp16 -->4.09<!-- /claim -->× density improvement over FP16 |
 | **Inference GPU VRAM** | 0.0 GB (CPU) | ~5.0 GB (Metal/CUDA) | **0.0 GB (Pure CPU)** | BitNet C++ runtime requires zero GPU VRAM |
 | **Host System RAM (LoRA Training)**| ~1.5 GB | ~12.0 GB | **~4.5 – 6.0 GB** | PyTorch autograd graph + adapter gradients |
 
@@ -128,7 +128,7 @@ Hypothesized Contributing Factors (Unprofiled):
 #### 2. LoRA Training Arithmetic Invariant
 During PEFT LoRA fine-tuning:
 $$h = W_0 \cdot x + \frac{\alpha}{r} (B \cdot A) \cdot x$$
-* The pre-trained base ternary weight matrix $W_0 \in \{-1, 0, +1\}$ is **100% frozen** ($\nabla_{W_0} \mathcal{L} = 0$). Its ternary properties are completely preserved.
+* The pre-trained base ternary weight matrix $W_0 \in \{-1, 0, +1\}$ is **completely frozen** ($\nabla_{W_0} \mathcal{L} = 0$). Its ternary properties are completely preserved.
 * The trainable low-rank adapters $A$ and $B$ are updated in floating point (`float32` on Metal to prevent numerical underflow).
 * Training requires floating-point compute; only inference can execute via pure integer SIMD.
 
@@ -155,9 +155,9 @@ Illustrative completions from the multi-model comparison arena on an enterprise 
 * **Limitation**: Requires substantial RAM (5.2 GB FP16) and GPU compute for conversational throughput on CPU.
 
 ### 3. BitNet b1.58 2B-4T (Commodity CPU Tier)
-* **Throughput & Efficiency**: 23.5 tokens/sec CPU decode (107 t/s prefill) with 2.41B parameter capacity at only 1.10 GB RAM footprint.
+* **Throughput & Efficiency**: 23.5 tokens/sec 8-thread CPU decode (<!-- claim:threads_4_decode_tok_per_sec -->19.5<!-- /claim --> t/s decode, <!-- claim:threads_4_prefill_tok_per_sec -->114.5<!-- /claim --> t/s prefill at 4 threads) with 2.41B parameter capacity at 1.10 GiB on-disk weights and <!-- claim:bitnet_2b_peak_rss_mb -->1369.79<!-- /claim --> MB peak RSS.
 * **Instruction Alignment & Sampling**: Microsoft's model card indicates that BitNet b1.58 2B-4T underwent pre-training, SFT, and DPO. In early raw CLI testing without explicit chat templates or repetition penalties, repetitive n-gram continuation loops were observed. Systematic evaluation across LLaMA 3 chat templates (`tokenizer.apply_chat_template`) and sampling parameters (repetition penalties, top-k/top-p) remains under active investigation.
-* **LoRA Fine-Tuning**: Fine-tuning verified on Metal in `float32`, producing a 15.26 MB adapter that structures output into enterprise compliance key-value schemas.
+* **LoRA Fine-Tuning**: Fine-tuning evaluated on Metal in `float32`, producing a 15.26 MB adapter that structures output into enterprise compliance key-value schemas.
 * **Enterprise FTaaS Fit**: Demonstrates feasibility for ternary edge hardware: provides 2.4B capacity on commodity CPU hardware without cloud GPU egress cost.
 
 ---
@@ -173,8 +173,8 @@ Illustrative completions from the multi-model comparison arena on an enterprise 
                     │                         │                         │
             • In-browser WASM         • Complex contract       • Commodity CPU edge
             • Zero client latency       clause analysis          (POS/teller stations)
-            • Minimal RAM (<300 MB)   • Deep multi-step        • 1.1 GB strict memory
-            • Strict tag extraction     reasoning                envelope
+            • Minimal RAM (<300 MB)   • Deep multi-step        • 1.1 GiB disk weights /
+            • Strict tag extraction     reasoning                ~1.37 GB peak RSS
             • Instant offline audit   • Dedicated GPU servers  • 2.4B capacity without
                                                                  GPU energy footprint
 ```

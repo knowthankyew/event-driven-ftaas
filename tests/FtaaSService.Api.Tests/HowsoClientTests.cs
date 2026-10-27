@@ -48,7 +48,7 @@ public class HowsoClientTests
     [Fact]
     public async Task CheckHealthAsync_ReturnsLive_WhenEndpointReturnsHealthy()
     {
-        var jsonResponse = "{\"status\": \"Healthy\", \"engine\": \"Amalgam-Hazard-LK\", \"license\": \"AGPL-3.0\"}";
+        var jsonResponse = "{\"status\": \"Healthy\", \"engine\": \"Clean-Room Reference Information Engine (Hazard et al. Laplace-LK Surprisal)\", \"license\": \"AGPL-3.0\"}";
         var handler = new DelegatingMockHandler(req =>
         {
             Assert.Equal(HttpMethod.Get, req.Method);
@@ -66,7 +66,7 @@ public class HowsoClientTests
 
         Assert.True(result.IsLive);
         Assert.Equal("Healthy", result.Status);
-        Assert.Equal("Amalgam-Hazard-LK", result.Engine);
+        Assert.Equal("Clean-Room Reference Information Engine (Hazard et al. Laplace-LK Surprisal)", result.Engine);
         Assert.Equal("AGPL-3.0", result.License);
     }
 

@@ -299,6 +299,46 @@ class TestInstructionMasking(unittest.TestCase):
         # Trailing padding tokens should be -100
         self.assertEqual(seq_labels[7:], [-100, -100, -100, -100, -100])
 
+    def test_weighted_causal_lm_loss_respects_sample_probability_mass(self):
+        import torch
+        from trainer import compute_weighted_causal_lm_loss
+
+        # 2 samples, seq_len=3, vocab=4
+        # Sample 0 predicts token 1 perfectly; Sample 1 predicts token 2 poorly
+        logits = torch.tensor([
+            [[0.0, 10.0, 0.0, 0.0], [0.0, 10.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]],
+            [[10.0, 0.0, -5.0, 0.0], [10.0, 0.0, -5.0, 0.0], [0.0, 0.0, 0.0, 0.0]],
+        ], dtype=torch.float32)
+        labels = torch.tensor([
+            [-100, 1, 1],
+            [-100, 2, 2],
+        ], dtype=torch.long)
+
+        unweighted = compute_weighted_causal_lm_loss(
+            logits, labels, torch.tensor([1.0, 1.0]), mean_weight=1.0
+        )
+        heavy_sample0 = compute_weighted_causal_lm_loss(
+            logits, labels, torch.tensor([3.0, 1.0]), mean_weight=2.0
+        )
+        heavy_sample1 = compute_weighted_causal_lm_loss(
+            logits, labels, torch.tensor([1.0, 3.0]), mean_weight=2.0
+        )
+
+        self.assertLess(float(heavy_sample0), float(unweighted))
+        self.assertGreater(float(heavy_sample1), float(unweighted))
+
+        # Single-sample micro-batch (per_device_train_batch_size == 1 with gradient accumulation):
+        # sample weight must scale the loss rather than cancelling out against itself.
+        single_logits = logits[:1]
+        single_labels = labels[:1]
+        loss_w1 = compute_weighted_causal_lm_loss(
+            single_logits, single_labels, torch.tensor([1.0]), mean_weight=1.5
+        )
+        loss_w3 = compute_weighted_causal_lm_loss(
+            single_logits, single_labels, torch.tensor([3.0]), mean_weight=1.5
+        )
+        self.assertAlmostEqual(float(loss_w3), float(loss_w1) * 3.0, places=5)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -62,12 +62,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r src/FtaaSService.Inference/requirements.txt
           pip install -r src/FtaaSService.Worker/requirements.txt
+          pip install -r src/howso-service/requirements.txt
           pip install pip-audit
 
       - name: Audit Python Dependencies
         run: |
           pip-audit -r src/FtaaSService.Inference/requirements.txt
           pip-audit -r src/FtaaSService.Worker/requirements.txt
+          pip-audit -r src/howso-service/requirements.txt
 
       - name: Run Python Unit & Cross-Service Contract Tests
         run: python -m unittest discover -s tests
