@@ -1,6 +1,6 @@
 <!-- diagram-meta
   last-validated: 2026-10-27
-  validated-commit: e891d72
+  validated-commit: d0f901d
   covers: [src/**, tests/**, scripts/**]
   generated-by: manual
 -->
@@ -459,6 +459,9 @@ ml/
 ├── docker-compose.yml            # RabbitMQ, MLflow, and Surprisal Data Arbiter services
 ├── README.md                     # Executive summary, trade-offs & runbook
 ├── NOTICE.md                     # Legal disclosures, privacy invariants & attribution
+├── LICENSE                       # Canonical MIT License
+├── .github/                      # GitHub Actions CI workflows & Dependabot configuration
+├── policies/                     # Workspace governance & compliance policies
 ├── docs/                         # Engineering documentation & benchmark records
 │   ├── ARCHITECTURE.md           # Detailed architecture specifications & contracts
 │   ├── ROADMAP.md                # BitNet b1.58 ternary integration roadmap & execution tracking
@@ -470,6 +473,7 @@ ml/
 │   ├── claims_registry.json      # Cryptographic & empirical claims verification database
 │   └── PRIVACY_TELEMETRY_SCHEMA.md # Portfolio privacy & telemetry governance schema
 ├── scripts/
+│   ├── audit-claims.py           # Unified architecture diagram, license & empirical claims linter
 │   ├── dev-up.sh                 # Start infra, check health, seed datasets
 │   ├── dev-down.sh               # Tear down infra
 │   ├── verify-e2e.sh             # Master single-command verification script
@@ -515,6 +519,7 @@ ml/
 │   │   └── requirements.txt
 │   └── surprisal-service/        # Containerized Independent Reference Information Engine (MIT HTTP Boundary)
 │       ├── Dockerfile            # Standalone container specification (port 5200)
+│       ├── README.md             # Microservice documentation, provenance & fidelity disclosures
 │       ├── service.py            # Independent Laplace-LK information-theoretic ablation & attribution engine
 │       └── requirements.txt      # FastAPI, Uvicorn, and Pydantic dependencies (zero upstream packages)
 ```

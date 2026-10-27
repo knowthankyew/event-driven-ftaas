@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Checkout Shared Privacy Telemetry
         run: git clone --depth 1 --branch "$SHARED_TELEMETRY_REF" https://github.com/knowthankyew/privacy-telemetry.git ../privacy-telemetry
@@ -50,6 +52,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v7
@@ -95,6 +99,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Checkout Shared Privacy Telemetry
         run: git clone --depth 1 --branch "$SHARED_TELEMETRY_REF" https://github.com/knowthankyew/privacy-telemetry.git ../privacy-telemetry

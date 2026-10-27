@@ -383,6 +383,157 @@ class TestClaimsLinter(unittest.TestCase):
                     f"Found leaked host directory path in {path.relative_to(REPO_ROOT)}"
                 )
 
+    @classmethod
+    def get_audit_module(cls):
+        """Load and cache scripts/audit-claims.py module dynamically."""
+        if not hasattr(cls, "_audit_module"):
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("audit_claims", str(REPO_ROOT / "scripts/audit-claims.py"))
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            cls._audit_module = mod
+        return cls._audit_module
+
+    def test_architecture_diagram_freshness(self):
+        """Assert architecture diagram freshness passes cleanly on full non-shallow clones."""
+        audit_mod = self.get_audit_module()
+
+        # Check if git is available and repo is non-shallow
+        git_check = audit_mod._git("rev-parse", "--is-shallow-repository")
+        if git_check.returncode != 0 or git_check.stdout.strip() == "true":
+            self.skipTest("Shallow clone or git unavailable; leaving diagram freshness enforcement to full CI.")
+
+        diagram_errors: list[str] = []
+        audit_mod.audit_architecture_diagrams(diagram_errors)
+        self.assertEqual(diagram_errors, [], f"Architecture diagram audit failed: {diagram_errors}")
+
+    def test_license_governance_clean(self):
+        """Assert 100% MIT canonical license gate passes cleanly whenever git is available."""
+        audit_mod = self.get_audit_module()
+
+        git_check = audit_mod._git("status", "--porcelain")
+        if git_check.returncode != 0:
+            self.skipTest("Git command unavailable in this environment.")
+
+        license_errors: list[str] = []
+        audit_mod.audit_license_compliance(license_errors)
+        self.assertEqual(license_errors, [], f"License compliance gate failed: {license_errors}")
+
+    def test_architecture_diagram_meta_parser_and_validation(self):
+        """Verify diagram meta parsing and error detection on simulated invalid inputs."""
+        import tempfile
+        audit_mod = self.get_audit_module()
+
+        # 1. Parser behavior on missing header or non-bracketed/empty covers
+        self.assertIsNone(audit_mod.parse_diagram_meta("no header here"))
+        meta_no_brackets = audit_mod.parse_diagram_meta("<!-- diagram-meta\n  covers: src/**\n-->")
+        self.assertIsNotNone(meta_no_brackets)
+        self.assertEqual(meta_no_brackets["covers"], [])
+        meta_empty = audit_mod.parse_diagram_meta("<!-- diagram-meta\n  covers: []\n-->")
+        self.assertIsNotNone(meta_empty)
+        self.assertEqual(meta_empty["covers"], [])
+
+        # Valid meta parsing
+        meta = audit_mod.parse_diagram_meta("<!-- diagram-meta\n  last-validated: 2026-10-27\n  covers: [src/**]\n-->")
+        self.assertIsNotNone(meta)
+        self.assertEqual(meta["last-validated"], "2026-10-27")
+        self.assertEqual(meta["covers"], ["src/**"])
+
+        # 2. _audit_diagram_doc error detection on simulated inputs
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+
+            # Missing validated-commit
+            doc_missing_commit = tmp_path / "missing_commit.md"
+            doc_missing_commit.write_text(
+                "<!-- diagram-meta\n  last-validated: 2026-10-27\n  covers: [src/**]\n-->\n# Test",
+                encoding="utf-8"
+            )
+            errs: list[str] = []
+            audit_mod._audit_diagram_doc(doc_missing_commit, errs)
+            self.assertTrue(
+                any("validated-commit is missing" in e for e in errs),
+                f"Expected missing commit error, got: {errs}"
+            )
+
+            # Future last-validated date
+            doc_future = tmp_path / "future_date.md"
+            doc_future.write_text(
+                "<!-- diagram-meta\n  last-validated: 2099-01-01\n  validated-commit: 1234567\n  covers: [src/**]\n-->\n# Test",
+                encoding="utf-8"
+            )
+            errs = []
+            audit_mod._audit_diagram_doc(doc_future, errs)
+            self.assertTrue(
+                any("in the future" in e for e in errs),
+                f"Expected future date error, got: {errs}"
+            )
+
+            # Non-ISO date
+            doc_non_iso = tmp_path / "non_iso.md"
+            doc_non_iso.write_text(
+                "<!-- diagram-meta\n  last-validated: not-a-date\n  validated-commit: 1234567\n  covers: [src/**]\n-->\n# Test",
+                encoding="utf-8"
+            )
+            errs = []
+            audit_mod._audit_diagram_doc(doc_non_iso, errs)
+            self.assertTrue(
+                any("not an ISO date" in e for e in errs),
+                f"Expected non-ISO date error, got: {errs}"
+            )
+
+    def test_spdx_and_agpl_detection_patterns(self):
+        """Assert SPDX rejects compound expressions, trims comment terminators, and exercises license gate."""
+        import subprocess
+        import tempfile
+        audit_mod = self.get_audit_module()
+
+        # 1. Test clean_spdx_identifier helper on various terminators and compound expressions
+        test_cases = [
+            ("// SPDX" + "-License-Identifier: MIT AND GPL-3.0-only\n", "MIT AND GPL-3.0-only"),
+            ("# SPDX" + "-License-Identifier: MIT\n", "MIT"),
+            ("<!-- SPDX" + "-License-Identifier: GPL-3.0 -->\n", "GPL-3.0"),
+            ("// SPDX" + "-License-Identifier: GPL-3.0;\n", "GPL-3.0"),
+            ("// SPDX" + "-License-Identifier: GPL-3.0,\n", "GPL-3.0"),
+            ("/* SPDX" + "-License-Identifier: MIT */\n", "MIT"),
+        ]
+        for sample, expected in test_cases:
+            raw_matches = audit_mod.SPDX_RE.findall(sample)
+            self.assertTrue(bool(raw_matches), f"Failed to match {sample}")
+            cleaned = audit_mod.clean_spdx_identifier(raw_matches[0])
+            self.assertEqual(cleaned, expected, f"Expected {expected}, got {cleaned} for {sample}")
+
+        # 2. Case-insensitive license pattern
+        target_token = "a" + "gpl"
+        self.assertTrue(bool(re.search(r"\bagpl\b", f"this has {target_token} license", re.IGNORECASE)))
+        self.assertTrue(bool(re.search(r"\bagpl\b", f"licensed under {target_token.upper()}-3.0", re.IGNORECASE)))
+
+        # 3. Exercise license gate entry point with non-MIT declarations ending in -->, ,, and ;
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            bad_html = tmp_path / "bad_spdx.html"
+            bad_html.write_text("<!-- SPDX" + "-License-Identifier: GPL-3.0 -->\n", encoding="utf-8")
+            bad_comma = tmp_path / "bad_spdx_comma.txt"
+            bad_comma.write_text("// SPDX" + "-License-Identifier: GPL-3.0,\n", encoding="utf-8")
+            bad_semi = tmp_path / "bad_spdx_semi.txt"
+            bad_semi.write_text("// SPDX" + "-License-Identifier: GPL-3.0;\n", encoding="utf-8")
+
+            simulated_paths = f"{bad_html}\0{bad_comma}\0{bad_semi}\0"
+            orig_git = audit_mod._git
+            try:
+                audit_mod._git = lambda *args: (
+                    subprocess.CompletedProcess(args=["git", *args], returncode=0, stdout=simulated_paths, stderr="")
+                    if "-z" in args else orig_git(*args)
+                )
+                gate_errors: list[str] = []
+                audit_mod.audit_license_compliance(gate_errors)
+                spdx_errors = [e for e in gate_errors if "non-MIT SPDX identifier" in e]
+                self.assertEqual(len(spdx_errors), 3, f"Expected 3 SPDX errors, got: {gate_errors}")
+                for err in spdx_errors:
+                    self.assertIn("non-MIT SPDX identifier 'GPL-3.0'", err)
+            finally:
+                audit_mod._git = orig_git
+
 
 if __name__ == "__main__":
     unittest.main()
