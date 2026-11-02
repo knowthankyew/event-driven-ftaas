@@ -34,32 +34,37 @@ if [ "$HAS_SYSTEM_BROWSER" -eq 0 ]; then
     npx --yes playwright install chromium || true
 fi
 
-# Start .NET API server in background
-echo "Starting Studio server on http://localhost:5100..."
-dotnet run --project src/FtaaSService.Api &
-API_PID=$!
-
-# Ensure API is killed on exit
+# Ensure Studio API server is running on http://localhost:5100
+API_PID=""
 cleanup() {
-    echo "Shutting down Studio server (PID $API_PID)..."
-    kill $API_PID 2>/dev/null || true
+    if [ -n "$API_PID" ]; then
+        echo "Shutting down temporary Studio server (PID $API_PID)..."
+        kill $API_PID 2>/dev/null || true
+    fi
 }
 trap cleanup EXIT
 
-# Wait for server readiness
-echo "Waiting for Studio to be ready..."
-READY=0
-for i in {1..120}; do
-    if curl -s http://localhost:5100 > /dev/null; then
-        echo "Studio is ready!"
-        READY=1
-        break
+if ! curl --fail --max-time 3 -s http://localhost:5100/healthz >/dev/null 2>&1; then
+    echo "Starting Studio server on http://localhost:5100..."
+    dotnet run --project src/FtaaSService.Api &
+    API_PID=$!
+
+    echo "Waiting for Studio to be ready..."
+    READY=0
+    for i in {1..120}; do
+        if curl --fail --max-time 3 -s http://localhost:5100/healthz >/dev/null 2>&1; then
+            echo "Studio is ready!"
+            READY=1
+            break
+        fi
+        sleep 1
+    done
+    if [ "$READY" -ne 1 ]; then
+        echo "Error: Studio did not become ready on http://localhost:5100" >&2
+        exit 1
     fi
-    sleep 1
-done
-if [ "$READY" -ne 1 ]; then
-    echo "Error: Studio did not become ready on http://localhost:5100" >&2
-    exit 1
+else
+    echo "Studio server is already running on http://localhost:5100."
 fi
 
 # Run Playwright recording script

@@ -102,17 +102,26 @@ async function sleep(ms) {
 
   // 1. Comparison Arena - Persona 1: Fintech Support & Compliance
   console.log('Step 1: Testing Fintech Compliance Persona...');
+  const maxTokensEl = await page.$('#max-tokens');
+  if (maxTokensEl) {
+    await maxTokensEl.fill('24');
+    await sleep(500);
+  }
+
   const promptPill = await page.$('.sample-prompt-chip');
   if (promptPill) {
     await promptPill.click();
-    await sleep(1500);
-  }
-
-  const runBtn = await page.$('#btn-run-compare');
-  if (runBtn) {
-    await runBtn.click();
-    console.log('Clicked Compare...');
-    await sleep(3500);
+    console.log('Clicked sample prompt (triggers comparison)...');
+    try {
+      await page.waitForFunction(() => {
+        const el = document.getElementById('base-completion');
+        return el && !el.classList.contains('placeholder') && el.textContent.trim().length > 0;
+      }, undefined, { timeout: 60000 });
+    } catch (e) {
+      console.error('Timed out waiting for base-completion:', e.message);
+      throw e;
+    }
+    await sleep(2000);
   }
 
   // Smooth scroll down to view side-by-side results and policy checklist
@@ -131,23 +140,15 @@ async function sleep(ms) {
   const personaCards = await page.$$('.persona-card');
   if (personaCards.length > 1) {
     await personaCards[1].click();
+    console.log('Selected Enterprise SaaS Customer Ops persona...');
     await sleep(1500);
 
     const saasPrompt = await page.$('.sample-prompt-chip');
     if (saasPrompt) {
       await saasPrompt.click();
-      await sleep(1500);
-    }
-
-    if (runBtn) {
-      await runBtn.click();
+      console.log('Clicked SaaS sample prompt...');
       await sleep(3500);
     }
-
-    await page.evaluate(() => {
-      window.scrollBy({ top: 350, behavior: 'smooth' });
-    });
-    await sleep(3500);
   }
 
   // 3. Switch to No-Code Adapter Studio Tab
