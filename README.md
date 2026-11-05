@@ -92,6 +92,8 @@ FTaaS follows the portfolio governance standard documented in [PRIVACY_TELEMETRY
  [Side-by-Side Comparison] ────────── Base Completion vs Fine-Tuned Completion
 ```
 
+> **Sidecar Provenance**: Legal attribution, clean-room derivation details, and trademark disclosures for the optional `surprisal-service` sidecar are documented in [`NOTICE.md` §5](NOTICE.md#5-optional-containerized-sidecar-surprisal-service-formerly-howso-service).
+
 ---
 
 ## Why This Architecture? (Engineering Trade-Offs)
@@ -205,7 +207,7 @@ All technical design documents, prototype evaluations, and implementation roadma
 | **[`docs/GEMMA_PROTOTYPE_RESULTS.md`](docs/GEMMA_PROTOTYPE_RESULTS.md)** | High-capacity reasoning tier (2.6B) empirical benchmarks, Apple Silicon MPS tuning, and licensing guards. |
 | **[`docs/BITNET_PROTOTYPE_RESULTS.md`](docs/BITNET_PROTOTYPE_RESULTS.md)** | 1.58-bit ternary CPU execution (2.4B) AVX2 SIMD scaling benchmarks, memory profiling, and PyTorch LoRA metrics. |
 | **[`docs/PRIVACY_TELEMETRY_SCHEMA.md`](docs/PRIVACY_TELEMETRY_SCHEMA.md)** | Portfolio governance standard for strict attribute allowlists, burn-to-purge invariants, and OpenTelemetry overlay. |
-| **[`NOTICE.md`](NOTICE.md)** | Root statutory disclaimers, consumer privacy invariants, and third-party foundation model attribution. |
+| **[`NOTICE.md`](NOTICE.md)** | Root statutory disclaimers, consumer privacy invariants, third-party foundation model attribution, and `surprisal-service` provenance verification. |
 
 ---
 

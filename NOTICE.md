@@ -33,3 +33,10 @@ This platform enables fine-tuning and inference orchestration with third-party f
 - **Academic citation**: References to Hazard et al. are citations to published research and imply no endorsement by the authors.
 - **Trademarks**: Howso® and Amalgam™ are trademarks or registered trademarks of Howso Incorporated. They appear in this repository only to cite the underlying research and to describe this project's provenance. This project is independent and is not affiliated with, endorsed by, or sponsored by Howso Incorporated.
 - **Patents**: The MIT License does not grant, and this repository does not claim to grant, any license under third-party patents. Anyone deploying this service commercially is responsible for their own patent and freedom-to-operate review.
+
+### 5.1 Provenance Verification
+
+- **Derivation constraint**: `src/surprisal-service/service.py` was authored under explicit instruction to derive its mathematical routines solely from the equations and algorithmic descriptions published in Hazard et al. (arXiv:2510.22809).
+- **Source-isolation review**: A post-implementation verification pass confirmed that no Howso Engine or Amalgam source code, decompiled artifacts, or SDK internals were consulted or incorporated during development.
+- **Adaptation scope**: Beyond the paper's core distance and surprisal equations and the relevant algorithmic sections, the service relies on independent engineering heuristics—including length-band pre-sorting, Jaccard token-overlap prefiltering, candidate evaluation caps, and log-space weight stabilization—that are original to this repository.
+- **Audit record**: The complete conversational development and verification transcript is retained in the author's local development history and is not checked into the public repository.
