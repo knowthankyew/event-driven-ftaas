@@ -1,6 +1,6 @@
 <!-- diagram-meta
-  last-validated: 2026-11-02
-  validated-commit: 2aab3b2
+  last-validated: 2026-11-08
+  validated-commit: aa51441
   covers: [src/**, tests/**, scripts/**]
   generated-by: manual
 -->
