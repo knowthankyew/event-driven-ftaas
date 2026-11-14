@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # ── Stage 1: Build & Publish Control Plane ────────────────────────────
-FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0-alpine AS build
 WORKDIR /workspace
 
 # Copy privacy-telemetry project
