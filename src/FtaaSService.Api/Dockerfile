@@ -18,7 +18,7 @@ COPY ml/src/FtaaSService.Api /workspace/ml/src/FtaaSService.Api
 RUN dotnet publish -c Release -o /app/publish
 
 # ── Stage 2: Hardened Runtime ─────────────────────────────────────────
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:11.0-alpine AS runtime
 WORKDIR /app
 
 RUN apk add --no-cache wget
