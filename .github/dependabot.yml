@@ -57,6 +57,9 @@ updates:
       interval: "weekly"
     assignees:
       - "knowthankyew"
+    ignore:
+      - dependency-name: "mcr.microsoft.com/dotnet/*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "docker"
     directory: "/src/FtaaSService.Worker"

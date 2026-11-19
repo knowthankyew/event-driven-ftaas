@@ -163,6 +163,9 @@ def _audit_diagram_doc(doc: Path, errors: list[str]) -> None:
                 ":(exclude)scripts/audit-claims.py",
                 ":(exclude)scripts/sync_docs.py",
                 ":(exclude)tests/test_claims_linter.py",
+                ":(exclude)**/requirements*.txt",
+                ":(exclude)Directory.Packages.props",
+                ":(exclude)**/*.csproj",
             ]
             diff = _git("diff", "--name-only", f"{commit}..HEAD", "--", *pathspecs)
             if diff.returncode != 0:
