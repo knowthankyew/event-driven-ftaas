@@ -183,7 +183,7 @@ public static class JobEndpoints
         {
             ["base_model"] = baseModel,
             ["dataset_hash"] = normResult.Sha256Hash!,
-            ["dataset_relative_path"] = normResult.RelativePath!
+            ["dataset_relative_path"] = normResult.RelativePath ?? string.Empty
         };
 
         if (enableSurprisalPreflight)

@@ -28,7 +28,11 @@ public interface IFtaasTelemetry
 
 public sealed class FtaasTelemetry : IFtaasTelemetry
 {
+    private static readonly byte[] EphemeralFallbackHmacKey =
+        System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+
     private readonly IPrivacyTelemetry _inner;
+    private readonly byte[] _hmacKey;
 
     public string Mode => _inner.Mode;
     public bool IsBurnEnabled => _inner.IsBurnEnabled;
@@ -36,6 +40,13 @@ public sealed class FtaasTelemetry : IFtaasTelemetry
 
     public FtaasTelemetry(IConfiguration configuration)
     {
+        var configuredHmacKey = configuration["FTAAS_TELEMETRY_HMAC_KEY"]
+            ?? configuration["Telemetry:HmacKey"]
+            ?? Environment.GetEnvironmentVariable("FTAAS_TELEMETRY_HMAC_KEY");
+        _hmacKey = string.IsNullOrWhiteSpace(configuredHmacKey)
+            ? EphemeralFallbackHmacKey
+            : System.Text.Encoding.UTF8.GetBytes(configuredHmacKey);
+
         var allowlist = new SafeAllowlist(new[]
         {
             "job_id", "status", "duration_ms", "duration_sec", "base_model", "dataset_hash",
@@ -52,9 +63,42 @@ public sealed class FtaasTelemetry : IFtaasTelemetry
             allowlist: allowlist);
     }
 
+    public static string SanitizePathAttribute(string key, string? value, byte[]? hmacKey = null)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        if (string.Equals(key, "adapter_path", StringComparison.OrdinalIgnoreCase))
+        {
+            var keyBytes = (hmacKey is { Length: > 0 }) ? hmacKey : EphemeralFallbackHmacKey;
+            var mac = System.Security.Cryptography.HMACSHA256.HashData(
+                keyBytes,
+                System.Text.Encoding.UTF8.GetBytes(value));
+            return $"hmac:{Convert.ToHexString(mac).ToLowerInvariant()[..16]}";
+        }
+        var segments = value.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length > 0 ? segments[^1] : string.Empty;
+    }
+
     public void RecordSpan(string name, string jobId, string status, long durationMs = 0, IDictionary<string, object>? attributes = null)
     {
-        _inner.RecordSpan(name, jobId, status, durationMs, attributes);
+        IDictionary<string, object>? sanitized = attributes;
+        if (attributes is not null)
+        {
+            Dictionary<string, object>? copied = null;
+            foreach (var kv in attributes)
+            {
+                if (string.Equals(kv.Key, "adapter_path", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(kv.Key, "dataset_relative_path", StringComparison.OrdinalIgnoreCase))
+                {
+                    copied ??= new Dictionary<string, object>(attributes);
+                    copied[kv.Key] = SanitizePathAttribute(kv.Key, kv.Value?.ToString(), _hmacKey);
+                }
+            }
+            if (copied is not null)
+            {
+                sanitized = copied;
+            }
+        }
+        _inner.RecordSpan(name, jobId, status, durationMs, sanitized);
     }
 
     public IReadOnlyList<FtaasSpanRecord> GetBufferedSpans()

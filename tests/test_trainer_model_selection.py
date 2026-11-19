@@ -277,6 +277,76 @@ class TestTrainerModelSelection(unittest.TestCase):
                 )
             self.assertIn("HF_TOKEN", str(ctx.exception))
 
+    def test_failed_redelivery_preserves_existing_valid_adapter(self):
+        """Verifies atomic staging protects existing valid adapter weights if a redelivered run fails mid-save."""
+        import trainer as trainer_module
+        from datasets import Dataset as HFDataset
+
+        job_id = "test-job-atomic-001"
+        existing_dir = self.data_root / "artifacts" / job_id / "model_adapters"
+        existing_dir.mkdir(parents=True, exist_ok=True)
+        (existing_dir / "adapter_config.json").write_text(json.dumps({"peft_type": "LORA", "version": "good"}))
+        (existing_dir / "adapter_model.safetensors").write_bytes(b"G" * (150 * 1024))
+
+        mock_tokenizer = MagicMock()
+        mock_model = MagicMock()
+        mock_model.config = MagicMock()
+        mock_peft_model = MagicMock()
+        mock_peft_model.named_parameters.return_value = []
+        mock_train_result = MagicMock()
+        mock_train_result.training_loss = 0.5
+        mock_trainer = MagicMock()
+        mock_trainer.train.return_value = mock_train_result
+
+        def truncated_save(path, **kwargs):
+            p = Path(path)
+            p.mkdir(parents=True, exist_ok=True)
+            (p / "adapter_config.json").write_text(json.dumps({"peft_type": "LORA", "version": "bad"}))
+            (p / "adapter_model.safetensors").write_bytes(b"B" * 100)  # < 100KB -> triggers verification error
+
+        mock_peft_model.save_pretrained.side_effect = truncated_save
+        mock_tokenizer.save_pretrained.side_effect = lambda path, **kwargs: None
+
+        stub_tokenized = HFDataset.from_dict({
+            "input_ids": [[1, 2, 3, 4] * 64] * 2,
+            "attention_mask": [[1] * 256] * 2,
+            "labels": [[1, 2, 3, 4] * 64] * 2,
+        })
+
+        with patch.object(trainer_module, "DATA_ROOT", self.data_root), \
+             patch.object(trainer_module, "ARTIFACTS_ROOT", self.data_root / "artifacts"), \
+             patch("trainer.AutoTokenizer.from_pretrained", return_value=mock_tokenizer), \
+             patch("trainer.AutoModelForCausalLM.from_pretrained", return_value=mock_model), \
+             patch("trainer.LoraConfig", return_value=MagicMock()), \
+             patch("trainer.get_peft_model", return_value=mock_peft_model), \
+             patch("trainer.Trainer", return_value=mock_trainer), \
+             patch("trainer.mlflow") as mock_mlflow, \
+             patch("datasets.Dataset.map", return_value=stub_tokenized):
+
+            mock_run = MagicMock()
+            mock_run.__enter__ = MagicMock(return_value=mock_run)
+            mock_run.__exit__ = MagicMock(return_value=False)
+            mock_run.info.run_id = "test-run-redeliver"
+            mock_run.info.experiment_id = "test-exp-redeliver"
+            mock_mlflow.start_run.return_value = mock_run
+
+            from trainer import train_job
+            with self.assertRaises(RuntimeError):
+                train_job(
+                    job_id=job_id,
+                    job_name="test-atomic",
+                    base_model_name="HuggingFaceTB/SmolLM2-135M",
+                    dataset_path=str(self.dataset_file.relative_to(self.data_root)),
+                    dataset_hash="abc123",
+                    hyperparameters={"epochs": 1, "batchSize": 2, "learningRate": 0.0003},
+                )
+
+        # Existing valid adapter must remain completely intact and staging cleaned up
+        self.assertIn("good", (existing_dir / "adapter_config.json").read_text())
+        self.assertEqual((existing_dir / "adapter_model.safetensors").stat().st_size, 150 * 1024)
+        staging_leftovers = list((self.data_root / "artifacts" / job_id).glob(".model_adapters.staging.*"))
+        self.assertEqual(staging_leftovers, [])
+
 
 class TestInstructionMasking(unittest.TestCase):
     """Validates that instruction tuning masks prompt tokens and pad tokens as -100 while preserving completion and EOS tokens."""

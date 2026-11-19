@@ -150,5 +150,57 @@ class TestLifecycleTelemetry(unittest.TestCase):
             logger.removeHandler(handler)
             logger.setLevel(prev_level)
 
+    def test_emit_lifecycle_span_sanitizes_path_valued_attributes(self):
+        import hashlib
+        import hmac
+        import os
+        from unittest.mock import patch
+
+        logged_messages = []
+
+        class TestHandler(logging.Handler):
+            def emit(self, record):
+                logged_messages.append(record.getMessage())
+
+        logger = logging.getLogger("FtaaSService.Worker.Consumer")
+        prev_level = logger.level
+        logger.setLevel(logging.INFO)
+        handler = TestHandler()
+        logger.addHandler(handler)
+
+        try:
+            raw_dataset_path = "/Users/alice/data/datasets/job-path-1.jsonl"
+            raw_adapter_path = "/Users/alice/data/artifacts/job-path-1/model_adapters"
+            with patch.dict(os.environ, {"FTAAS_TELEMETRY_HMAC_KEY": "worker-test-hmac-secret"}):
+                emit_lifecycle_span(
+                    span_name="job.registered",
+                    job_id="job-path-1",
+                    status="Succeeded",
+                    attributes={
+                        "dataset_relative_path": raw_dataset_path,
+                        "adapter_path": raw_adapter_path,
+                    }
+                )
+            expected_single_pass = "hmac:" + hmac.new(
+                b"worker-test-hmac-secret",
+                raw_adapter_path.encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()[:16]
+
+            span_msg = next(msg for msg in logged_messages if "[TELEMETRY_SPAN] job.registered" in msg)
+            data = json.loads(span_msg.split("::", 1)[1].strip())
+            self.assertEqual(data["dataset_relative_path"], "job-path-1.jsonl")
+            self.assertNotIn("/", data["dataset_relative_path"])
+            self.assertNotIn("alice", data["dataset_relative_path"])
+            self.assertRegex(data["adapter_path"], r"^hmac:[a-f0-9]{16}$")
+            self.assertEqual(data["adapter_path"], expected_single_pass)
+            unsalted_hex = hashlib.sha256(raw_adapter_path.encode("utf-8")).hexdigest()[:16]
+            self.assertNotEqual(data["adapter_path"], f"hmac:{unsalted_hex}")
+            self.assertNotIn("/", data["adapter_path"])
+            self.assertNotIn("alice", data["adapter_path"])
+        finally:
+            logger.removeHandler(handler)
+            logger.setLevel(prev_level)
+
 if __name__ == '__main__':
     unittest.main()

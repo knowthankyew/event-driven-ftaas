@@ -202,6 +202,43 @@ class TestCrossServiceContracts(unittest.TestCase):
             self.assertGreater(payload["sequenceNumber"], prev_seq)
             prev_seq = payload["sequenceNumber"]
 
+    def test_request_stop_interrupts_consuming_and_closes_connection_gracefully(self):
+        """Verifies SIGTERM/request_stop wakes start_consuming via add_callback_threadsafe and exits cleanly."""
+        import signal
+        import threading
+
+        consumer = JobConsumer()
+        started_event = threading.Event()
+        stopped_event = threading.Event()
+
+        mock_channel = MagicMock()
+        mock_channel.is_open = True
+        mock_channel.stop_consuming.side_effect = lambda: stopped_event.set()
+
+        def fake_start_consuming():
+            started_event.set()
+            assert stopped_event.wait(timeout=2.0)
+
+        mock_channel.start_consuming.side_effect = fake_start_consuming
+
+        mock_conn = MagicMock()
+        mock_conn.is_closed = False
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.add_callback_threadsafe.side_effect = lambda cb: cb()
+
+        consumer.get_connection = MagicMock(return_value=mock_conn)
+
+        worker_thread = threading.Thread(target=consumer.run, daemon=True)
+        worker_thread.start()
+        self.assertTrue(started_event.wait(timeout=2.0))
+
+        consumer.request_stop(signal.SIGTERM, None)
+        worker_thread.join(timeout=2.0)
+
+        self.assertFalse(worker_thread.is_alive())
+        mock_channel.stop_consuming.assert_called_once()
+        mock_conn.close.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

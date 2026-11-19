@@ -1,4 +1,9 @@
+import hashlib
+import hmac
 import json
+import os
+import secrets
+import signal
 import time
 import traceback
 import logging
@@ -52,6 +57,24 @@ SAFE_ALLOWLIST_KEYS = {
     "adapter_size_bytes", "exchange", "routing_key", "action", "error"
 }
 
+_EPHEMERAL_HMAC_KEY = secrets.token_bytes(32)
+
+
+def _get_hmac_key() -> bytes:
+    configured = os.environ.get("FTAAS_TELEMETRY_HMAC_KEY", "").strip()
+    return configured.encode("utf-8") if configured else _EPHEMERAL_HMAC_KEY
+
+
+def sanitize_path_attribute(key: str, value: str | None) -> str:
+    """Emit only non-identifying basenames or keyed HMAC-SHA256 digests for path-valued telemetry keys."""
+    if not value:
+        return ""
+    if key.lower() == "adapter_path":
+        digest = hmac.new(_get_hmac_key(), str(value).encode("utf-8"), hashlib.sha256).hexdigest()[:16]
+        return f"hmac:{digest}"
+    segments = [seg for seg in str(value).replace("\\", "/").split("/") if seg]
+    return segments[-1] if segments else ""
+
 def emit_lifecycle_span(span_name: str, job_id: str, status: str, duration_sec: float = 0.0, attributes: dict = None, parent_context=None):
     """
     Emits payload-scrubbed OpenTelemetry-style lifecycle span.
@@ -68,6 +91,9 @@ def emit_lifecycle_span(span_name: str, job_id: str, status: str, duration_sec: 
             lower_k = k.lower()
             if lower_k not in SAFE_ALLOWLIST_KEYS:
                 clean_attrs[k] = "[REDACTED_NOT_IN_ALLOWLIST]"
+                continue
+            if lower_k in ("adapter_path", "dataset_relative_path") and v is not None:
+                clean_attrs[k] = sanitize_path_attribute(lower_k, str(v))
                 continue
             clean_attrs[k] = v
 
@@ -95,6 +121,37 @@ class JobConsumer:
         self.current_traceparent = None
         self._in_flight_lock = threading.Lock()
         self._in_flight_jobs = set()
+        self._active_threads = set()
+        self._stop_event = threading.Event()
+        self._signal_received = None
+
+    def install_signal_handlers(self):
+        if threading.current_thread() is not threading.main_thread():
+            return
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                signal.signal(sig, self.request_stop)
+            except (ValueError, OSError) as ex:
+                logger.debug(f"Could not install handler for signal {sig}: {ex}")
+
+    def request_stop(self, signum=None, _frame=None):
+        self._signal_received = signum
+        self._stop_event.set()
+        conn = self.connection
+        if conn is not None and not getattr(conn, "is_closed", False):
+            def _stop_channel():
+                ch = self.channel
+                if ch is not None and getattr(ch, "is_open", False):
+                    try:
+                        ch.stop_consuming()
+                    except Exception as ex:
+                        logger.debug(f"Channel stop_consuming during shutdown notice: {ex}")
+
+            if hasattr(conn, "add_callback_threadsafe"):
+                try:
+                    conn.add_callback_threadsafe(_stop_channel)
+                except Exception as ex:
+                    logger.debug(f"Could not schedule stop_consuming on connection: {ex}")
 
     def get_connection(self):
         credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
@@ -217,6 +274,8 @@ class JobConsumer:
             args=(ch, method, properties, body, conn, job_id),
             daemon=True
         )
+        with self._in_flight_lock:
+            self._active_threads.add(t)
         t.start()
 
     def _process_job_thread(self, ch, method, properties, body, conn=None, parsed_job_id=None):
@@ -424,59 +483,83 @@ class JobConsumer:
             logger.warning(f"Rejected terminal failure for Job {job_id} -> routed to DLQ.")
         finally:
             active_id = job_id or parsed_job_id
-            if active_id:
-                with self._in_flight_lock:
+            current_t = threading.current_thread()
+            with self._in_flight_lock:
+                if active_id:
                     self._in_flight_jobs.discard(active_id)
+                self._active_threads.discard(current_t)
+
+    def _shutdown_gracefully(self, drain_timeout: float = 5.0):
+        logger.info(f"Shutting down worker gracefully (signal={self._signal_received})...")
+        with self._in_flight_lock:
+            threads = list(self._active_threads)
+        for t in threads:
+            if t.is_alive() and t is not threading.current_thread():
+                t.join(timeout=drain_timeout)
+        try:
+            if self.connection and not getattr(self.connection, "is_closed", False):
+                self.connection.close()
+        except Exception as ex:
+            logger.debug(f"Connection close during shutdown notice: {ex}")
 
     def run(self):
-        while True:
-            try:
-                logger.info(f"Connecting to RabbitMQ at {RABBITMQ_HOST}:{RABBITMQ_PORT}...")
-                self.connection = self.get_connection()
-                self.channel = self.connection.channel()
+        self.install_signal_handlers()
+        try:
+            while not self._stop_event.is_set():
+                try:
+                    logger.info(f"Connecting to RabbitMQ at {RABBITMQ_HOST}:{RABBITMQ_PORT}...")
+                    self.connection = self.get_connection()
+                    self.channel = self.connection.channel()
 
-                # Declare exchanges
-                self.channel.exchange_declare(exchange=DLX_EXCHANGE, exchange_type="direct", durable=True)
-                self.channel.exchange_declare(exchange=EXCHANGE_NAME, exchange_type="direct", durable=True)
+                    # Declare exchanges
+                    self.channel.exchange_declare(exchange=DLX_EXCHANGE, exchange_type="direct", durable=True)
+                    self.channel.exchange_declare(exchange=EXCHANGE_NAME, exchange_type="direct", durable=True)
 
-                # Declare DLQ
-                self.channel.queue_declare(queue=DLQ_QUEUE, durable=True)
-                self.channel.queue_bind(queue=DLQ_QUEUE, exchange=DLX_EXCHANGE, routing_key=JOB_REQUESTED_ROUTING_KEY)
+                    # Declare DLQ
+                    self.channel.queue_declare(queue=DLQ_QUEUE, durable=True)
+                    self.channel.queue_bind(queue=DLQ_QUEUE, exchange=DLX_EXCHANGE, routing_key=JOB_REQUESTED_ROUTING_KEY)
 
-                # Declare Requested Queue with DLX
-                args = {
-                    "x-dead-letter-exchange": DLX_EXCHANGE,
-                    "x-dead-letter-routing-key": JOB_REQUESTED_ROUTING_KEY
-                }
-                self.channel.queue_declare(queue=JOB_REQUESTED_QUEUE, durable=True, arguments=args)
-                self.channel.queue_bind(queue=JOB_REQUESTED_QUEUE, exchange=EXCHANGE_NAME, routing_key=JOB_REQUESTED_ROUTING_KEY)
+                    # Declare Requested Queue with DLX
+                    args = {
+                        "x-dead-letter-exchange": DLX_EXCHANGE,
+                        "x-dead-letter-routing-key": JOB_REQUESTED_ROUTING_KEY
+                    }
+                    self.channel.queue_declare(queue=JOB_REQUESTED_QUEUE, durable=True, arguments=args)
+                    self.channel.queue_bind(queue=JOB_REQUESTED_QUEUE, exchange=EXCHANGE_NAME, routing_key=JOB_REQUESTED_ROUTING_KEY)
 
-                # Declare Updated Queue
-                self.channel.queue_declare(queue=JOB_UPDATED_QUEUE, durable=True)
-                self.channel.queue_bind(queue=JOB_UPDATED_QUEUE, exchange=EXCHANGE_NAME, routing_key=JOB_UPDATED_ROUTING_KEY)
+                    # Declare Updated Queue
+                    self.channel.queue_declare(queue=JOB_UPDATED_QUEUE, durable=True)
+                    self.channel.queue_bind(queue=JOB_UPDATED_QUEUE, exchange=EXCHANGE_NAME, routing_key=JOB_UPDATED_ROUTING_KEY)
 
-                # Set prefetch = 1 so worker processes 1 training job at a time
-                self.channel.basic_qos(prefetch_count=1)
-                self.channel.basic_consume(
-                    queue=JOB_REQUESTED_QUEUE,
-                    on_message_callback=self.on_message,
-                    auto_ack=False
-                )
+                    # Set prefetch = 1 so worker processes 1 training job at a time
+                    self.channel.basic_qos(prefetch_count=1)
+                    self.channel.basic_consume(
+                        queue=JOB_REQUESTED_QUEUE,
+                        on_message_callback=self.on_message,
+                        auto_ack=False
+                    )
 
-                logger.info(f"[*] Worker ready. Listening on queue '{JOB_REQUESTED_QUEUE}'... To exit press CTRL+C")
-                self.channel.start_consuming()
+                    if self._stop_event.is_set():
+                        break
+                    logger.info(f"[*] Worker ready. Listening on queue '{JOB_REQUESTED_QUEUE}'... To exit press CTRL+C")
+                    self.channel.start_consuming()
 
-            except pika.exceptions.AMQPConnectionError as ex:
-                logger.warning(f"RabbitMQ connection lost: {ex}. Reconnecting in 5 seconds...")
-                time.sleep(5)
-            except KeyboardInterrupt:
-                logger.info("Worker stopped by user.")
-                if self.connection and not self.connection.is_closed:
-                    self.connection.close()
-                break
-            except Exception as ex:
-                logger.error(f"Unexpected error in consumer loop: {ex}")
-                time.sleep(5)
+                except pika.exceptions.AMQPConnectionError as ex:
+                    if self._stop_event.is_set():
+                        break
+                    logger.warning(f"RabbitMQ connection lost: {ex}. Reconnecting in 5 seconds...")
+                    self._stop_event.wait(5)
+                except KeyboardInterrupt:
+                    logger.info("Worker stopped by user.")
+                    self._stop_event.set()
+                    break
+                except Exception as ex:
+                    if self._stop_event.is_set():
+                        break
+                    logger.error(f"Unexpected error in consumer loop: {ex}")
+                    self._stop_event.wait(5)
+        finally:
+            self._shutdown_gracefully()
 
 if __name__ == "__main__":
     consumer = JobConsumer()

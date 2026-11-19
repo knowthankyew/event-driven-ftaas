@@ -1,6 +1,8 @@
 import os
 import json
 import math
+import shutil
+import threading
 import logging
 from pathlib import Path
 from datetime import datetime, timezone
@@ -392,26 +394,50 @@ def train_job(
         logger.info(f"Commencing training execution for {total_steps} steps...")
         train_result = trainer.train()
 
-        # 9. Save Final Adapter Weights
-        final_adapter_dir = ARTIFACTS_ROOT / job_id / "model_adapters"
-        final_adapter_dir.mkdir(parents=True, exist_ok=True)
-        peft_model.save_pretrained(str(final_adapter_dir))
-        tokenizer.save_pretrained(str(final_adapter_dir))
+        # 9. Save Final Adapter Weights atomically via staging dir so redelivery never observes torn weights
+        job_artifacts_dir = ARTIFACTS_ROOT / job_id
+        job_artifacts_dir.mkdir(parents=True, exist_ok=True)
+        final_adapter_dir = job_artifacts_dir / "model_adapters"
+        staging_adapter_dir = job_artifacts_dir / f".model_adapters.staging.{os.getpid()}.{threading.get_ident()}"
+        backup_adapter_dir = job_artifacts_dir / f".model_adapters.backup.{os.getpid()}.{threading.get_ident()}"
+        shutil.rmtree(staging_adapter_dir, ignore_errors=True)
+        shutil.rmtree(backup_adapter_dir, ignore_errors=True)
+        staging_adapter_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            peft_model.save_pretrained(str(staging_adapter_dir))
+            tokenizer.save_pretrained(str(staging_adapter_dir))
+
+            # Verify adapter integrity BEFORE swapping into final_adapter_dir
+            adapter_config_file = staging_adapter_dir / "adapter_config.json"
+            safetensors_file = staging_adapter_dir / "adapter_model.safetensors"
+            bin_file = staging_adapter_dir / "adapter_model.bin"
+
+            if not adapter_config_file.exists() or adapter_config_file.stat().st_size < 10:
+                raise RuntimeError(f"Adapter verification failed: adapter_config.json missing or zero-byte at {staging_adapter_dir}")
+
+            weights_file = safetensors_file if safetensors_file.exists() else bin_file
+            if not weights_file.exists() or weights_file.stat().st_size < 100 * 1024:
+                raise RuntimeError(f"Adapter verification failed: adapter weight file missing or truncated (<100KB) at {staging_adapter_dir}")
+
+            if final_adapter_dir.exists():
+                os.replace(final_adapter_dir, backup_adapter_dir)
+            try:
+                os.replace(staging_adapter_dir, final_adapter_dir)
+            except Exception:
+                if backup_adapter_dir.exists() and not final_adapter_dir.exists():
+                    os.replace(backup_adapter_dir, final_adapter_dir)
+                raise
+            shutil.rmtree(backup_adapter_dir, ignore_errors=True)
+        finally:
+            shutil.rmtree(staging_adapter_dir, ignore_errors=True)
 
         # Relative path from DATA_ROOT for storage contract
         rel_adapter_path = str(final_adapter_dir.relative_to(DATA_ROOT))
-
-        # Verify adapter integrity: ensure weights exist and are not zero-byte or truncated
-        adapter_config_file = final_adapter_dir / "adapter_config.json"
-        safetensors_file = final_adapter_dir / "adapter_model.safetensors"
-        bin_file = final_adapter_dir / "adapter_model.bin"
-
-        if not adapter_config_file.exists() or adapter_config_file.stat().st_size < 10:
-            raise RuntimeError(f"Adapter verification failed: adapter_config.json missing or zero-byte at {final_adapter_dir}")
-
-        weights_file = safetensors_file if safetensors_file.exists() else bin_file
-        if not weights_file.exists() or weights_file.stat().st_size < 100 * 1024:
-            raise RuntimeError(f"Adapter verification failed: adapter weight file missing or truncated (<100KB) at {final_adapter_dir}")
+        weights_file = (
+            final_adapter_dir / "adapter_model.safetensors"
+            if (final_adapter_dir / "adapter_model.safetensors").exists()
+            else final_adapter_dir / "adapter_model.bin"
+        )
 
         logger.info(f"Verified adapter integrity: {weights_file.name} is {weights_file.stat().st_size / 1024 / 1024:.2f} MB")
 
