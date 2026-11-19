@@ -46,9 +46,9 @@ fi
 echo -e "\n${CYAN}[2/6] Ensuring .NET 10 Ingestion Gateway is running on :5100...${NC}"
 if ! curl -s http://localhost:5100/healthz >/dev/null 2>&1; then
     echo "Launching .NET 10 API..."
-    dotnet run --project src/FtaaSService.Api > /dev/null 2>&1 &
+    dotnet run --project src/FtaaSService.Api > /tmp/ftaas-api.log 2>&1 &
     SPAWNED_PIDS+=($!)
-    for i in {1..20}; do
+    for i in {1..60}; do
         if curl -s http://localhost:5100/healthz >/dev/null 2>&1; then
             break
         fi
@@ -57,6 +57,10 @@ if ! curl -s http://localhost:5100/healthz >/dev/null 2>&1; then
 fi
 if ! curl -s http://localhost:5100/healthz >/dev/null 2>&1; then
     echo -e "${YELLOW}❌ .NET 10 API failed to become ready on :5100 within deadline.${NC}"
+    if [ -f /tmp/ftaas-api.log ]; then
+        echo -e "${YELLOW}--- .NET API Startup Log ---${NC}"
+        cat /tmp/ftaas-api.log
+    fi
     exit 1
 fi
 echo -e "${GREEN}✅ .NET 10 Ingestion Gateway is responsive.${NC}"
@@ -65,15 +69,15 @@ echo -e "${GREEN}✅ .NET 10 Ingestion Gateway is responsive.${NC}"
 echo -e "\n${CYAN}[3/6] Ensuring Python Compute Worker & Inference Engine are running...${NC}"
 if ! ps aux | grep -v grep | grep "consumer.py" >/dev/null 2>&1; then
     echo "Launching Python Compute Worker..."
-    PYTHONUNBUFFERED=1 "$PYTHON_EXEC" src/FtaaSService.Worker/consumer.py > /dev/null 2>&1 &
+    PYTHONUNBUFFERED=1 "$PYTHON_EXEC" src/FtaaSService.Worker/consumer.py > /tmp/ftaas-worker.log 2>&1 &
     SPAWNED_PIDS+=($!)
 fi
 
 if ! curl -s http://localhost:8000/healthz >/dev/null 2>&1; then
     echo "Launching Python Dynamic Inference Engine..."
-    BASE_MODEL_NAME=HuggingFaceTB/SmolLM2-135M PYTHONUNBUFFERED=1 "$PYTHON_EXEC" src/FtaaSService.Inference/app.py > /dev/null 2>&1 &
+    BASE_MODEL_NAME=HuggingFaceTB/SmolLM2-135M PYTHONUNBUFFERED=1 "$PYTHON_EXEC" src/FtaaSService.Inference/app.py > /tmp/ftaas-inference.log 2>&1 &
     SPAWNED_PIDS+=($!)
-    for i in {1..25}; do
+    for i in {1..60}; do
         if curl -s http://localhost:8000/healthz >/dev/null 2>&1; then
             break
         fi
@@ -82,6 +86,10 @@ if ! curl -s http://localhost:8000/healthz >/dev/null 2>&1; then
 fi
 if ! curl -s http://localhost:8000/healthz >/dev/null 2>&1; then
     echo -e "${YELLOW}❌ Python Inference Engine failed to become ready on :8000 within deadline.${NC}"
+    if [ -f /tmp/ftaas-inference.log ]; then
+        echo -e "${YELLOW}--- Python Inference Startup Log ---${NC}"
+        cat /tmp/ftaas-inference.log
+    fi
     exit 1
 fi
 echo -e "${GREEN}✅ Compute Worker and Inference Engine are ready.${NC}"

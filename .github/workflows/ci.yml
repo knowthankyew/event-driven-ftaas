@@ -110,6 +110,9 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Build .NET API
+        run: dotnet build src/FtaaSService.Api
+
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
