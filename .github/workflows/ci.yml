@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 env:
-  SHARED_TELEMETRY_REF: v1.0.1
+  SHARED_TELEMETRY_REF: main
 
 jobs:
   validate-dotnet:
