@@ -1,6 +1,6 @@
 <!-- diagram-meta
   last-validated: 2026-11-24
-  validated-commit: 6d649c9
+  validated-commit: 1e55145
   covers: [src/**, tests/**, scripts/**]
   generated-by: manual
 -->
@@ -80,6 +80,7 @@ flowchart TD
    - Automated device detection (`mps` on Apple Silicon, `cuda` on Nvidia, or multi-threaded `cpu`).
    - Tiered baseline models:
      - **SmolLM2-135M** (`HuggingFaceTB/SmolLM2-135M`): Ultra-compact baseline (2,048-token context, ~1,500 words / ~3–4 pages, LoRA rank 8, alpha 32, ~1.8 MB adapter) fine-tuning in 2–4 minutes on Apple Silicon (M1–M4) or CUDA.
+     - **SmolLM2-135M-Instruct & SmolLM2-360M-Instruct** (`HuggingFaceTB/SmolLM2-135M-Instruct`, `HuggingFaceTB/SmolLM2-360M-Instruct`): Compact ChatML instruction-tuned variants (2,048-token context, `q_proj`/`v_proj` LoRA targets, configurable `maxLength` in `[64, 2048]`) supporting structured bracketed-tag classification alongside `surprisal-service`'s `security_log` feature profile.
      - **Google Gemma 2 2B IT** (`google/gemma-2-2b-it`): High-capacity reasoning tier (8,192-token context, ~6,000 words / ~12–15 single-spaced pages, LoRA rank 8, alpha 32, ~12.2 MB adapter) utilizing Gemma chat templates (`<start_of_turn>`) with hardware preflight gates (~8 GB VRAM requirement and Hugging Face license check).
      - **Microsoft BitNet b1.58 2B-4T** (`microsoft/BitNet-b1.58-2B-4T`): 1.58-bit ternary foundation model ($W \in \{-1, 0, +1\}$, 4,096-token architectural context, ~3,000 words / ~6–8 pages, with bounded 16-token generation and 240-token embedding ceilings) operating at ~1.10 GB RAM footprint via integer addition/subtraction, delivering up to 23.5 tokens/sec decode entirely on CPU (zero GPU required).
 4. **Observable MLOps & Distributed Tracing**:
