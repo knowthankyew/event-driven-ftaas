@@ -174,6 +174,9 @@ def train_job(
     lora_r = int(hyperparameters.get("loraRank", 8))
     lora_alpha = int(hyperparameters.get("loraAlpha", 32))
     lora_dropout = float(hyperparameters.get("loraDropout", 0.05))
+    model_spec = get_model_spec(base_model_name)
+    raw_max_length = int(hyperparameters.get("maxLength", hyperparameters.get("max_length", 256)))
+    max_length = max(64, min(raw_max_length, min(2048, model_spec.context_length)))
 
     # 3. Setup MLflow
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
@@ -197,6 +200,7 @@ def train_job(
             "lora_r": lora_r,
             "lora_alpha": lora_alpha,
             "lora_dropout": lora_dropout,
+            "max_length": max_length,
             "device": str(DEVICE)
         })
 
@@ -258,8 +262,7 @@ def train_job(
             raise
 
         # 5. Inject LoRA Adapters
-        logger.info(f"Applying LoRA (r={lora_r}, alpha={lora_alpha})")
-        model_spec = get_model_spec(base_model_name)
+        logger.info(f"Applying LoRA (r={lora_r}, alpha={lora_alpha}, max_length={max_length})")
         lora_config = LoraConfig(
             r=lora_r,
             lora_alpha=lora_alpha,
@@ -294,13 +297,13 @@ def train_job(
             tokenized = tokenizer(
                 examples["text"],
                 truncation=True,
-                max_length=256,
+                max_length=max_length,
                 padding="max_length"
             )
             prompt_tokenized = tokenizer(
                 examples["prompt_text"],
                 truncation=True,
-                max_length=256
+                max_length=max_length
             )
             labels = []
             for i, input_id_seq in enumerate(tokenized["input_ids"]):
@@ -459,7 +462,7 @@ def train_job(
             resolved_ds = ds_p if ds_p.is_absolute() else (DATA_ROOT / ds_p).resolve()
             val_candidate = resolved_ds.parent / f"{resolved_ds.stem}-val{resolved_ds.suffix}"
             if val_candidate.exists():
-                eval_metrics = evaluate_model(peft_model, tokenizer, val_candidate, base_model=base_model_name)
+                eval_metrics = evaluate_model(peft_model, tokenizer, val_candidate, base_model=base_model_name, max_length=max_length)
                 mlflow.log_metric("eval/loss", eval_metrics["eval_loss"])
                 if "format_accuracy" in eval_metrics:
                     mlflow.log_metric("eval/format_accuracy", eval_metrics["format_accuracy"])

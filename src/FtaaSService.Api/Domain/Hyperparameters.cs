@@ -21,4 +21,7 @@ public sealed record Hyperparameters
 
     [JsonPropertyName("loraDropout")]
     public double LoraDropout { get; init; } = 0.05;
+
+    [JsonPropertyName("maxLength")]
+    public int MaxLength { get; init; } = 256;
 }

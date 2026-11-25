@@ -80,6 +80,7 @@ class AuditRequest(BaseModel):
     records: List[DatasetRecord] = Field(..., max_length=5000, description="Records to audit and ablate per batch")
     ablation_threshold: float = Field(0.15, description="Marginal surprisal in nats below which cases are ablated")
     anomaly_threshold: float = Field(5.0, description="k-NN surprisal in nats above which cases are flagged as anomalous")
+    feature_profile: str = Field("auto", description="Feature extraction profile: auto | fintech | security_log")
 
 class AuditSummary(BaseModel):
     original_count: int
@@ -99,6 +100,7 @@ class VerifyRequest(BaseModel):
     prompt: str = Field(..., max_length=10000, description="Input query prompt")
     candidate_completion: str = Field(..., max_length=10000, description="Generated candidate completion to verify")
     max_tolerable_surprisal: float = Field(6.0, description="Surprisal ceiling in nats before flagging policy violation")
+    feature_profile: str = Field("auto", description="Feature extraction profile: auto | fintech | security_log")
 
 class InfluentialCase(BaseModel):
     case_index: int
@@ -127,21 +129,124 @@ def token_jaccard_similarity(s1: Any, s2: Any) -> float:
         return 0.0
     return len(tokens1 & tokens2) / len(tokens1 | tokens2)
 
-def extract_features(prompt: str, completion: str) -> Dict[str, Any]:
+_SECURITY_LOG_TAGS = frozenset({
+    "BENIGN-NOISE", "RECON-SCAN", "AUTH-BRUTEFORCE", "INJECTION-ATTEMPT",
+    "EXFIL-SUSPECT", "PRIV-ESC", "POLICY-ANOMALY", "NEEDS-REVIEW",
+})
+
+_SECURITY_LOG_KEYWORDS = [
+    "ssh", "sudo", "passwd", "union", "select", "http", "404", "403", "500",
+    "error", "warn", "fatal", "outbound", "exfil", "healthz", "cron",
+    "failed", "invalid", "injection", "relay",
+]
+
+
+def _shannon_entropy(text: str) -> float:
+    raw = text.encode("utf-8", errors="ignore")
+    n = len(raw)
+    if n == 0:
+        return 0.0
+    counts: Dict[int, int] = {}
+    for b in raw:
+        counts[b] = counts.get(b, 0) + 1
+    ent = 0.0
+    inv_n = 1.0 / n
+    for c in counts.values():
+        p = c * inv_n
+        ent -= p * math.log2(p)
+    return ent
+
+
+def _char_ratios_x10(text: str) -> tuple[float, float, float]:
+    n = len(text)
+    if n == 0:
+        return 0.0, 0.0, 0.0
+    sym = dig = up = 0
+    for ch in text:
+        if "A" <= ch <= "Z":
+            up += 1
+        elif "a" <= ch <= "z":
+            pass
+        elif "0" <= ch <= "9":
+            dig += 1
+        elif ch in (" ", "\t", "\n", "\r"):
+            pass
+        else:
+            sym += 1
+    scale = 10.0 / n
+    return sym * scale, dig * scale, up * scale
+
+
+def _is_security_log_record(prompt: str, completion: str) -> bool:
+    if "BEGIN_UNTRUSTED_LOG_TELEMETRY" in prompt:
+        return True
+    if "service=" in prompt and ("level=" in prompt or "surprisal=" in prompt or "template=" in prompt):
+        return True
+    m = re.search(r"\[([A-Za-z0-9\-_]+)\]", completion)
+    if m and m.group(1).upper() in _SECURITY_LOG_TAGS:
+        return True
+    return False
+
+
+def resolve_feature_profile(requested: str, records: List[DatasetRecord]) -> str:
+    norm = (requested or "auto").strip().lower()
+    if norm in ("fintech", "security_log"):
+        return norm
+    if norm != "auto":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported feature_profile '{requested}'. Expected: auto, fintech, or security_log.",
+        )
+    if not records:
+        return "fintech"
+    sec_hits = sum(1 for r in records if _is_security_log_record(r.prompt, r.completion))
+    return "security_log" if sec_hits > 0 and sec_hits * 2 >= len(records) else "fintech"
+
+
+def extract_features(prompt: str, completion: str, profile: str = "fintech") -> Dict[str, Any]:
     """Extracts prompt-side and completion-side continuous, token, and nominal features."""
     tag = "UNKNOWN"
     m = re.search(r'\[([A-Za-z0-9\-_]+)\]', completion)
     if m:
         tag = m.group(1)
 
+    prompt_lower = prompt.lower()
+    completion_lower = completion.lower()
+
+    if profile == "security_log":
+        sym_x10, dig_x10, up_x10 = _char_ratios_x10(prompt)
+        sev_rank = 0.0
+        sm = re.search(r'\bseverity\s*[:=]\s*(low|medium|high|critical)\b', completion_lower)
+        if sm:
+            sev_rank = {"low": 1.0, "medium": 2.0, "high": 3.0, "critical": 4.0}[sm.group(1)]
+
+        feat: Dict[str, Any] = {
+            "prompt_len": float(len(prompt)),
+            "prompt_entropy": _shannon_entropy(prompt),
+            "prompt_symbol_ratio": sym_x10,
+            "prompt_digit_ratio": dig_x10,
+            "prompt_upper_ratio": up_x10,
+            "prompt_has_injection": 1.0 if ("injection_flag=true" in prompt_lower or "ignore previous" in prompt_lower) else 0.0,
+            "completion_len": float(len(completion)),
+            "completion_has_mitre": 1.0 if re.search(r'\bmitre\s*[:=]\s*t(?:a)?\d{4}', completion_lower) else 0.0,
+            "completion_severity_rank": sev_rank,
+            "tag": tag,
+            "prompt": prompt,
+            "completion": completion,
+            "_prompt_tokens": set(re.findall(r'\w+', prompt_lower)),
+            "_completion_tokens": set(re.findall(r'\w+', completion_lower)),
+        }
+        for kw in _SECURITY_LOG_KEYWORDS:
+            feat[f"prompt_kw_{kw}"] = 1.0 if kw in prompt_lower else 0.0
+            feat[f"completion_kw_{kw}"] = 1.0 if kw in completion_lower else 0.0
+        return feat
+
     domain_keywords = [
         "transfer", "wire", "contract", "cancel", "outage", "sso", "refund", "charge",
         "gdpr", "hipaa", "phi", "api", "bonus", "atm", "baa", "portfolio", "card", "notice", "sla"
     ]
-    prompt_lower = prompt.lower()
-    completion_lower = completion.lower()
 
-    feat: Dict[str, Any] = {
+    feat = {
         "prompt_len": float(len(prompt)),
         "prompt_has_dollar": 1.0 if "$" in prompt else 0.0,
         "prompt_has_time": 1.0 if any(w in prompt_lower for w in ["day", "hour", "minute", "sla", "terms"]) else 0.0,
@@ -211,6 +316,7 @@ def health():
         "native_surprisal_available": False,
         "native_howso_available": NATIVE_HOWSO_AVAILABLE,
         "engine": ENGINE_IDENTIFIER,
+        "supported_profiles": ["auto", "fintech", "security_log"],
         "license": "MIT"
     }
 
@@ -219,7 +325,8 @@ def audit_dataset(req: AuditRequest):
     if not req.records:
         raise HTTPException(status_code=400, detail="Record list cannot be empty.")
 
-    extracted = [extract_features(r.prompt, r.completion) for r in req.records]
+    profile = resolve_feature_profile(req.feature_profile, req.records)
+    extracted = [extract_features(r.prompt, r.completion, profile=profile) for r in req.records]
     deviations = compute_deviations(extracted)
 
     # 1. Redundancy Ablation (Section 8.1)
@@ -381,8 +488,9 @@ def verify_completion(req: VerifyRequest):
     if not req.reference_records:
         raise HTTPException(status_code=400, detail="Reference records cannot be empty.")
 
-    ref_extracted = [extract_features(r.prompt, r.completion) for r in req.reference_records]
-    cand_extracted = extract_features(req.prompt, req.candidate_completion)
+    profile = resolve_feature_profile(req.feature_profile, req.reference_records)
+    ref_extracted = [extract_features(r.prompt, r.completion, profile=profile) for r in req.reference_records]
+    cand_extracted = extract_features(req.prompt, req.candidate_completion, profile=profile)
     deviations = compute_deviations(ref_extracted)
 
     # Reference selection strictly uses prompt-derived features

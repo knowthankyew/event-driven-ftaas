@@ -8,16 +8,18 @@ public class ModelCatalogTests
     public void SupportedModels_ContainsSmolLM2AndGemma2BAndBitNet()
     {
         Assert.Contains(SupportedModels.SmolLM2, SupportedModels.All);
+        Assert.Contains(SupportedModels.SmolLM2_135M_Instruct, SupportedModels.All);
+        Assert.Contains(SupportedModels.SmolLM2_360M_Instruct, SupportedModels.All);
         Assert.Contains(SupportedModels.Gemma2_2B_IT, SupportedModels.All);
         Assert.Contains(SupportedModels.BitNet2B4T, SupportedModels.All);
-        Assert.Equal(3, SupportedModels.All.Count);
+        Assert.Equal(5, SupportedModels.All.Count);
     }
 
     [Fact]
     public void SupportedModelsCatalog_ExposesExpectedMetadataForBothModels()
     {
         var catalog = SupportedModels.Catalog;
-        Assert.Equal(3, catalog.Count);
+        Assert.Equal(5, catalog.Count);
 
         var smol = catalog.FirstOrDefault(m => m.ModelId == SupportedModels.SmolLM2);
         Assert.NotNull(smol);
@@ -26,6 +28,18 @@ public class ModelCatalogTests
         Assert.Equal(0.5, smol.MinGpuVramGb);
         Assert.False(smol.RequiresHfAuth);
         Assert.Null(smol.HardwareDisclaimer);
+
+        var smol135Instruct = catalog.FirstOrDefault(m => m.ModelId == SupportedModels.SmolLM2_135M_Instruct);
+        Assert.NotNull(smol135Instruct);
+        Assert.Equal("135M", smol135Instruct.ParameterCount);
+        Assert.Equal(2048, smol135Instruct.ContextLength);
+        Assert.False(smol135Instruct.RequiresHfAuth);
+
+        var smol360Instruct = catalog.FirstOrDefault(m => m.ModelId == SupportedModels.SmolLM2_360M_Instruct);
+        Assert.NotNull(smol360Instruct);
+        Assert.Equal("360M", smol360Instruct.ParameterCount);
+        Assert.Equal(2048, smol360Instruct.ContextLength);
+        Assert.False(smol360Instruct.RequiresHfAuth);
 
         var gemma = catalog.FirstOrDefault(m => m.ModelId == SupportedModels.Gemma2_2B_IT);
         Assert.NotNull(gemma);
@@ -48,6 +62,8 @@ public class ModelCatalogTests
 
     [Theory]
     [InlineData("HuggingFaceTB/SmolLM2-135M", true)]
+    [InlineData("HuggingFaceTB/SmolLM2-135M-Instruct", true)]
+    [InlineData("HuggingFaceTB/SmolLM2-360M-Instruct", true)]
     [InlineData("google/gemma-2-2b-it", true)]
     [InlineData("microsoft/BitNet-b1.58-2B-4T", true)]
     [InlineData("unsupported/arbitrary-model", false)]

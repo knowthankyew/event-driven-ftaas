@@ -155,6 +155,15 @@ class TestTrainerModelSelection(unittest.TestCase):
         self.assertNotIn("k_proj", targets)
         self.assertNotIn("o_proj", targets)
 
+    def test_smollm2_instruct_uses_correct_lora_targets_and_chatml(self):
+        for model_id in ("HuggingFaceTB/SmolLM2-135M-Instruct", "HuggingFaceTB/SmolLM2-360M-Instruct"):
+            captured = self._run_trainer_with_mocks(model_id)
+            targets = captured.get("lora_target_modules", [])
+            self.assertEqual(targets, ["q_proj", "v_proj"])
+            for text in captured.get("formatted_texts", []):
+                self.assertIn("<|im_start|>user", text)
+                self.assertIn("<|im_start|>assistant", text)
+
     def test_gemma_uses_correct_lora_targets(self):
         captured = self._run_trainer_with_mocks("google/gemma-2-2b-it")
         targets = captured.get("lora_target_modules", [])

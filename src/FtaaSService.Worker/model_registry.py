@@ -62,6 +62,30 @@ _REGISTRY: dict = {
         hardware_disclaimer=None,
         supports_browser_runtime=True,
     ),
+    "HuggingFaceTB/SmolLM2-135M-Instruct": ModelSpec(
+        model_id="HuggingFaceTB/SmolLM2-135M-Instruct",
+        display_name="SmolLM2-135M-Instruct",
+        chat_template=ChatTemplate.CHATML,
+        lora_target_modules=["q_proj", "v_proj"],
+        parameter_count_display="135M",
+        context_length=2048,
+        min_gpu_vram_gb=0.5,
+        requires_hf_auth=False,
+        hardware_disclaimer=None,
+        supports_browser_runtime=True,
+    ),
+    "HuggingFaceTB/SmolLM2-360M-Instruct": ModelSpec(
+        model_id="HuggingFaceTB/SmolLM2-360M-Instruct",
+        display_name="SmolLM2-360M-Instruct",
+        chat_template=ChatTemplate.CHATML,
+        lora_target_modules=["q_proj", "v_proj"],
+        parameter_count_display="360M",
+        context_length=2048,
+        min_gpu_vram_gb=1.0,
+        requires_hf_auth=False,
+        hardware_disclaimer=None,
+        supports_browser_runtime=False,
+    ),
     "google/gemma-2-2b-it": ModelSpec(
         model_id="google/gemma-2-2b-it",
         display_name="Gemma 2 2B IT",
@@ -97,6 +121,8 @@ _REGISTRY: dict = {
 
 # Convenience aliases (used by API layer for validation)
 SMOLLM2 = "HuggingFaceTB/SmolLM2-135M"
+SMOLLM2_135M_INSTRUCT = "HuggingFaceTB/SmolLM2-135M-Instruct"
+SMOLLM2_360M_INSTRUCT = "HuggingFaceTB/SmolLM2-360M-Instruct"
 GEMMA_2_2B_IT = "google/gemma-2-2b-it"
 BITNET_2B_4T = "microsoft/BitNet-b1.58-2B-4T"
 DEFAULT_MODEL_ID = GEMMA_2_2B_IT

@@ -131,12 +131,13 @@ public static class JobEndpoints
             || hyperparameters.LoraRank is < 1 or > 128
             || hyperparameters.LoraAlpha is < 1 or > 512
             || hyperparameters.LearningRate is <= 0 or > 0.1
-            || hyperparameters.LoraDropout is < 0 or >= 1)
+            || hyperparameters.LoraDropout is < 0 or >= 1
+            || hyperparameters.MaxLength is < 64 or > 2048)
         {
             return Results.BadRequest(new
             {
                 error = "invalid_hyperparameters",
-                message = "Hyperparameters are outside safe operational bounds (epochs 1-20, batchSize 1-64, loraRank 1-128, loraAlpha 1-512, lr (0, 0.1], loraDropout [0, 1))."
+                message = "Hyperparameters are outside safe operational bounds (epochs 1-20, batchSize 1-64, loraRank 1-128, loraAlpha 1-512, lr (0, 0.1], loraDropout [0, 1), maxLength 64-2048)."
             });
         }
 

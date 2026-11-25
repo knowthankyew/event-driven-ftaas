@@ -15,6 +15,8 @@ from model_registry import (
     preflight_check,
     ChatTemplate,
     SMOLLM2,
+    SMOLLM2_135M_INSTRUCT,
+    SMOLLM2_360M_INSTRUCT,
     GEMMA_2_2B_IT,
     BITNET_2B_4T,
     DEFAULT_MODEL_ID,
@@ -76,9 +78,24 @@ class TestModelRegistrySpecs(unittest.TestCase):
 
     def test_supported_model_ids_frozenset_contains_both(self):
         self.assertIn(SMOLLM2, SUPPORTED_MODEL_IDS)
+        self.assertIn(SMOLLM2_135M_INSTRUCT, SUPPORTED_MODEL_IDS)
+        self.assertIn(SMOLLM2_360M_INSTRUCT, SUPPORTED_MODEL_IDS)
         self.assertIn(GEMMA_2_2B_IT, SUPPORTED_MODEL_IDS)
         self.assertIn(BITNET_2B_4T, SUPPORTED_MODEL_IDS)
-        self.assertEqual(len(SUPPORTED_MODEL_IDS), 3)
+        self.assertEqual(len(SUPPORTED_MODEL_IDS), 5)
+
+    def test_smollm2_instruct_specs_registered(self):
+        spec135 = get_model_spec(SMOLLM2_135M_INSTRUCT)
+        self.assertEqual(spec135.chat_template, ChatTemplate.CHATML)
+        self.assertEqual(spec135.lora_target_modules, ["q_proj", "v_proj"])
+        self.assertEqual(spec135.parameter_count_display, "135M")
+        self.assertFalse(spec135.requires_hf_auth)
+
+        spec360 = get_model_spec(SMOLLM2_360M_INSTRUCT)
+        self.assertEqual(spec360.chat_template, ChatTemplate.CHATML)
+        self.assertEqual(spec360.lora_target_modules, ["q_proj", "v_proj"])
+        self.assertEqual(spec360.parameter_count_display, "360M")
+        self.assertFalse(spec360.requires_hf_auth)
 
 
 class TestChatTemplates(unittest.TestCase):

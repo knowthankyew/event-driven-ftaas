@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Dict, Any, Tuple
 
@@ -20,7 +21,8 @@ def evaluate_model(
     tokenizer: AutoTokenizer,
     val_dataset_path: Path,
     max_eval_samples: int = 10,
-    base_model: str = "HuggingFaceTB/SmolLM2-135M"
+    base_model: str = "HuggingFaceTB/SmolLM2-135M",
+    max_length: int = 256,
 ) -> Dict[str, float]:
     """
     Evaluates a trained model against a validation dataset split.
@@ -54,10 +56,10 @@ def evaluate_model(
 
             # 1. Compute Cross-Entropy Loss excluding prompt tokens (instruction masking)
             full_text = format_training_prompt(base_model, prompt, expected)
-            inputs = tokenizer(full_text, return_tensors="pt", truncation=True, max_length=256)
+            inputs = tokenizer(full_text, return_tensors="pt", truncation=True, max_length=max_length)
 
             gen_prompt = format_inference_prompt(base_model, prompt)
-            prompt_tok = tokenizer(gen_prompt, truncation=True, max_length=256)
+            prompt_tok = tokenizer(gen_prompt, truncation=True, max_length=max_length)
             prompt_len = len(prompt_tok["input_ids"])
 
             input_ids_list = inputs["input_ids"][0].tolist()
@@ -88,6 +90,9 @@ def evaluate_model(
             expected_tags = [w for w in ["SENTIMENT:", "METRICS:"] if w in expected]
             if expected_tags:
                 if any(tag in completion for tag in expected_tags):
+                    correct_format += 1
+            elif re.search(r"\[([A-Za-z0-9_-]+)\]", expected):
+                if re.search(r"\[([A-Za-z0-9_-]+)\]", completion):
                     correct_format += 1
             elif completion.strip():
                 correct_format += 1

@@ -188,6 +188,49 @@ class TestSurprisalService(unittest.TestCase):
         self.assertGreater(len(body["influential_cases"]), 0)
         self.assertEqual(body["influential_cases"][0]["tag"], "ACH-HELD-VERIFY")
 
+    def test_surprisal_security_log_profile_audit_and_verify(self):
+        base_prompt = (
+            "Classify the untrusted host log telemetry below.\n"
+            "BEGIN_UNTRUSTED_LOG_TELEMETRY\n"
+            "service=sshd level=WARN count=24 entropy=4.10 surprisal=8.90/5.00 rules=SENT-001\n"
+            "template=Failed password for invalid user <STR> from <IP> port <NUM> ssh2\n"
+            "sample=Failed password for invalid user root from 203.0.113.10 port 41200 ssh2\n"
+            "END_UNTRUSTED_LOG_TELEMETRY"
+        )
+        base_comp = "[AUTH-BRUTEFORCE] severity=HIGH mitre=TA0006 explanation=Repeated SSH password guessing against root."
+        records = [
+            {"prompt": base_prompt, "completion": base_comp},
+            {"prompt": base_prompt + "  ", "completion": base_comp},
+            {"prompt": base_prompt.replace("203.0.113.10", "203.0.113.11"), "completion": base_comp},
+            {"prompt": base_prompt.replace("203.0.113.10", "203.0.113.12"), "completion": base_comp},
+            {
+                "prompt": "BEGIN_UNTRUSTED_LOG_TELEMETRY\nservice=nginx level=INFO count=80 entropy=3.40 surprisal=0.20/5.00\nsample=GET /healthz HTTP/1.1 200 2ms\nEND_UNTRUSTED_LOG_TELEMETRY",
+                "completion": "[BENIGN-NOISE] severity=LOW mitre=NONE explanation=Routine loopback healthcheck.",
+            },
+        ]
+
+        status, body = self.client.post("/v1/audit/dataset", {
+            "records": records,
+            "ablation_threshold": 0.15,
+            "anomaly_threshold": 5.0,
+            "feature_profile": "auto",
+        })
+        self.assertEqual(status, 200)
+        self.assertIn("prompt_entropy", body["summary"]["measured_deviations"])
+        self.assertGreaterEqual(body["summary"]["ablated_count"], 1)
+
+        v_status, v_body = self.client.post("/v1/verify/completion", {
+            "reference_records": records,
+            "prompt": base_prompt,
+            "candidate_completion": base_comp,
+            "max_tolerable_surprisal": 5.0,
+            "feature_profile": "security_log",
+        })
+        self.assertEqual(v_status, 200)
+        self.assertTrue(v_body["is_conforming"])
+        self.assertEqual(v_body["measured_surprisal_nats"], 0.0)
+        self.assertEqual(v_body["predicted_tag"], "AUTH-BRUTEFORCE")
+
 
 if __name__ == "__main__":
     unittest.main()

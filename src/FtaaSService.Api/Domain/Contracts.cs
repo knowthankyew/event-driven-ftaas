@@ -355,12 +355,16 @@ public sealed record LatencyBreakdown
 public static class SupportedModels
 {
     public const string SmolLM2 = "HuggingFaceTB/SmolLM2-135M";
+    public const string SmolLM2_135M_Instruct = "HuggingFaceTB/SmolLM2-135M-Instruct";
+    public const string SmolLM2_360M_Instruct = "HuggingFaceTB/SmolLM2-360M-Instruct";
     public const string Gemma2_2B_IT = "google/gemma-2-2b-it";
     public const string BitNet2B4T = "microsoft/BitNet-b1.58-2B-4T";
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         SmolLM2,
+        SmolLM2_135M_Instruct,
+        SmolLM2_360M_Instruct,
         Gemma2_2B_IT,
         BitNet2B4T,
     };
@@ -405,6 +409,24 @@ public static class SupportedModels
                 "Embedding context bounded to <= 240 tokens (upstream AVX2 batch ceiling); " +
                 "generation bounded to <= 16 prompt tokens (context breakdown boundary). " +
                 "Production statutory retrieval operates in Retrieval-Only mode."
+        ),
+        new(
+            ModelId: SmolLM2_135M_Instruct,
+            DisplayName: "SmolLM2-135M-Instruct",
+            ParameterCount: "135M",
+            ContextLength: 2048,
+            MinGpuVramGb: 0.5,
+            RequiresHfAuth: false,
+            HardwareDisclaimer: null
+        ),
+        new(
+            ModelId: SmolLM2_360M_Instruct,
+            DisplayName: "SmolLM2-360M-Instruct",
+            ParameterCount: "360M",
+            ContextLength: 2048,
+            MinGpuVramGb: 1.0,
+            RequiresHfAuth: false,
+            HardwareDisclaimer: null
         ),
     };
 }
