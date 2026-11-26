@@ -80,24 +80,30 @@ def get_docs_to_scan() -> list[Path]:
 
 def audit_vocabulary(errors: list[str]) -> None:
     registry_path = REPO_ROOT / "docs" / "claims_registry.json"
+    reg_ok, reg_errs = sync_docs.validate_claims_registry(registry_path, repo_root=REPO_ROOT)
+    if not reg_ok:
+        for e in reg_errs:
+            errors.append(f"Registry hygiene violation: {e}")
+
     for doc in get_docs_to_scan():
         content = doc.read_text(encoding="utf-8")
-        rel_name = str(doc.relative_to(REPO_ROOT))
+        rel_name = str(doc.relative_to(REPO_ROOT)).replace("\\", "/")
 
-        # 1. Run sync_docs prohibited + guarded word linter (requires claim_term/claim markers for guarded words)
-        ok, word_errs = sync_docs.lint_prose_and_words(content, rel_name, registry_path=registry_path)
+        # 1. Run sync_docs prohibited + guarded word + personal path linter
+        ok, word_errs = sync_docs.lint_prose_and_words(
+            content, rel_name, registry_path=registry_path, repo_root=REPO_ROOT
+        )
         if not ok:
             for e in word_errs:
-                errors.append(f"Vocabulary violation: {e}")
+                errors.append(f"Vocabulary/Path violation: {e}")
 
-        # 2. Check additional portfolio prohibited terms line-by-line (without skipping lines containing 'guardrail')
-        for idx, line in enumerate(content.splitlines(), 1):
-            for pattern in ADDITIONAL_PROHIBITED_WORDS:
-                if pattern.search(line):
-                    errors.append(
-                        f"Vocabulary violation in {rel_name}:{idx}: "
-                        f"Prohibited term matching '{pattern.pattern}' found: '{line.strip()}'"
-                    )
+        # 2. Check structural integrity of claim markers and empirical regions across every scanned doc
+        m_ok, m_errs = sync_docs.lint_claim_markers_and_regions(
+            content, rel_name, registry_path=registry_path
+        )
+        if not m_ok:
+            for e in m_errs:
+                errors.append(f"Marker/Region violation: {e}")
 
 
 def parse_diagram_meta(text: str) -> dict | None:
@@ -144,11 +150,13 @@ def _audit_diagram_doc(doc: Path, errors: list[str]) -> None:
     covers: list[str] = meta["covers"]
     if not commit:
         errors.append(f"{label}: validated-commit is missing")
+    elif not re.fullmatch(r"[0-9a-fA-F]{7,40}", commit):
+        errors.append(f"{label}: validated-commit '{commit}' must be a valid hex git commit hash")
     if not covers:
         errors.append(f"{label}: covers is missing or not a [a, b, c] list")
 
     # 2. Freshness: nothing under `covers` changed since validated-commit
-    if commit and covers:
+    if commit and re.fullmatch(r"[0-9a-fA-F]{7,40}", commit) and covers:
         resolved = _git("rev-parse", "--verify", "--quiet", f"{commit}^{{commit}}")
         if resolved.returncode != 0:
             errors.append(
@@ -163,11 +171,12 @@ def _audit_diagram_doc(doc: Path, errors: list[str]) -> None:
                 ":(exclude)scripts/audit-claims.py",
                 ":(exclude)scripts/sync_docs.py",
                 ":(exclude)tests/test_claims_linter.py",
+                ":(exclude)tests/test_sync_docs_fixes.py",
                 ":(exclude)**/requirements*.txt",
                 ":(exclude)Directory.Packages.props",
                 ":(exclude)**/*.csproj",
             ]
-            diff = _git("diff", "--name-only", f"{commit}..HEAD", "--", *pathspecs)
+            diff = _git("diff", "--name-only", commit, "--", *pathspecs)
             if diff.returncode != 0:
                 errors.append(f"{label}: git diff failed: {diff.stderr.strip()}")
             else:
@@ -273,9 +282,13 @@ def main() -> int:
     print("\n=== Event-Driven FTaaS (ML) Claims & Invariant Audit ===")
     errors: list[str] = []
 
-    # 1. Run empirical claims linter test suite
-    test_cmd = [sys.executable, "-m", "unittest", "tests/test_claims_linter.py"]
-    ok_tests, test_out = run_check(test_cmd, "Empirical Claims Test Suite (test_claims_linter.py)", errors)
+    # 1. Run empirical claims linter test suites
+    test_cmd = [sys.executable, "-m", "unittest", "tests/test_claims_linter.py", "tests/test_sync_docs_fixes.py"]
+    ok_tests, test_out = run_check(
+        test_cmd,
+        "Empirical Claims Test Suites (test_claims_linter.py & test_sync_docs_fixes.py)",
+        errors,
+    )
     if ok_tests:
         m = re.search(r"Ran\s+(\d+)\s+tests?", test_out)
         count_str = f"{m.group(1)} test cases" if m else "all test cases"
@@ -287,10 +300,11 @@ def main() -> int:
     if ok_sync:
         print("  ✓ Wilson intervals, MRR recomputation, conclusion AST & multi-doc claims verified (sync_docs.py)")
 
-    # 3. Audit prohibited and guarded vocabulary across README.md, NOTICE.md, and docs/*.md
+    # 3. Audit registry hygiene, prohibited/guarded vocabulary, markers & personal paths across docs
+    before_vocab = len(errors)
     audit_vocabulary(errors)
-    if not any("Vocabulary violation" in e for e in errors):
-        print("  ✓ README.md, NOTICE.md, and all docs/*.md verified clean of prohibited & unguarded vocabulary")
+    if len(errors) == before_vocab:
+        print("  ✓ README.md, NOTICE.md, claims_registry.json & all docs/*.md verified clean of vocabulary, marker & path violations")
 
     # 4. Architecture diagram freshness & path existence
     before_diagram = len(errors)

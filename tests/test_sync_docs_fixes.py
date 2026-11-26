@@ -200,10 +200,21 @@ class TestClaimTermsValidation(unittest.TestCase):
     def setUp(self):
         self._td = tempfile.TemporaryDirectory()
         self.tmp = Path(self._td.name)
+        (self.tmp / "evidence.py").write_text("def verify_all_sources():\n    pass\n", encoding="utf-8")
         self.reg_file = self.tmp / "claims_registry.json"
         self.reg_file.write_text(
-            json.dumps({"version": "2.0.0", "claim_terms": {"verified": {"term": "verified"}}}),
-            encoding="utf-8"
+            json.dumps(
+                {
+                    "version": "2.0.0",
+                    "claim_terms": {
+                        "verified": {
+                            "term": "verified",
+                            "evidence": ["evidence.py:verify_all_sources"],
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
         )
 
     def tearDown(self):
@@ -211,20 +222,149 @@ class TestClaimTermsValidation(unittest.TestCase):
 
     def test_valid_claim_term_passes(self):
         text = "This statute is <!-- claim_term:verified -->verified<!-- /claim_term --> by the parser."
-        ok, errs = sync_docs.lint_prose_and_words(text, "test.md", registry_path=self.reg_file)
+        ok, errs = sync_docs.lint_prose_and_words(
+            text, "test.md", registry_path=self.reg_file, repo_root=self.tmp
+        )
         self.assertTrue(ok, errs)
 
     def test_unregistered_claim_term_fails(self):
         text = "This statute is <!-- claim_term:unregistered -->verified<!-- /claim_term --> by the parser."
-        ok, errs = sync_docs.lint_prose_and_words(text, "test.md", registry_path=self.reg_file)
+        ok, errs = sync_docs.lint_prose_and_words(
+            text, "test.md", registry_path=self.reg_file, repo_root=self.tmp
+        )
         self.assertFalse(ok)
         self.assertTrue(any("unknown claim_term ID 'unregistered'" in e for e in errs))
 
     def test_mismatched_claim_term_text_fails(self):
         text = "This statute is <!-- claim_term:verified -->authentic<!-- /claim_term --> by the parser."
-        ok, errs = sync_docs.lint_prose_and_words(text, "test.md", registry_path=self.reg_file)
+        ok, errs = sync_docs.lint_prose_and_words(
+            text, "test.md", registry_path=self.reg_file, repo_root=self.tmp
+        )
         self.assertFalse(ok)
         self.assertTrue(any("does not match registered term" in e for e in errs))
+
+    def test_missing_claim_term_evidence_fails_closed(self):
+        bad_reg = self.tmp / "bad_reg.json"
+        bad_reg.write_text(
+            json.dumps({"version": "2.0.0", "claim_terms": {"verified": {"term": "verified"}}}),
+            encoding="utf-8",
+        )
+        text = "This statute is <!-- claim_term:verified -->verified<!-- /claim_term -->."
+        ok, errs = sync_docs.lint_prose_and_words(
+            text, "test.md", registry_path=bad_reg, repo_root=self.tmp
+        )
+        self.assertFalse(ok)
+        self.assertTrue(any("missing required non-empty 'evidence'" in e for e in errs), errs)
+
+
+class TestHardenedClaimsBackport(unittest.TestCase):
+    def test_strict_json_rejects_nan_float_overflow_and_duplicate_keys(self):
+        for bad_raw, sub in (
+            ('{"v": NaN}', "Non-standard non-finite"),
+            ('{"v": 1e309}', "Non-finite JSON floating-point"),
+            ('{"k": 1, "k": 2}', "Duplicate JSON object member"),
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                sync_docs._loads_strict_json(bad_raw)
+            self.assertIn(sub, str(ctx.exception))
+
+    def test_personal_host_paths_and_unified_prohibited_words(self):
+        reg_path = REPO_ROOT / "docs" / "claims_registry.json"
+        for leaked in (
+            "Path /Users/alice/ml",
+            "Path /home/alice/ml",
+            r"Path C:\Users\alice\ml",
+        ):
+            ok, errs = sync_docs.lint_prose_and_words(leaked, "doc.md", registry_path=reg_path)
+            self.assertFalse(ok, leaked)
+            self.assertTrue(any("Personal path leak" in e for e in errs), errs)
+
+        ok_p, errs_p = sync_docs.lint_prose_and_words(
+            "This model is rock solid and infinitely scalable.", "doc.md", registry_path=reg_path
+        )
+        self.assertFalse(ok_p)
+        self.assertGreaterEqual(len(errs_p), 2)
+
+    def test_validate_claims_registry_passes_committed_and_catches_orphans(self):
+        reg_path = REPO_ROOT / "docs" / "claims_registry.json"
+        ok, errs = sync_docs.validate_claims_registry(reg_path, repo_root=REPO_ROOT)
+        self.assertTrue(ok, errs)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_root = Path(tmp)
+            (tmp_root / "docs").mkdir()
+            (tmp_root / "a.json").write_text('{"x": 1}', encoding="utf-8")
+            bad = tmp_root / "docs" / "reg.json"
+            bad.write_text(
+                json.dumps(
+                    {
+                        "version": "2.0.0",
+                        "claims": {
+                            "orphan": {
+                                "source_artifact": "a.json",
+                                "json_path": "x",
+                                "format_rule": "{value}",
+                                "used_in": [],
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            ok_b, errs_b = sync_docs.validate_claims_registry(bad, repo_root=tmp_root)
+            self.assertFalse(ok_b)
+            self.assertTrue(any("orphaned claim" in e for e in errs_b), errs_b)
+
+    def test_cross_doc_marker_linter_and_empirical_header_bypass_blocked(self):
+        reg_path = REPO_ROOT / "docs" / "claims_registry.json"
+
+        ok_fence, errs_fence = sync_docs.lint_claim_markers_and_regions(
+            "```markdown\n<!-- claim:fake -->1<!-- /claim -->\n<!-- BEGIN_EMPIRICAL -->\n```\n",
+            "doc.md",
+            registry_path=reg_path,
+        )
+        self.assertTrue(ok_fence, errs_fence)
+
+        for bad_doc, sub in (
+            ("<!-- claim:nonexistent_xyz -->1<!-- /claim -->", "unknown claim ID"),
+            ("<!-- claim:bm25_mrr -->0.89", "unclosed"),
+            ("orphan <!-- /claim -->", "orphan closing"),
+            ("<!-- BEGIN_RETRIEVAL_BENCHMARK_TABLE -->\n| A | B | C |\n", "unbalanced empirical delimiters"),
+        ):
+            ok_m, errs_m = sync_docs.lint_claim_markers_and_regions(bad_doc, "doc.md", registry_path=reg_path)
+            self.assertFalse(ok_m, bad_doc)
+            self.assertTrue(any(sub in e for e in errs_m), (bad_doc, errs_m))
+
+        # Data row mentioning "Top-1" must NOT bypass unmanaged-digit detection in empirical table!
+        bypass_tbl = (
+            "<!-- BEGIN_RETRIEVAL_BENCHMARK_TABLE -->\n"
+            "| Retrieval Method | Top-1 Recall | Role |\n"
+            "| :--- | :--- | :--- |\n"
+            "| **Fake** | Top-1 99.9% | Baseline |\n"
+            "<!-- END_RETRIEVAL_BENCHMARK_TABLE -->\n"
+        )
+        ok_b, errs_b = sync_docs.check_empirical_regions(bypass_tbl, "bypass.md")
+        self.assertFalse(ok_b)
+        self.assertTrue(any("unmanaged digits" in e for e in errs_b), errs_b)
+
+    def test_recompute_rejects_string_bool_flags_and_ast_skips_format_specs(self):
+        art = TestRecomputeHardening._artifact(n=2, hits=1)
+        art["full_corpus_benchmark"]["query_details"][1]["rankings"]["bm25"]["top1_hit"] = "false"
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "bad_bool.json"
+            p.write_text(json.dumps(art), encoding="utf-8")
+            ok, errs = sync_docs.independent_recompute_metrics(p)
+            self.assertFalse(ok)
+            self.assertTrue(any("must be booleans" in e for e in errs), errs)
+
+            sdir = Path(tmp) / "scripts"
+            sdir.mkdir()
+            (sdir / "sample_bench.py").write_text(
+                'def build_conclusion(mrr):\n    return f"Measured MRR {mrr:.4f}"\n',
+                encoding="utf-8",
+            )
+            ok_ast, errs_ast = sync_docs.lint_script_conclusions(sdir)
+            self.assertTrue(ok_ast, errs_ast)
 
 
 if __name__ == "__main__":

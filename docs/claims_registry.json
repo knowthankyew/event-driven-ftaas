@@ -3,7 +3,11 @@
   "claim_terms": {
     "verified": {
       "term": "verified",
-      "description": "Statutory source verification status marker"
+      "description": "Statutory source verification status marker",
+      "evidence": [
+        "docs/verified_statutory_sources.json",
+        "scripts/verify_statutory_sources.py:verify_all_sources"
+      ]
     }
   },
   "claims": {

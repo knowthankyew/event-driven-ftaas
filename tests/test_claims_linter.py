@@ -373,13 +373,13 @@ class TestClaimsLinter(unittest.TestCase):
         self.assertGreaterEqual(len(tp_runs), 12)
 
     def test_no_users_path_in_any_docs_or_artifacts(self):
-        """Ensure zero personal /Users/ host directory paths exist in docs or artifacts."""
+        """Ensure zero personal host paths (/Users/, /home/, C:\\Users\\) exist in docs or artifacts."""
+        import sync_docs
         for path in DOCS_DIR.glob("**/*"):
             if path.is_file() and path.suffix in (".md", ".json", ".jsonl"):
                 content = path.read_text(encoding="utf-8", errors="replace")
-                self.assertNotIn(
-                    "/Users/",
-                    content,
+                self.assertFalse(
+                    sync_docs._has_personal_host_path_text(content),
                     f"Found leaked host directory path in {path.relative_to(REPO_ROOT)}"
                 )
 
