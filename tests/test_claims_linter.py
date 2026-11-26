@@ -534,6 +534,26 @@ class TestClaimsLinter(unittest.TestCase):
             finally:
                 audit_mod._git = orig_git
 
+    def test_inline_backtick_claim_markers_rejected(self):
+        """Verify claim markers wrapped in inline backtick code spans fail closed while inner backticks and <code> pass."""
+        import sync_docs
+
+        reg_path = DOCS_DIR / "claims_registry.json"
+        ok_bad, errs_bad = sync_docs.lint_claim_markers_and_regions(
+            "Ceiling `MAX_SAFE_GENERATE_TOKENS = <!-- claim:max_safe_generate_tokens -->16<!-- /claim -->`.",
+            "docs/ROADMAP.md",
+            registry_path=reg_path,
+        )
+        self.assertFalse(ok_bad)
+        self.assertTrue(any("inside inline backtick code span" in e for e in errs_bad), errs_bad)
+
+        ok_good, errs_good = sync_docs.lint_claim_markers_and_regions(
+            "Ceiling <code>MAX_SAFE_GENERATE_TOKENS = <!-- claim:max_safe_generate_tokens -->16<!-- /claim --></code>.",
+            "docs/ROADMAP.md",
+            registry_path=reg_path,
+        )
+        self.assertTrue(ok_good, errs_good)
+
 
 if __name__ == "__main__":
     unittest.main()
